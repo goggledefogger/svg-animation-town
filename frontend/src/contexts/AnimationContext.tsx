@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { batSignalPreset } from '../utils/animationPresets';
 import { AnimationApi } from '../services/api';
 
@@ -57,21 +57,85 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [playing, setPlaying] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(5000); // 5 seconds default
 
+  // Debug log when elements change
+  useEffect(() => {
+    console.log('Animation elements updated in context. Count:', elements.length);
+    console.log('Element IDs:', elements.map(el => el.id).join(', '));
+
+    // Check if any elements have required attributes
+    elements.forEach(element => {
+      console.log(`Element ${element.id} (${element.type}) attributes:`, element.attributes);
+
+      // Check for required attributes based on type (using camelCase for React)
+      const requiredAttributes = {
+        circle: ['cx', 'cy', 'r', 'fill'],
+        rect: ['x', 'y', 'width', 'height', 'fill'],
+        path: ['d', 'fill'],
+        text: ['x', 'y', 'fontSize', 'fill'], // Changed from font-size to fontSize
+        line: ['x1', 'y1', 'x2', 'y2', 'stroke'],
+        group: []
+      };
+
+      if (element.type in requiredAttributes) {
+        // Convert attribute names to both hyphenated and camelCase versions for checking
+        const elementAttributes = Object.keys(element.attributes).map(key => key.toLowerCase());
+
+        const missingAttributes = requiredAttributes[element.type as keyof typeof requiredAttributes]
+          .filter(attr => {
+            // Check for both camelCase and hyphenated versions of the attribute
+            const camelCaseAttr = attr.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+            const hyphenatedAttr = camelCaseAttr.replace(/([A-Z])/g, '-$1').toLowerCase();
+
+            return !elementAttributes.includes(camelCaseAttr.toLowerCase()) &&
+                   !elementAttributes.includes(hyphenatedAttr.toLowerCase());
+          });
+
+        if (missingAttributes.length > 0) {
+          console.warn(`Element ${element.id} missing required attributes:`, missingAttributes);
+        }
+      }
+
+      // Log animations
+      if (element.animations && element.animations.length > 0) {
+        console.log(`Element ${element.id} has ${element.animations.length} animations`);
+        element.animations.forEach(anim => {
+          console.log(`Animation ${anim.id} for property ${anim.targetProperty}:`, anim);
+        });
+      } else {
+        console.log(`Element ${element.id} has no animations`);
+      }
+    });
+  }, [elements]);
+
+  // Debug when currentTime changes
+  useEffect(() => {
+    console.log('Animation current time updated:', currentTime);
+  }, [currentTime]);
+
+  // Debug when playing state changes
+  useEffect(() => {
+    console.log('Animation playing state changed:', playing);
+  }, [playing]);
+
   const addElement = (element: SVGElement) => {
+    console.log('Adding element:', element);
     setElements(prev => [...prev, element]);
   };
 
   const updateElement = (id: string, updates: Partial<SVGElement>) => {
+    console.log('Updating element:', id, updates);
     setElements(prev =>
       prev.map(el => el.id === id ? { ...el, ...updates } : el)
     );
   };
 
   const removeElement = (id: string) => {
+    console.log('Removing element:', id);
     setElements(prev => prev.filter(el => el.id !== id));
   };
 
   const addAnimation = (elementId: string, animation: Animation) => {
+    console.log('Adding animation to element:', elementId, animation);
     setElements(prev =>
       prev.map(el =>
         el.id === elementId
@@ -82,6 +146,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const updateAnimation = (elementId: string, animationId: string, updates: Partial<Animation>) => {
+    console.log('Updating animation:', elementId, animationId, updates);
     setElements(prev =>
       prev.map(el =>
         el.id === elementId
@@ -97,6 +162,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const removeAnimation = (elementId: string, animationId: string) => {
+    console.log('Removing animation:', elementId, animationId);
     setElements(prev =>
       prev.map(el =>
         el.id === elementId
@@ -107,9 +173,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const loadPreset = async (presetName: string): Promise<string> => {
+    console.log('Loading preset:', presetName);
     try {
       // First try to fetch the preset from the API
       const presetData = await AnimationApi.getPreset(presetName);
+      console.log('Loaded preset data:', presetData);
       setElements(presetData.elements);
       return presetData.message;
     } catch (error) {
@@ -118,6 +186,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Fall back to local presets if API fails
       switch (presetName) {
         case 'batSignal':
+          console.log('Using local batSignal preset');
           setElements(batSignalPreset);
           return "I've created the bat signal with a dramatic reveal.";
         default:
@@ -128,8 +197,10 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const generateAnimationFromPrompt = async (prompt: string): Promise<string> => {
+    console.log('Generating animation from prompt:', prompt);
     try {
       const result = await AnimationApi.generate(prompt);
+      console.log('Generated animation result:', result);
       setElements(result.elements);
       return result.message;
     } catch (error: any) {
@@ -139,8 +210,10 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const updateAnimationFromPrompt = async (prompt: string): Promise<string> => {
+    console.log('Updating animation from prompt:', prompt);
     try {
       const result = await AnimationApi.update(prompt, elements);
+      console.log('Updated animation result:', result);
       setElements(result.elements);
       return result.message;
     } catch (error: any) {

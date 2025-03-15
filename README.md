@@ -26,7 +26,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 ### Conversational Animation Interface
 - Create, modify and animate SVG elements through natural language
 - Ask for specific animations, effects, or timing adjustments
-- Get intelligent responses from OpenAI
+- Get intelligent responses from OpenAI gpt-4o-mini
 
 ### SVG Animation Capabilities
 - Create and manage basic shapes (rectangles, circles, paths, lines)
@@ -53,7 +53,7 @@ The AI assistant becomes your creative partner - understanding context, making i
    ```
    PORT=3001
    OPENAI_API_KEY=your_openai_api_key_here
-   OPENAI_MODEL=gpt-4-turbo
+   OPENAI_MODEL=gpt-4o-mini
    ```
 4. Start the backend server: `npm run dev`
 
@@ -99,7 +99,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 
 ## OpenAI Integration
 
-The integration with OpenAI requires prompt engineering to generate appropriate SVG elements. The system is designed to:
+The integration with OpenAI gpt-4o-mini requires prompt engineering to generate appropriate SVG elements. The system is designed to:
 
 1. Send a carefully structured system prompt that defines the expected JSON format
 2. Include the current animation state for context-aware updates

@@ -93,8 +93,37 @@ const ChatInterface: React.FC = () => {
           ? await AnimationApi.generate(text)
           : await AnimationApi.update(text, elements);
 
-        // Update the animation elements
+        // Debug the received response
+        console.log('Received API response for animation:', JSON.stringify(result, null, 2));
+        console.log('Setting elements to:', result.elements);
+        console.log('Element count:', result.elements.length);
+
+        // Add extra validation for the elements
+        if (result.elements.length > 0) {
+          // Log the structure of each element
+          result.elements.forEach((element, index) => {
+            console.log(`Element ${index + 1}:`, element);
+
+            // Check if the element has the required properties
+            if (!element.id || !element.type || !element.attributes) {
+              console.warn(`Element ${index + 1} is missing required properties:`, element);
+            }
+
+            // Check animations
+            if (!element.animations || !Array.isArray(element.animations)) {
+              console.warn(`Element ${index + 1} has invalid animations:`, element.animations);
+              // Ensure animations is an array
+              element.animations = [];
+            }
+          });
+        } else {
+          console.warn('No elements received from API');
+        }
+
+        // Update the animation elements - log before and after for debugging
+        console.log('Setting elements in context, before:', elements);
         setElements(result.elements);
+        console.log('Elements should be set in context');
 
         // Add AI response
         const aiMessage: Message = {
@@ -116,6 +145,7 @@ const ChatInterface: React.FC = () => {
       };
 
       setMessages(prev => [...prev, errorMessage]);
+      console.error('Error processing animation request:', error);
     } finally {
       setIsProcessing(false);
     }

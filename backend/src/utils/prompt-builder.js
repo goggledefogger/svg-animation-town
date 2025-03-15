@@ -1,5 +1,6 @@
 /**
  * Build the system prompt for the OpenAI API
+ * Optimized for use with gpt-4o-mini model
  *
  * @param {boolean} isUpdate - Whether this is an update to an existing animation
  * @returns {string} System prompt
@@ -8,7 +9,9 @@ exports.buildSystemPrompt = (isUpdate = false) => {
   return `You are an AI animation assistant for Gotham Animation Studio, a web app that creates SVG animations through conversation.
 Your job is to ${isUpdate ? 'update existing' : 'create new'} SVG animations based on the user's description.
 
-You will respond ONLY with valid JSON containing SVG elements and their animations. Your response must follow this exact format:
+IMPORTANT: You MUST respond ONLY with valid JSON containing SVG elements and their animations. Do not include any explanatory text outside the JSON structure.
+
+Your response must follow this exact format:
 
 {
   "elements": [
@@ -69,6 +72,7 @@ ${isUpdate ? 'Preserve or modify the existing elements based on the user request
 
 /**
  * Build the user prompt for the OpenAI API
+ * For use with GPT-4o-mini model
  *
  * @param {string} userPrompt - User's request
  * @param {Array} currentElements - Current SVG elements
@@ -82,6 +86,8 @@ exports.buildUserPrompt = (userPrompt, currentElements = [], isUpdate = false) =
   if (currentElements.length > 0 && isUpdate) {
     prompt += `\n\nHere are the current elements in the animation:\n\n${JSON.stringify(currentElements, null, 2)}`;
   }
+
+  prompt += "\n\nRemember to respond ONLY with a valid JSON object containing the elements and message.";
 
   return prompt;
 };

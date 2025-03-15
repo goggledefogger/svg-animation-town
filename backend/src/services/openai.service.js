@@ -10,6 +10,7 @@ const openai = new OpenAI({
 
 /**
  * Generate a new animation based on user prompt
+ * Uses GPT-4o-mini by default
  *
  * @param {string} prompt - User's animation request
  * @param {Array} currentElements - Current SVG elements (if any)
@@ -60,6 +61,7 @@ exports.generateAnimation = async (prompt, currentElements = []) => {
 
 /**
  * Update an existing animation based on user prompt
+ * Uses GPT-4o-mini by default
  *
  * @param {string} prompt - User's animation update request
  * @param {Array} currentElements - Current SVG elements
