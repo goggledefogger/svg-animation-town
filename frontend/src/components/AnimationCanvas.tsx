@@ -125,19 +125,19 @@ const AnimationCanvas: React.FC = () => {
 
   return (
     <div 
-      className="flex-grow bg-black rounded-lg overflow-hidden relative"
-      style={{ minHeight: '400px' }}
       ref={containerRef}
+      className="relative flex-1 bg-black/30 rounded-lg overflow-hidden flex items-center justify-center"
+      style={{ touchAction: 'pan-x pan-y' }}
     >
-      {/* SVG Container - always present but only visible when we have content */}
-      <div 
-        className="w-full h-full"
-        ref={svgContainerRef}
-        style={{ display: showEmptyState ? 'none' : 'block' }}
-      />
-      
-      {/* Empty State - conditionally rendered based on state */}
-      {showEmptyState && <EmptyState />}
+      {showEmptyState ? (
+        <EmptyState />
+      ) : (
+        <div 
+          ref={svgContainerRef}
+          className="w-full h-full flex items-center justify-center p-2 overflow-hidden"
+          style={{ maxHeight: '100%', maxWidth: '100%' }}
+        />
+      )}
     </div>
   );
 };

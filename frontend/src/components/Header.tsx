@@ -6,11 +6,11 @@ const Header: React.FC = () => {
   const { loadPreset } = useAnimation();
 
   return (
-    <header className="bg-gotham-blue p-4 border-b border-gray-700">
-      <div className="container mx-auto flex flex-col md:flex-row justify-between items-center">
-        <div className="flex items-center mb-4 md:mb-0">
+    <header className="bg-gotham-blue p-2 md:p-4 border-b border-gray-700">
+      <div className="container mx-auto flex flex-row justify-between items-center">
+        <div className="flex items-center">
           <svg
-            className="w-10 h-10 mr-3"
+            className="w-8 h-8 md:w-10 md:h-10 mr-2 md:mr-3"
             viewBox="0 0 100 100"
             xmlns="http://www.w3.org/2000/svg"
           >
@@ -21,22 +21,22 @@ const Header: React.FC = () => {
               className="animate-pulse-glow"
             />
           </svg>
-          <h1 className="text-xl md:text-2xl font-bold text-white">
-            Gotham Animation Studio
+          <h1 className="text-lg md:text-xl font-bold text-white truncate">
+            Gotham Animation
           </h1>
         </div>
-        <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-4">
-          <AIProviderSelector className="mb-2 md:mb-0" />
-          <div className="flex space-x-2">
+        <div className="flex items-center space-x-2">
+          <AIProviderSelector className="hidden md:block" />
+          <div className="flex space-x-1 md:space-x-2">
             <button
-              className="btn btn-outline text-sm"
+              className="btn btn-outline text-xs md:text-sm py-1 px-2 md:py-2 md:px-4"
               onClick={() => loadPreset('batSignal')}
             >
               Bat Signal
             </button>
-            <button className="btn btn-primary text-sm">
+            <button className="btn btn-primary text-xs md:text-sm py-1 px-2 md:py-2 md:px-4">
               <svg
-                className="w-4 h-4 mr-1 inline"
+                className="w-3 h-3 md:w-4 md:h-4 mr-1 inline"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

@@ -98,20 +98,21 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-gray-700 bg-gotham-blue">
-        <h2 className="text-lg font-semibold">Animation Assistant</h2>
+      <div className="p-2 md:p-4 bg-gotham-blue border-b border-gray-700 flex-shrink-0">
+        <h2 className="text-lg font-medium text-white">Chat</h2>
       </div>
-
-      <MessageList
-        messages={messages}
-        isTyping={isProcessing}
-        messagesEndRef={messagesEndRef}
-      />
-
-      <MessageInput
-        onSubmit={handleSubmit}
-        isProcessing={isProcessing}
-      />
+      
+      <div className="flex-1 overflow-y-auto p-2 md:p-4 pb-1">
+        <MessageList 
+          messages={messages} 
+          isTyping={isProcessing} 
+          messagesEndRef={messagesEndRef} 
+        />
+      </div>
+      
+      <div className="p-2 md:p-4 pt-1 border-t border-gray-700 flex-shrink-0 sticky bottom-0 bg-gotham-dark">
+        <MessageInput onSubmit={handleSubmit} isProcessing={isProcessing} />
+      </div>
     </div>
   );
 };
