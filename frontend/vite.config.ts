@@ -14,5 +14,6 @@ export default defineConfig({
     port: 3000,
     host: true,
     open: false,
+    allowedHosts: ['svg.roytown.net'],
   },
 });
