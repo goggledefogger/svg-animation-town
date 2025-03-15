@@ -1,5 +1,6 @@
 import React from 'react';
 import { SVGElement, Animation } from '../contexts/AnimationContext';
+import { debugLog, debugWarn, logError } from '../utils/logging';
 
 /**
  * Custom hook for rendering SVG animation elements
@@ -8,12 +9,12 @@ export const useAnimationRenderer = () => {
   // Function to compute animation styles based on the current time
   const computeAnimationStyles = (element: SVGElement, currentTime: number) => {
     // Debug log to see the element and its animations
-    console.log(`Computing styles for element: ${element.id}, type: ${element.type}`);
-    console.log('Element attributes:', element.attributes);
+    debugLog(`Computing styles for element: ${element.id}, type: ${element.type}`);
+    debugLog('Element attributes:', element.attributes);
 
     const { animations } = element;
     if (!animations || animations.length === 0) {
-      console.log('No animations found for element', element.id);
+      debugLog('No animations found for element', element.id);
       return {};
     }
 
@@ -21,8 +22,8 @@ export const useAnimationRenderer = () => {
     const animatedAttributes: Record<string, string | number> = {};
 
     animations.forEach(animation => {
-      console.log(`Processing animation: ${animation.id}, target property: ${animation.targetProperty}`);
-      console.log('Animation keyframes:', animation.keyframes);
+      debugLog(`Processing animation: ${animation.id}, target property: ${animation.targetProperty}`);
+      debugLog('Animation keyframes:', animation.keyframes);
 
       if (currentTime >= animation.delay &&
           (animation.iterationCount === 'infinite' ||
@@ -33,7 +34,7 @@ export const useAnimationRenderer = () => {
 
         // Find the keyframes that surround the current time
         const normalizedTime = effectiveTime / animation.duration; // 0 to 1
-        console.log('Normalized time:', normalizedTime);
+        debugLog('Normalized time:', normalizedTime);
 
         // Find the keyframes that surround the current normalized time
         let startFrame = animation.keyframes[0];
@@ -50,7 +51,7 @@ export const useAnimationRenderer = () => {
           }
         }
 
-        console.log('Interpolating between frames:',
+        debugLog('Interpolating between frames:',
           {start: startFrame, end: endFrame});
 
         // Interpolate between the start and end frames
@@ -76,12 +77,12 @@ export const useAnimationRenderer = () => {
             segmentProgress < 0.5 ? startValue : endValue;
         }
 
-        console.log(`Applied value for ${animation.targetProperty}:`,
+        debugLog(`Applied value for ${animation.targetProperty}:`,
           animatedAttributes[animation.targetProperty]);
       }
     });
 
-    console.log('Final animated attributes:', animatedAttributes);
+    debugLog('Final animated attributes:', animatedAttributes);
     return animatedAttributes;
   };
 
@@ -118,7 +119,7 @@ export const useAnimationRenderer = () => {
 
   // Function to render an SVG element based on its type
   const renderElement = (element: SVGElement, currentTime: number) => {
-    console.log(`Rendering element: ${element.id} (${element.type}) at time ${currentTime}`);
+    debugLog(`Rendering element: ${element.id} (${element.type}) at time ${currentTime}`);
 
     try {
       const animationStyles = computeAnimationStyles(element, currentTime);
@@ -129,7 +130,7 @@ export const useAnimationRenderer = () => {
         addDefaultAttributes(element.type, combinedProps)
       );
 
-      console.log('Final formatted props for rendering:', formattedProps);
+      debugLog('Final formatted props for rendering:', formattedProps);
 
       // Handle special case for text content
       if (element.type === 'text') {
@@ -152,11 +153,11 @@ export const useAnimationRenderer = () => {
         case 'group':
           return <g key={element.id} {...formattedProps} />;
         default:
-          console.warn('Unknown element type:', element.type);
+          debugWarn('Unknown element type:', element.type);
           return null;
       }
     } catch (error) {
-      console.error(`Error rendering element ${element.id}:`, error);
+      logError(`Error rendering element ${element.id}:`, error);
       return null;
     }
   };

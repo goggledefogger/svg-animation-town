@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { batSignalPreset } from '../utils/animationPresets';
 import { AnimationApi } from '../services/api';
+import { debugLog, debugWarn, logError } from '../utils/logging';
 
 // Define the SVG element type
 export interface SVGElement {
@@ -26,12 +27,21 @@ export interface Keyframe {
   value: string | number;
 }
 
+// Animation history item interface
+interface AnimationHistoryItem {
+  elements: SVGElement[];
+  description: string;
+  timestamp: number;
+}
+
 // Define the context interface
 interface AnimationContextType {
   elements: SVGElement[];
   currentTime: number;
   playing: boolean;
   duration: number;
+  history: AnimationHistoryItem[];
+  historyIndex: number;
   setElements: React.Dispatch<React.SetStateAction<SVGElement[]>>;
   setCurrentTime: (time: number) => void;
   setPlaying: (playing: boolean) => void;
@@ -45,10 +55,18 @@ interface AnimationContextType {
   loadPreset: (presetName: string) => Promise<string>;
   generateAnimationFromPrompt: (prompt: string) => Promise<string>;
   updateAnimationFromPrompt: (prompt: string) => Promise<string>;
+  undoAnimation: () => string | null;
+  redoAnimation: () => string | null;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+  clearAnimations: () => void;
 }
 
 // Create the context
 const AnimationContext = createContext<AnimationContextType | undefined>(undefined);
+
+// Maximum number of animations to keep in history
+const MAX_HISTORY_SIZE = 10;
 
 // Create a provider component
 export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -56,15 +74,105 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [playing, setPlaying] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(5000); // 5 seconds default
+  
+  // Animation history state
+  const [history, setHistory] = useState<AnimationHistoryItem[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  // Add new animation to history
+  const addToHistory = (newElements: SVGElement[], description: string) => {
+    debugLog('Adding to animation history:', description);
+    
+    // Create a deep copy of the elements to prevent reference issues
+    const elementsCopy = JSON.parse(JSON.stringify(newElements));
+    
+    // If we're not at the end of history (user has done undo),
+    // discard anything ahead of current index
+    const newHistory = history.slice(0, historyIndex + 1);
+    
+    // Add the new item
+    const newItem: AnimationHistoryItem = {
+      elements: elementsCopy,
+      description,
+      timestamp: Date.now()
+    };
+    
+    // Ensure we don't exceed max history size
+    if (newHistory.length >= MAX_HISTORY_SIZE) {
+      newHistory.shift(); // Remove oldest item
+    }
+    
+    // Update history and index
+    const updatedHistory = [...newHistory, newItem];
+    setHistory(updatedHistory);
+    setHistoryIndex(updatedHistory.length - 1);
+    
+    debugLog('History updated. Size:', updatedHistory.length, 'Index:', updatedHistory.length - 1);
+  };
+
+  // Clear all animations
+  const clearAnimations = () => {
+    debugLog('Clearing all animations');
+    setElements([]);
+    // Note: We don't add this to history since it's just clearing
+  };
+
+  // Undo functionality
+  const undoAnimation = (): string | null => {
+    debugLog('Attempting to undo animation. Current index:', historyIndex);
+    
+    if (historyIndex <= 0) {
+      debugLog('Cannot undo: at beginning of history or empty history');
+      return null;
+    }
+    
+    const newIndex = historyIndex - 1;
+    const prevItem = history[newIndex];
+    
+    debugLog('Undoing to history item:', prevItem.description);
+    setHistoryIndex(newIndex);
+    setElements(prevItem.elements);
+    
+    return prevItem.description;
+  };
+  
+  // Redo functionality
+  const redoAnimation = (): string | null => {
+    debugLog('Attempting to redo animation. Current index:', historyIndex);
+    
+    if (historyIndex >= history.length - 1) {
+      debugLog('Cannot redo: at end of history');
+      return null;
+    }
+    
+    const newIndex = historyIndex + 1;
+    const nextItem = history[newIndex];
+    
+    debugLog('Redoing to history item:', nextItem.description);
+    setHistoryIndex(newIndex);
+    setElements(nextItem.elements);
+    
+    return nextItem.description;
+  };
+  
+  // Check if undo is possible
+  const canUndo = (): boolean => {
+    return historyIndex > 0;
+  };
+  
+  // Check if redo is possible
+  const canRedo = (): boolean => {
+    return historyIndex < history.length - 1;
+  };
 
   // Debug log when elements change
   useEffect(() => {
-    console.log('Animation elements updated in context. Count:', elements.length);
-    console.log('Element IDs:', elements.map(el => el.id).join(', '));
+    debugLog('Animation elements updated in context. Count:', elements.length);
+    debugLog('Element IDs:', elements.map(el => el.id).join(', '));
 
     // Check if any elements have required attributes
     elements.forEach(element => {
-      console.log(`Element ${element.id} (${element.type}) attributes:`, element.attributes);
+      debugLog(`Element ${element.id} (${element.type}) attributes:`, element.attributes);
 
       // Check for required attributes based on type (using camelCase for React)
       const requiredAttributes = {
@@ -91,51 +199,51 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           });
 
         if (missingAttributes.length > 0) {
-          console.warn(`Element ${element.id} missing required attributes:`, missingAttributes);
+          debugWarn(`Element ${element.id} missing required attributes:`, missingAttributes);
         }
       }
 
       // Log animations
       if (element.animations && element.animations.length > 0) {
-        console.log(`Element ${element.id} has ${element.animations.length} animations`);
+        debugLog(`Element ${element.id} has ${element.animations.length} animations`);
         element.animations.forEach(anim => {
-          console.log(`Animation ${anim.id} for property ${anim.targetProperty}:`, anim);
+          debugLog(`Animation ${anim.id} for property ${anim.targetProperty}:`, anim);
         });
       } else {
-        console.log(`Element ${element.id} has no animations`);
+        debugLog(`Element ${element.id} has no animations`);
       }
     });
   }, [elements]);
 
   // Debug when currentTime changes
   useEffect(() => {
-    console.log('Animation current time updated:', currentTime);
+    debugLog('Animation current time updated:', currentTime);
   }, [currentTime]);
 
   // Debug when playing state changes
   useEffect(() => {
-    console.log('Animation playing state changed:', playing);
+    debugLog('Animation playing state changed:', playing);
   }, [playing]);
 
   const addElement = (element: SVGElement) => {
-    console.log('Adding element:', element);
+    debugLog('Adding element:', element);
     setElements(prev => [...prev, element]);
   };
 
   const updateElement = (id: string, updates: Partial<SVGElement>) => {
-    console.log('Updating element:', id, updates);
+    debugLog('Updating element:', id, updates);
     setElements(prev =>
       prev.map(el => el.id === id ? { ...el, ...updates } : el)
     );
   };
 
   const removeElement = (id: string) => {
-    console.log('Removing element:', id);
+    debugLog('Removing element:', id);
     setElements(prev => prev.filter(el => el.id !== id));
   };
 
   const addAnimation = (elementId: string, animation: Animation) => {
-    console.log('Adding animation to element:', elementId, animation);
+    debugLog('Adding animation to element:', elementId, animation);
     setElements(prev =>
       prev.map(el =>
         el.id === elementId
@@ -146,7 +254,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const updateAnimation = (elementId: string, animationId: string, updates: Partial<Animation>) => {
-    console.log('Updating animation:', elementId, animationId, updates);
+    debugLog('Updating animation:', elementId, animationId, updates);
     setElements(prev =>
       prev.map(el =>
         el.id === elementId
@@ -162,7 +270,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const removeAnimation = (elementId: string, animationId: string) => {
-    console.log('Removing animation:', elementId, animationId);
+    debugLog('Removing animation:', elementId, animationId);
     setElements(prev =>
       prev.map(el =>
         el.id === elementId
@@ -173,51 +281,73 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   const loadPreset = async (presetName: string): Promise<string> => {
-    console.log('Loading preset:', presetName);
+    debugLog('Loading preset:', presetName);
     try {
-      // First try to fetch the preset from the API
+      // First clear any existing animations
+      clearAnimations();
+      
+      // Try to fetch the preset from the API
       const presetData = await AnimationApi.getPreset(presetName);
-      console.log('Loaded preset data:', presetData);
+      debugLog('Loaded preset data:', presetData);
       setElements(presetData.elements);
+      
+      // Add to history
+      addToHistory(presetData.elements, `Loaded ${presetName} preset: ${presetData.message}`);
+      
       return presetData.message;
     } catch (error) {
-      console.error(`Error loading preset from API: ${error}`);
+      logError(`Error loading preset from API: ${error}`);
 
       // Fall back to local presets if API fails
       switch (presetName) {
         case 'batSignal':
-          console.log('Using local batSignal preset');
+          debugLog('Using local batSignal preset');
           setElements(batSignalPreset);
+          
+          // Add to history
+          addToHistory(batSignalPreset, `Loaded ${presetName} preset: I've created the bat signal with a dramatic reveal.`);
+          
           return "I've created the bat signal with a dramatic reveal.";
         default:
-          console.warn(`Preset '${presetName}' not found`);
+          debugWarn(`Preset '${presetName}' not found`);
           return '';
       }
     }
   };
 
   const generateAnimationFromPrompt = async (prompt: string): Promise<string> => {
-    console.log('Generating animation from prompt:', prompt);
+    debugLog('Generating animation from prompt:', prompt);
     try {
+      // First clear any existing animations
+      clearAnimations();
+      
       const result = await AnimationApi.generate(prompt);
-      console.log('Generated animation result:', result);
+      debugLog('Generated animation result:', result);
       setElements(result.elements);
+      
+      // Add to history
+      addToHistory(result.elements, `Generated animation: ${result.message}`);
+      
       return result.message;
     } catch (error: any) {
-      console.error('Error generating animation:', error);
+      logError('Error generating animation:', error);
       throw error;
     }
   };
 
   const updateAnimationFromPrompt = async (prompt: string): Promise<string> => {
-    console.log('Updating animation from prompt:', prompt);
+    debugLog('Updating animation from prompt:', prompt);
     try {
       const result = await AnimationApi.update(prompt, elements);
-      console.log('Updated animation result:', result);
+      debugLog('Updated animation result:', result);
       setElements(result.elements);
+      
+      // Add to history
+      addToHistory(result.elements, `Updated animation: ${result.message}`);
+      
       return result.message;
     } catch (error: any) {
-      console.error('Error updating animation:', error);
+      logError('Error updating animation:', error);
       throw error;
     }
   };
@@ -228,6 +358,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       currentTime,
       playing,
       duration,
+      history,
+      historyIndex,
       setElements,
       setCurrentTime,
       setPlaying,
@@ -240,7 +372,12 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       removeAnimation,
       loadPreset,
       generateAnimationFromPrompt,
-      updateAnimationFromPrompt
+      updateAnimationFromPrompt,
+      undoAnimation,
+      redoAnimation,
+      canUndo,
+      canRedo,
+      clearAnimations
     }}>
       {children}
     </AnimationContext.Provider>

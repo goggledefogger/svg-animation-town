@@ -154,3 +154,19 @@ This project is in early development. If you're interested in contributing, plea
 ---
 
 *"The night is darkest just before the dawn. And I promise you, the dawn is coming." - Harvey Dent*
+
+## Development Log
+
+### Recent Updates
+
+- **2023-11-19**: Fixed an issue where default test animations were playing alongside animations returned from the API. Test elements now only render when no API animations are loaded.
+- **2023-11-20**: Reduced excessive console logging in the frontend by implementing a debug logging system that can be toggled on/off. This makes the application run cleaner in production while still providing detailed logs when needed during development.
+- **2023-11-21**: Added animation history tracking with undo/redo functionality. When a new animation is created or loaded, the previous animation is now properly cleared, and users can navigate back and forth through their animation history using the undo/redo buttons.
+
+### Next Steps
+
+- Improve animation transitions between different states
+- Add ability to save and load user-created animations
+- Enhance the UI with more intuitive controls and feedback
+- Add export functionality for created animations
+- Fine-tune the bat signal preset animation

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
 import { formatTime } from '../utils/helpers';
+import { debugLog } from '../utils/logging';
 
 const TimelineControls: React.FC = () => {
   const {
@@ -10,7 +11,11 @@ const TimelineControls: React.FC = () => {
     setPlaying,
     duration,
     setDuration,
-    elements
+    elements,
+    undoAnimation,
+    redoAnimation,
+    canUndo,
+    canRedo
   } = useAnimation();
 
   // Calculate progress percentage
@@ -25,6 +30,22 @@ const TimelineControls: React.FC = () => {
     setCurrentTime(clickedProgress * duration);
   };
 
+  // Handle undo button click
+  const handleUndo = () => {
+    const result = undoAnimation();
+    if (result) {
+      debugLog('Undid animation:', result);
+    }
+  };
+
+  // Handle redo button click
+  const handleRedo = () => {
+    const result = redoAnimation();
+    if (result) {
+      debugLog('Redid animation:', result);
+    }
+  };
+
   // Empty state check
   if (elements.length === 0) {
     return null;
@@ -37,6 +58,30 @@ const TimelineControls: React.FC = () => {
           {formatTime(currentTime)} / {formatTime(duration)}
         </div>
         <div className="flex space-x-2">
+          {/* Undo button */}
+          <button
+            className={`btn btn-outline text-sm px-3 py-1 ${!canUndo() ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={handleUndo}
+            disabled={!canUndo()}
+            title="Undo last animation"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fillRule="evenodd" d="M9.707 14.707a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 1.414L7.414 9H15a1 1 0 110 2H7.414l2.293 2.293a1 1 0 010 1.414z" clipRule="evenodd"></path>
+            </svg>
+          </button>
+          
+          {/* Redo button */}
+          <button
+            className={`btn btn-outline text-sm px-3 py-1 ${!canRedo() ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={handleRedo}
+            disabled={!canRedo()}
+            title="Redo animation"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd"></path>
+            </svg>
+          </button>
+          
           <button
             className="btn btn-outline text-sm px-3 py-1"
             onClick={() => setCurrentTime(0)}
@@ -80,19 +125,25 @@ const TimelineControls: React.FC = () => {
       </div>
 
       {/* Duration controls */}
-      <div className="mt-2 flex items-center text-sm text-gray-400">
-        <label className="mr-2">Duration:</label>
-        <select
-          className="bg-gotham-dark border border-gray-700 rounded px-1 py-0.5"
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
-        >
-          <option value="5000">5 seconds</option>
-          <option value="10000">10 seconds</option>
-          <option value="15000">15 seconds</option>
-          <option value="30000">30 seconds</option>
-          <option value="60000">1 minute</option>
-        </select>
+      <div className="mt-2 flex items-center justify-between text-sm text-gray-400">
+        <div>
+          <label className="mr-2">Duration:</label>
+          <select
+            className="bg-gotham-dark border border-gray-700 rounded px-1 py-0.5"
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value))}
+          >
+            <option value="5000">5 seconds</option>
+            <option value="10000">10 seconds</option>
+            <option value="15000">15 seconds</option>
+            <option value="30000">30 seconds</option>
+            <option value="60000">1 minute</option>
+          </select>
+        </div>
+        
+        <div className="text-xs text-gray-500">
+          {canUndo() && "Use undo/redo to navigate between animations"}
+        </div>
       </div>
     </div>
   );

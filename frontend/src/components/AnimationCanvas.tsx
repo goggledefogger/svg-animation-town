@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
 import { useAnimationPlayback } from '../hooks/useAnimationPlayback';
 import { useAnimationRenderer } from '../hooks/useAnimationRenderer';
+import { debugLog } from '../utils/logging';
 import EmptyState from './EmptyState';
 
 const AnimationCanvas: React.FC = () => {
@@ -11,15 +12,15 @@ const AnimationCanvas: React.FC = () => {
 
   // Debug logging when elements or time changes
   useEffect(() => {
-    console.log('AnimationCanvas - elements changed:', elements);
-    console.log('Current element count:', elements.length);
+    debugLog('AnimationCanvas - elements changed:', elements);
+    debugLog('Current element count:', elements.length);
     if (elements.length > 0) {
-      console.log('First element details:', JSON.stringify(elements[0], null, 2));
+      debugLog('First element details:', JSON.stringify(elements[0], null, 2));
     }
   }, [elements]);
 
   useEffect(() => {
-    console.log('AnimationCanvas - current time:', currentTime);
+    debugLog('AnimationCanvas - current time:', currentTime);
   }, [currentTime]);
 
   // Create a test element to verify rendering
@@ -61,15 +62,20 @@ const AnimationCanvas: React.FC = () => {
         {/* Background rectangle for debugging */}
         <rect x="0" y="0" width="800" height="600" fill="#1a1a2e" />
 
-        {/* Test element to verify rendering pipeline */}
-        <circle cx="200" cy="200" r="30" fill="red" />
+        {/* Only render test elements when there are no API elements */}
+        {elements.length === 0 && (
+          <>
+            {/* Test element to verify rendering pipeline */}
+            <circle cx="200" cy="200" r="30" fill="red" />
 
-        {/* Render the test element using the renderer */}
-        {renderElement(testElement, currentTime)}
+            {/* Render the test element using the renderer */}
+            {renderElement(testElement, currentTime)}
+          </>
+        )}
 
         {/* Render actual elements in sorted order to ensure proper layering */}
         {sortedElements.map(element => {
-          console.log(`Rendering element ${element.id} of type ${element.type}`);
+          debugLog(`Rendering element ${element.id} of type ${element.type}`);
           return renderElement(element, currentTime);
         })}
       </svg>
