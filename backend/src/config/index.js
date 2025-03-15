@@ -14,7 +14,7 @@ const config = {
     apiKey: process.env.OPENAI_API_KEY,
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
     temperature: 0.7,
-    maxTokens: 2000,
+    maxTokens: 8000,
   },
 
   // Claude configuration
@@ -22,7 +22,7 @@ const config = {
     apiKey: process.env.CLAUDE_API_KEY,
     model: process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219',
     temperature: 0.7,
-    maxTokens: 4000,
+    maxTokens: 8000,
   },
 
   // AI Provider selection
