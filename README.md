@@ -10,6 +10,47 @@ Born from a simple bat signal SVG, this project demonstrates how natural languag
 
 ![Gotham Animation Studio](https://placeholder-image.com/gotham-studio-screenshot.jpg)
 
+## Architecture Overview
+
+Gotham Animation Studio follows a clean separation of concerns between the frontend and backend:
+
+### Backend (AI Processing)
+- Handles all communication with OpenAI's API
+- Processes natural language prompts and converts them to SVG animations
+- Returns complete, self-contained SVG code with embedded animations
+- No animation logic is implemented on the backend - it purely manages the AI conversation
+
+### Frontend (Rendering & User Interface)
+- Renders the SVG animation received directly from the backend
+- Manages playback controls (play/pause/reset)
+- Handles the chat interface for user prompts
+- Doesn't implement any animation generation logic - it simply displays what the backend provides
+
+This design ensures that all AI processing and SVG generation logic stays on the backend, while the frontend remains focused on rendering and user interaction.
+
+## Data Flow
+
+1. User enters a prompt in the chat interface
+2. Frontend sends prompt to backend API
+3. Backend constructs appropriate OpenAI prompt with detailed system instructions
+4. OpenAI generates a complete SVG with embedded animations
+5. Backend extracts and validates the SVG and sends it to the frontend
+6. Frontend renders the SVG directly without modifications
+
+### API Response Format
+
+The API returns a simple, standardized format:
+
+```json
+{
+  "success": true,
+  "svg": "<svg>...</svg>",
+  "message": "Human-friendly description of what was created"
+}
+```
+
+This format ensures that the frontend doesn't need to process or modify the SVG - it can be inserted directly into the DOM.
+
 ## Core Concept
 
 Traditional animation tools require specialized knowledge of timelines, keyframes, easing functions, and transformation matrices. Gotham Animation Studio flips this paradigm:
@@ -101,44 +142,38 @@ The AI assistant becomes your creative partner - understanding context, making i
 
 The integration with OpenAI gpt-4o-mini requires prompt engineering to generate appropriate SVG elements. The system is designed to:
 
-1. Send a carefully structured system prompt that defines the expected JSON format
+1. Send a carefully structured system prompt that defines the expected SVG format
 2. Include the current animation state for context-aware updates
-3. Parse and validate the JSON response to ensure it meets the application's requirements
+3. Parse and validate the SVG response to ensure it meets the application's requirements
 
-### Prompt Format
+### System Prompt Structure
 
-The system uses a structured JSON format to communicate with OpenAI:
+The backend uses a specialized system prompt that instructs the AI to generate complete SVG code with embedded animations. The prompt specifies:
 
-```json
-{
-  "elements": [
-    {
-      "id": "unique-id-string",
-      "type": "circle|rect|path|text|line|group",
-      "attributes": {
-        "attribute1": "value1",
-        "attribute2": "value2"
-      },
-      "animations": [
-        {
-          "id": "unique-animation-id",
-          "targetProperty": "propertyName",
-          "keyframes": [
-            { "offset": 0, "value": "startValue" },
-            { "offset": 0.5, "value": "midValue" },
-            { "offset": 1, "value": "endValue" }
-          ],
-          "duration": 3000,
-          "easing": "ease-in-out",
-          "delay": 0,
-          "iterationCount": 1
-        }
-      ]
-    }
-  ],
-  "message": "Your friendly response to the user about what you created"
-}
-```
+- The expected output format (complete SVG with animations)
+- How to structure animations using both SMIL and CSS methods
+- Required SVG attributes like viewBox and namespace
+- Design considerations like the dark background
+- Example templates showing proper syntax
+
+### Direct SVG Response
+
+Unlike many AI integrations that use structured JSON for complex data, this system optimizes for simplicity by having the AI generate complete SVG code directly:
+
+1. The AI generates a full SVG document with embedded animations
+2. The backend extracts this SVG from the response
+3. The frontend inserts it directly into the DOM without modifications
+
+This approach eliminates the need for complex client-side animation logic and ensures that all creative decisions are handled by the AI, not by hard-coded frontend rules.
+
+### Error Handling
+
+To ensure a graceful user experience, the system includes several safeguards:
+
+- SVG validation to catch malformed output
+- Automatic fallback to error SVGs when validation fails
+- Descriptive error messages that guide the user
+- Rate limiting and error handling for OpenAI API issues
 
 ## Contributing
 
