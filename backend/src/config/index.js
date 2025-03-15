@@ -17,6 +17,17 @@ const config = {
     maxTokens: 2000,
   },
 
+  // Claude configuration
+  claude: {
+    apiKey: process.env.CLAUDE_API_KEY,
+    model: process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219',
+    temperature: 0.7,
+    maxTokens: 2000,
+  },
+
+  // AI Provider selection
+  aiProvider: process.env.AI_PROVIDER || 'openai', // 'openai' or 'claude'
+
   // Cors configuration
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
@@ -26,11 +37,21 @@ const config = {
 
 // Validate required environment variables
 const validateConfig = () => {
-  const requiredEnvVars = ['OPENAI_API_KEY'];
-  const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+  // Check for at least one API key based on provider or both
+  if (config.aiProvider === 'openai' && !config.openai.apiKey) {
+    console.warn('Warning: OpenAI API key is missing but OpenAI is selected as the provider.');
+  }
+
+  if (config.aiProvider === 'claude' && !config.claude.apiKey) {
+    console.warn('Warning: Claude API key is missing but Claude is selected as the provider.');
+  }
+
+  // Validate other common settings
+  const otherRequiredVars = [];
+  const missingEnvVars = otherRequiredVars.filter(envVar => !process.env[envVar]);
 
   if (missingEnvVars.length > 0) {
-    console.warn(`Warning: Missing required environment variables: ${missingEnvVars.join(', ')}`);
+    console.warn(`Warning: Missing other required environment variables: ${missingEnvVars.join(', ')}`);
     console.warn('Some features may not work correctly without these variables.');
   }
 };

@@ -1,87 +1,136 @@
 /**
- * Build the system prompt for the OpenAI API
- * Optimized for use with gpt-4o-mini model
- * Instructs the model to create complete SVG animations
+ * Common instructions for creating SVG animations
+ * Used by both OpenAI and Claude
  *
  * @param {boolean} isUpdate - Whether this is an update to an existing animation
- * @returns {string} System prompt
+ * @returns {string} Common instructions
  */
-exports.buildSystemPrompt = (isUpdate = false) => {
+exports.getCommonInstructions = (isUpdate = false) => {
   return `You are an AI assistant that creates SVG animations based on user requests.
-Your responses should include:
-1. A brief explanation of what you're creating
-2. A complete, self-contained SVG that includes all animation directly within it.
 
-The SVG must:
-- Include all animations using native SVG animation methods (SMIL or CSS)
-- Have all styles and animations embedded within the SVG (inside <style> tags)
-- Be complete and ready to display without any additional processing
-- Use proper SVG namespaces
-- Set a viewBox of "0 0 800 600" and appropriate dimensions
+Your task is to create complete, self-contained SVG animations that include:
+- Native SVG animation methods (SMIL or CSS)
+- Embedded styles within the SVG (inside <style> tags)
+- Proper SVG namespaces
+- A viewBox of "0 0 800 600" and appropriate dimensions
 - Target a dark background (the container has a black background)
 
-Here's an example of how your SVG could be structured:
+${isUpdate ? 'Modify the existing SVG to incorporate the requested changes while preserving the overall structure.' : 'Create a completely new animation based on the user request.'}
 
+Example SVG template:
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
-  <!-- Definitions for gradients, filters, etc. -->
   <defs>
-    <linearGradient id="myGradient" gradientTransform="rotate(90)">
-      <stop offset="5%" stop-color="gold" />
-      <stop offset="95%" stop-color="red" />
-    </linearGradient>
+    <!-- Place gradients, filters here -->
   </defs>
-  
-  <!-- Embedded CSS animations -->
+
   <style>
-    @keyframes move {
+    /* Place CSS animations here */
+    @keyframes example {
       0% { transform: translateX(0); }
-      100% { transform: translateX(300px); }
-    }
-    #animated-element {
-      animation: move 3s ease infinite alternate;
+      100% { transform: translateX(100px); }
     }
   </style>
-  
-  <!-- SVG elements -->
-  <circle id="animated-element" cx="50" cy="50" r="20" fill="url(#myGradient)" />
-  
-  <!-- SMIL animations can also be used -->
-  <rect x="50" y="100" width="50" height="50" fill="blue">
-    <animate 
-      attributeName="x" 
-      values="50;350;50" 
-      dur="4s" 
-      repeatCount="indefinite" 
-      begin="0s" />
-  </rect>
+
+  <!-- SVG elements with animations -->
 </svg>
 
-You have full creative freedom in designing the animation. Use descriptive IDs for SVG elements.
-${isUpdate ? 'Modify the existing SVG to incorporate the requested changes while preserving the overall structure.' : 'Create a completely new animation based on the user request.'}
-You can use both CSS animations (in style tags) or SMIL animations (<animate> tags) based on which works better for the specific animation.
-Make sure all your SVG is valid and will render correctly in modern browsers.
-Always include the bat-yellow color (#ffdf00) for Batman-themed animations and important highlights.`;
+Creative guidance:
+- You have full creative freedom in designing the animation
+- Use descriptive IDs for SVG elements
+- You can use both CSS animations or SMIL animations based on which works better
+- Always include the bat-yellow color (#ffdf00) for Batman-themed animations`;
 };
 
 /**
- * Build the user prompt for the OpenAI API
- * For use with GPT-4o-mini model
+ * Add existing SVG to a prompt for updates
+ * Common functionality for both AI providers
  *
- * @param {string} userPrompt - User's request
- * @param {string} currentSvg - Current SVG content (if any)
- * @param {boolean} isUpdate - Whether this is an update to an existing animation
- * @returns {string} User prompt
+ * @param {string} userPrompt - The basic user prompt
+ * @param {string} currentSvg - The current SVG to update
+ * @returns {string} - The prompt with SVG added
  */
-exports.buildUserPrompt = (userPrompt, currentSvg = '', isUpdate = false) => {
-  let prompt = userPrompt;
+exports.addExistingSvgToPrompt = (userPrompt, currentSvg) => {
+  return `${userPrompt}
 
-  // If there is current SVG content and this is an update, include it in the prompt
-  if (currentSvg && isUpdate) {
-    prompt += `\n\nHere is the current SVG animation:\n\n${currentSvg}`;
-    prompt += "\n\nPlease modify this SVG animation according to my request while preserving the overall structure.";
+Here is the current SVG animation:
+
+${currentSvg}`;
+};
+
+/**
+ * Get common JSON response structure information
+ * Used in prompts for both providers
+ *
+ * @returns {string} - Description of the JSON response structure
+ */
+exports.getJsonResponseStructure = () => {
+  return `Your response must be formatted as valid JSON with two fields:
+1. "explanation": A brief description of what you created or updated
+2. "svg": The complete SVG code as a string (with all necessary attributes and animations)`;
+};
+
+/**
+ * Format a parsed response consistently across providers
+ *
+ * @param {Object} parsedResponse - The parsed JSON response from the AI
+ * @returns {string|null} - Formatted response for the controller
+ */
+exports.formatParsedResponse = (parsedResponse) => {
+  if (!parsedResponse || !parsedResponse.svg) {
+    return null;
   }
 
-  prompt += "\n\nMake sure to respond with a complete, self-contained SVG that can be directly inserted into the webpage.";
+  // Return as a formatted string to match the original implementation
+  // This is likely what the controller expects
+  return `${parsedResponse.explanation || ''}\n\n${parsedResponse.svg}`;
+};
 
-  return prompt;
+/**
+ * Get JSON schema for SVG response
+ * Used for structured tool use with Claude
+ *
+ * @returns {Object} - The JSON schema for SVG response
+ */
+exports.getSvgResponseSchema = () => {
+  return {
+    type: "object",
+    properties: {
+      explanation: {
+        type: "string",
+        description: "Explanation of what was created or modified in the SVG"
+      },
+      svg: {
+        type: "string",
+        description: "Complete SVG code with animations"
+      }
+    },
+    required: ["explanation", "svg"]
+  };
+};
+
+/**
+ * Generate a fallback error SVG
+ *
+ * @param {string} message - Error message to display
+ * @param {string} currentSvg - The current SVG (for updates)
+ * @returns {string} - Error response as a string
+ */
+exports.generateErrorSvg = (message = "Could not generate SVG animation", currentSvg = null) => {
+  const explanation = `Error: ${message}`;
+
+  if (currentSvg) {
+    return `${explanation}\n\n${currentSvg}`;
+  }
+
+  const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+    <rect width="800" height="600" fill="#1a1a2e" />
+    <text x="400" y="280" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+      ${message}
+    </text>
+    <text x="400" y="320" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle">
+      Try again with a different prompt
+    </text>
+  </svg>`;
+
+  return `${explanation}\n\n${errorSvg}`;
 };

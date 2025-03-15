@@ -15,7 +15,7 @@ Born from a simple bat signal SVG, this project demonstrates how natural languag
 Gotham Animation Studio follows a clean separation of concerns between the frontend and backend:
 
 ### Backend (AI Processing)
-- Handles all communication with OpenAI's API
+- Handles all communication with AI providers (OpenAI or Claude)
 - Processes natural language prompts and converts them to SVG animations
 - Returns complete, self-contained SVG code with embedded animations
 - No animation logic is implemented on the backend - it purely manages the AI conversation
@@ -85,7 +85,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 ### Prerequisites
 - Node.js (v14+)
 - npm or yarn
-- OpenAI API key
+- OpenAI API key or Anthropic Claude API key
 
 ### Backend Setup
 1. Navigate to the backend directory: `cd backend`
@@ -93,8 +93,17 @@ The AI assistant becomes your creative partner - understanding context, making i
 3. Create a `.env` file based on `.env.example`:
    ```
    PORT=3001
+
+   # OpenAI configuration
    OPENAI_API_KEY=your_openai_api_key_here
    OPENAI_MODEL=gpt-4o-mini
+
+   # Claude configuration (optional)
+   CLAUDE_API_KEY=your_claude_api_key_here
+   CLAUDE_MODEL=claude-3-7-sonnet-20250219
+
+   # Default AI Provider (openai or claude)
+   AI_PROVIDER=openai
    ```
 4. Start the backend server: `npm run dev`
 

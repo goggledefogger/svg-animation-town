@@ -42,16 +42,18 @@ export const AnimationApi = {
    * Generate a new SVG animation based on user prompt
    */
   generate: async (
-    prompt: string
+    prompt: string,
+    provider: 'openai' | 'claude' = 'openai'
   ): Promise<{ svg: string; message: string }> => {
     console.log('Generating animation with prompt:', prompt);
+    console.log('Using AI provider:', provider);
 
     try {
       const data = await fetchApi<any>(
         '/animation/generate',
         {
           method: 'POST',
-          body: JSON.stringify({ prompt }),
+          body: JSON.stringify({ prompt, provider }),
         }
       );
 
@@ -84,20 +86,22 @@ export const AnimationApi = {
    */
   update: async (
     prompt: string,
-    currentSvg: string
+    currentSvg: string,
+    provider: 'openai' | 'claude' = 'openai'
   ): Promise<{ svg: string; message: string }> => {
     console.log('Updating animation with prompt:', prompt);
+    console.log('Using AI provider:', provider);
 
     try {
       const data = await fetchApi<any>(
         '/animation/update',
         {
           method: 'POST',
-          body: JSON.stringify({ prompt, currentSvg }),
+          body: JSON.stringify({ prompt, currentSvg, provider }),
         }
       );
 
-      console.log('Received updated animation data from update endpoint');
+      console.log('Received animation data from update endpoint');
 
       // Handle both new SVG-based responses and legacy element-based responses
       if (data.svg) {

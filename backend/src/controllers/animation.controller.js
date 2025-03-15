@@ -1,30 +1,57 @@
 const OpenAIService = require('../services/openai.service');
 const presetService = require('../services/preset.service');
+const AIService = require('../services/ai.service');
 const { extractSvgAndText } = require('../utils/parser');
 const { asyncHandler, BadRequestError, NotFoundError, ServiceUnavailableError } = require('../utils/errors');
+const config = require('../config');
 
 /**
  * Generate a new animation based on a text prompt
  */
 exports.generateAnimation = asyncHandler(async (req, res) => {
-  const { prompt } = req.body;
+  const { prompt, provider } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
   }
 
   try {
-    // Call OpenAI to generate the animation
-    const llmResponse = await OpenAIService.generateAnimation(prompt);
+    // Override the default provider if one is specified in the request
+    if (provider && (provider === 'openai' || provider === 'claude')) {
+      // Temporarily override the configured provider
+      const originalProvider = config.aiProvider;
+      config.aiProvider = provider;
 
-    // Extract SVG and text from the response
-    const { svg, text } = extractSvgAndText(llmResponse);
+      console.log(`Using provider: ${provider} for animation generation`);
 
-    return res.status(200).json({
-      success: true,
-      svg,
-      message: text
-    });
+      // Call the AI service to generate the animation
+      const llmResponse = await AIService.generateAnimation(prompt);
+
+      // Restore the original provider
+      config.aiProvider = originalProvider;
+
+      // Extract SVG and text from the response
+      const { svg, text } = extractSvgAndText(llmResponse);
+      console.log(`Extracted SVG length: ${svg?.length || 0}, Text length: ${text?.length || 0}`);
+
+      return res.status(200).json({
+        success: true,
+        svg,
+        message: text
+      });
+    } else {
+      // Use the default provider configured in the system
+      const llmResponse = await AIService.generateAnimation(prompt);
+
+      // Extract SVG and text from the response
+      const { svg, text } = extractSvgAndText(llmResponse);
+
+      return res.status(200).json({
+        success: true,
+        svg,
+        message: text
+      });
+    }
   } catch (error) {
     console.error('Error generating animation:', error);
     throw new ServiceUnavailableError(`Failed to generate animation: ${error.message}`);
@@ -35,24 +62,49 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
  * Update an existing animation based on a text prompt
  */
 exports.updateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, currentSvg } = req.body;
+  const { prompt, currentSvg, provider } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
   }
 
   try {
-    // Call OpenAI to update the animation
-    const llmResponse = await OpenAIService.updateAnimation(prompt, currentSvg);
+    // Override the default provider if one is specified in the request
+    if (provider && (provider === 'openai' || provider === 'claude')) {
+      // Temporarily override the configured provider
+      const originalProvider = config.aiProvider;
+      config.aiProvider = provider;
 
-    // Extract SVG and text from the response
-    const { svg, text } = extractSvgAndText(llmResponse);
+      console.log(`Using provider: ${provider} for animation update`);
 
-    return res.status(200).json({
-      success: true,
-      svg,
-      message: text
-    });
+      // Call the AI service to update the animation
+      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
+
+      // Restore the original provider
+      config.aiProvider = originalProvider;
+
+      // Extract SVG and text from the response
+      const { svg, text } = extractSvgAndText(llmResponse);
+      console.log(`Extracted SVG length: ${svg?.length || 0}, Text length: ${text?.length || 0}`);
+
+      return res.status(200).json({
+        success: true,
+        svg,
+        message: text
+      });
+    } else {
+      // Use the default provider configured in the system
+      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
+
+      // Extract SVG and text from the response
+      const { svg, text } = extractSvgAndText(llmResponse);
+
+      return res.status(200).json({
+        success: true,
+        svg,
+        message: text
+      });
+    }
   } catch (error) {
     console.error('Error updating animation:', error);
     throw new ServiceUnavailableError(`Failed to update animation: ${error.message}`);

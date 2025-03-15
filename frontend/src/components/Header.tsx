@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
+import AIProviderSelector from './AIProviderSelector';
 
 const Header: React.FC = () => {
   const { loadPreset } = useAnimation();
@@ -24,30 +25,33 @@ const Header: React.FC = () => {
             Gotham Animation Studio
           </h1>
         </div>
-        <div className="flex space-x-2">
-          <button
-            className="btn btn-outline text-sm"
-            onClick={() => loadPreset('batSignal')}
-          >
-            Bat Signal
-          </button>
-          <button className="btn btn-primary text-sm">
-            <svg
-              className="w-4 h-4 mr-1 inline"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
+        <div className="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-4">
+          <AIProviderSelector className="mb-2 md:mb-0" />
+          <div className="flex space-x-2">
+            <button
+              className="btn btn-outline text-sm"
+              onClick={() => loadPreset('batSignal')}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            Export
-          </button>
+              Bat Signal
+            </button>
+            <button className="btn btn-primary text-sm">
+              <svg
+                className="w-4 h-4 mr-1 inline"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                />
+              </svg>
+              Export
+            </button>
+          </div>
         </div>
       </div>
     </header>
