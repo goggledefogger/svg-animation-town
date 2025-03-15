@@ -81,26 +81,78 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // Helper function to control CSS animations by setting animation-play-state
+  const controlCssAnimations = useCallback((playState: 'running' | 'paused') => {
+    if (!svgRef) return;
+    
+    try {
+      // Get all animated elements that have CSS animations
+      const styleElement = svgRef.querySelector('style');
+      if (!styleElement) {
+        console.log('No style element found for CSS animations');
+        return;
+      }
+      
+      // Find elements with CSS animations by looking for IDs mentioned in keyframes
+      const styleContent = styleElement.textContent || '';
+      // Extract IDs from animation references like "#lightBeam {" or "#element {"
+      const animatedElementIds = Array.from(styleContent.matchAll(/#([a-zA-Z0-9_-]+)\s+{/g))
+        .map(match => match[1])
+        .filter(id => styleContent.includes(`#${id}`) && styleContent.includes('animation:'));
+      
+      console.log(`Found ${animatedElementIds.length} elements with CSS animations`);
+      
+      // Apply play state to each element
+      animatedElementIds.forEach(id => {
+        const element = svgRef.getElementById(id);
+        if (element) {
+          // Cast to SVGElement which has a style property
+          (element as SVGElement).style.animationPlayState = playState;
+        }
+      });
+      
+      // As a fallback, try to select all elements that might have animations
+      const animatedElements = svgRef.querySelectorAll('[style*="animation"]');
+      animatedElements.forEach((element) => {
+        (element as SVGElement).style.animationPlayState = playState;
+      });
+    } catch (error) {
+      console.error('Error controlling CSS animations:', error);
+    }
+  }, [svgRef]);
+
   // Animation control methods
   const pauseAnimations = useCallback(() => {
     if (svgRef) {
       console.log('Pausing animations');
+      
+      // Pause SMIL animations (animate tags)
       svgRef.pauseAnimations();
+      
+      // Pause CSS animations
+      controlCssAnimations('paused');
+      
       setPlaying(false);
     } else {
       console.warn('Cannot pause animations: SVG reference is null');
     }
-  }, [svgRef]);
+  }, [svgRef, controlCssAnimations]);
 
   const resumeAnimations = useCallback(() => {
     if (svgRef) {
       console.log('Resuming animations');
+      
+      // Resume SMIL animations (animate tags)
       svgRef.unpauseAnimations();
+      
+      // Resume CSS animations
+      controlCssAnimations('running');
+      
       setPlaying(true);
     } else {
       console.warn('Cannot resume animations: SVG reference is null');
     }
-  }, [svgRef]);
+  }, [svgRef, controlCssAnimations]);
 
   // Resets animations by re-inserting the SVG content
   const resetAnimations = useCallback(() => {
