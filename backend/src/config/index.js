@@ -22,7 +22,7 @@ const config = {
     apiKey: process.env.CLAUDE_API_KEY,
     model: process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219',
     temperature: 0.7,
-    maxTokens: 2000,
+    maxTokens: 4000,
   },
 
   // AI Provider selection
