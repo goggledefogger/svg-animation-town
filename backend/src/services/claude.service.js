@@ -35,16 +35,31 @@ const buildClaudeSystemPrompt = (isUpdate = false) => {
 
   return `${baseInstructions}
 
-You MUST use the provided tool for your response.
+You are an SVG animation expert. Your ONLY task is to create or modify SVG animations.
 
-Follow these instructions carefully:
-1. Your response should only use the provided tool, not regular text output.
-2. The 'explanation' field must contain a brief description of what you created or modified.
-3. The 'svg' field must contain the complete SVG code as a valid string, properly escaped.
-4. The SVG code must include all required elements (xmlns, viewBox, dimensions).
-5. Check that your SVG is properly formatted before submitting.
+YOU MUST RESPOND IN VALID JSON FORMAT WITH THE FOLLOWING STRUCTURE:
+{
+  "explanation": "Brief description of the animation",
+  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 600\" width=\"800\" height=\"600\">...</svg>"
+}
 
-Both fields are REQUIRED. Omitting either will result in an error.`;
+SVG REQUIREMENTS:
+1. The SVG field MUST start with '<svg xmlns="http://www.w3.org/2000/svg"'
+2. The SVG MUST include:
+   - All required namespace attributes
+   - viewBox="0 0 800 600"
+   - width="800" height="600"
+   - <style> tag containing animations
+   - All animation elements properly defined
+3. The SVG MUST be a complete document that can be directly embedded in a webpage
+4. The SVG MUST end with '</svg>'
+
+FORMAT REQUIREMENTS:
+1. Your response MUST be valid JSON with NO text outside the JSON object
+2. Both "explanation" and "svg" fields are REQUIRED
+3. Escape quotes and special characters properly in the SVG string
+4. DO NOT include backticks, code blocks, or extra text outside the JSON
+5. DO NOT include any explanations or notes outside the JSON object`;
 };
 
 /**
@@ -56,17 +71,21 @@ Both fields are REQUIRED. Omitting either will result in an error.`;
  * @returns {string} Claude user prompt
  */
 const buildClaudeUserPrompt = (userPrompt, currentSvg = '', isUpdate = false) => {
-  let content = '';
+  let content = isUpdate && currentSvg
+    ? `Update this SVG animation based on this request: ${userPrompt}`
+    : `Create an SVG animation based on this description: ${userPrompt}`;
 
   if (isUpdate && currentSvg) {
-    content = `Update this SVG animation based on this request: ${userPrompt}`;
     content = addExistingSvgToPrompt(content, currentSvg);
-  } else {
-    content = `Create an SVG animation based on this description: ${userPrompt}`;
   }
 
-  // Add a reminder about using the tool properly
-  content += "\n\nIMPORTANT: You must use the provided tool to return your response, ensuring both 'explanation' and 'svg' fields are included. The 'svg' field must contain a complete, valid SVG document with proper XML structure.";
+  content += `\n\nYOU MUST RESPOND WITH VALID JSON ONLY - NO TEXT OUTSIDE THE JSON:
+{
+  "explanation": "Brief description of what you created/modified",
+  "svg": "<svg xmlns=\\"http://www.w3.org/2000/svg\\" viewBox=\\"0 0 800 600\\" width=\\"800\\" height=\\"600\\">...</svg>"
+}
+
+The SVG must be complete, with all required attributes and properly escaped. DO NOT include any text, explanations, or notes outside the JSON.`;
 
   return content;
 };
@@ -176,29 +195,7 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
       ? Math.max(0.1, config.claude.temperature - 0.2)
       : config.claude.temperature;
 
-    // Define the tool for SVG creation/updates
-    const toolName = isUpdate ? "update_svg_animation" : "create_svg_animation";
-    const toolDescription = isUpdate
-      ? "Creates an updated SVG animation based on the user's request and existing SVG. Always returns both explanation and svg fields."
-      : "Creates a new SVG animation based on the user's description. Always returns both explanation and svg fields.";
-
-    // Custom schema with more detailed descriptions
-    const toolSchema = {
-      type: "object",
-      properties: {
-        explanation: {
-          type: "string",
-          description: "A brief explanation of what you created or modified in the SVG animation"
-        },
-        svg: {
-          type: "string",
-          description: "The complete SVG code as a valid string. Must include all required SVG elements, namespaces, and be properly escaped."
-        }
-      },
-      required: ["explanation", "svg"]
-    };
-
-    // Call Claude API with structured tool use for proper JSON responses
+    // Call Claude API without response_format parameter
     const completion = await anthropic.messages.create({
       model: config.claude.model,
       max_tokens: config.claude.maxTokens,
@@ -206,115 +203,112 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
       messages: [
         { role: 'user', content: userPrompt }
       ],
-      temperature: temperature,
-      tools: [
-        {
-          name: toolName,
-          description: toolDescription,
-          input_schema: toolSchema
-        }
-      ],
-      tool_choice: {
-        type: "tool",
-        name: toolName
-      }
+      temperature: temperature
     });
 
-    // For debugging
-    console.log('Claude response structure:', JSON.stringify({
-      contentTypes: completion.content.map(c => c.type),
-      hasToolUse: completion.content.some(c => c.type === 'tool_use')
-    }));
+    console.log('Claude response received');
+    console.log('Response structure:', JSON.stringify(completion, null, 2));
 
-    // Extract the tool use response
+    // Extract the content from the response
     if (completion.content && completion.content.length > 0) {
-      // Find the tool_use block
-      const toolUseBlock = completion.content.find(block =>
-        block.type === 'tool_use' &&
-        block.name === toolName
-      );
-
-      if (toolUseBlock && toolUseBlock.input) {
-        console.log(`Successfully received structured SVG ${isUpdate ? 'update' : ''} response via tool_use`);
-        console.log('Tool use input:', JSON.stringify(toolUseBlock.input));
-
-        // Validate that we have the required fields before processing
-        if (toolUseBlock.input.svg) {
-          return formatParsedResponse(toolUseBlock.input);
-        } else {
-          console.warn('Tool use response is missing SVG field');
-        }
-      }
-
-      // If we couldn't find a proper tool use response, check for text content
       const textBlock = completion.content.find(block => block.type === 'text');
+
       if (textBlock && textBlock.text) {
-        console.log('Processing LLM response');
-        const text = textBlock.text.trim();
+        console.log('Raw text response:', textBlock.text);
 
-        // First try to parse it as JSON
         try {
-          const parsedJson = JSON.parse(text);
-          if (parsedJson && parsedJson.svg) {
-            console.log('Found valid JSON with SVG in text response');
-            return formatParsedResponse(parsedJson);
+          // If the text is empty or just whitespace, generate an error
+          if (!textBlock.text.trim()) {
+            throw new ServiceUnavailableError('Claude returned an empty response');
           }
-        } catch (e) {
-          console.log('Text is not valid JSON, trying other extraction methods');
-        }
 
-        // Try to extract JSON from code blocks
-        try {
-          const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-          if (jsonMatch && jsonMatch[1]) {
-            const parsedCodeBlock = JSON.parse(jsonMatch[1].trim());
-            if (parsedCodeBlock && parsedCodeBlock.svg) {
-              console.log('Found JSON in code block with SVG');
-              return formatParsedResponse(parsedCodeBlock);
+          // Parse the JSON response
+          let parsedResponse;
+          try {
+            // First try direct JSON parsing
+            parsedResponse = JSON.parse(textBlock.text);
+            console.log('Successfully parsed direct JSON response');
+          } catch (directParseError) {
+            console.log('Direct JSON parsing failed, attempting to extract JSON from text');
+
+            // Try to extract JSON using regex
+            const jsonRegex = /\{(?:[^{}]|(\{(?:[^{}]|(\{(?:[^{}]|(\{[^{}]*\}))*\}))*\}))*\}/g;
+            const jsonMatches = textBlock.text.match(jsonRegex);
+
+            if (jsonMatches && jsonMatches.length > 0) {
+              try {
+                // Try each JSON match until one parses successfully
+                for (const potentialJson of jsonMatches) {
+                  try {
+                    parsedResponse = JSON.parse(potentialJson);
+                    console.log('Successfully extracted JSON using regex');
+                    break;
+                  } catch (e) {
+                    // Continue to next match
+                  }
+                }
+              } catch (extractionError) {
+                console.error('Failed to extract valid JSON:', extractionError);
+              }
+            }
+
+            // If we still don't have a valid parsed response, check for JSON in code blocks
+            if (!parsedResponse) {
+              const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/;
+              const codeBlockMatch = textBlock.text.match(codeBlockRegex);
+
+              if (codeBlockMatch && codeBlockMatch[1]) {
+                try {
+                  parsedResponse = JSON.parse(codeBlockMatch[1]);
+                  console.log('Successfully extracted JSON from code block');
+                } catch (codeBlockError) {
+                  console.error('Failed to parse JSON from code block:', codeBlockError);
+                }
+              }
+            }
+
+            // If all extraction methods failed, throw the original error
+            if (!parsedResponse) {
+              console.error('All JSON extraction methods failed');
+              throw new ServiceUnavailableError('Claude did not return a valid JSON response');
             }
           }
-        } catch (e) {
-          console.log('Failed to extract JSON from code blocks');
-        }
 
-        // Direct SVG extraction as a last resort
-        console.log('Falling back to direct SVG extraction');
-        const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
-        if (svgMatch && svgMatch[0]) {
-          const svgContent = svgMatch[0];
-          console.log(`Found SVG via direct extraction, length: ${svgContent.length}`);
+          // Validate the required fields
+          if (!parsedResponse.svg) {
+            throw new ServiceUnavailableError('SVG field is missing from the response');
+          }
 
-          // Create a simple explanation based on the remaining text
-          const textBeforeSvg = text.substring(0, text.indexOf(svgContent)).trim();
-          const explanation = textBeforeSvg || `Generated SVG based on: ${prompt.substring(0, 50)}...`;
+          const svgContent = parsedResponse.svg;
 
-          console.log(`Extracted SVG length: ${svgContent.length}, Text length: ${explanation.length}`);
+          if (!svgContent.trim().startsWith('<svg')) {
+            throw new ServiceUnavailableError('Invalid SVG: Must start with <svg> tag');
+          }
 
-          // Construct a proper response
-          const response = {
-            explanation: explanation,
-            svg: svgContent
-          };
+          if (!svgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
+            throw new ServiceUnavailableError('Invalid SVG: Missing required xmlns attribute');
+          }
 
-          return formatParsedResponse(response);
+          if (!svgContent.includes('viewBox="0 0 800 600"')) {
+            throw new ServiceUnavailableError('Invalid SVG: Missing or incorrect viewBox');
+          }
+
+          if (!svgContent.includes('<style>')) {
+            throw new ServiceUnavailableError('Invalid SVG: Missing style tag for animations');
+          }
+
+          console.log('SVG validation passed, returning response');
+          return formatParsedResponse(parsedResponse);
+        } catch (parseError) {
+          console.error('Failed to parse Claude response as JSON:', parseError);
+          throw new ServiceUnavailableError('Claude did not return a valid JSON response');
         }
       }
+
+      throw new ServiceUnavailableError('Claude response missing text content');
     }
 
-    console.warn(`Could not extract structured SVG ${isUpdate ? 'update' : ''} response, generating fallback SVG`);
-
-    // If we got here, Claude failed to provide a valid SVG, so generate a simple one
-    if (isUpdate && currentSvg) {
-      // For updates, return the original SVG with an error message
-      return generateErrorSvg(
-        `Could not update SVG animation as requested`,
-        currentSvg
-      );
-    } else {
-      // For new animations, create a basic animated SVG as fallback
-      const fallbackSvg = generateBasicSvg(prompt, isUpdate);
-      return formatParsedResponse(fallbackSvg);
-    }
+    throw new ServiceUnavailableError('Claude response contains no content');
   } catch (error) {
     console.error('Claude API Error:', error);
     throw new ServiceUnavailableError(`Claude API Error: ${error.message || 'Unknown error'}`);
