@@ -1,22 +1,6 @@
-import { SVGElement } from '../contexts/AnimationContext';
 import { ApiResponse, ApiError } from '../types/api';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
-/**
- * Converts hyphenated-style property names to camelCase for React compatibility
- */
-function convertToCamelCase(obj: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-    // Convert hyphenated property to camelCase (e.g., 'stroke-width' to 'strokeWidth')
-    const camelKey = key.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-    result[camelKey] = value;
-  }
-
-  return result;
-}
 
 /**
  * Generic fetch wrapper with error handling
@@ -51,60 +35,44 @@ async function fetchApi<T>(
 }
 
 /**
- * Process elements received from the API to make them compatible with React
- */
-function processElements(elements: any[]): SVGElement[] {
-  return elements.map(element => {
-    // Make a copy of the element to avoid modifying the original
-    const processedElement: SVGElement = {
-      ...element,
-      // Convert attribute keys to camelCase for React compatibility
-      attributes: convertToCamelCase(element.attributes || {}),
-      // Ensure animations is an array
-      animations: element.animations || []
-    };
-
-    return processedElement;
-  });
-}
-
-/**
- * Animation API endpoints
+ * Animation API endpoints for working with SVG animations
  */
 export const AnimationApi = {
   /**
-   * Generate animation based on user prompt
+   * Generate a new SVG animation based on user prompt
    */
   generate: async (
-    prompt: string,
-    currentElements: SVGElement[] = []
-  ): Promise<{ elements: SVGElement[]; message: string }> => {
+    prompt: string
+  ): Promise<{ svg: string; message: string }> => {
     console.log('Generating animation with prompt:', prompt);
 
     try {
-      const data = await fetchApi<ApiResponse>('/animation/generate', {
-        method: 'POST',
-        body: JSON.stringify({ prompt, currentElements }),
-      });
+      const data = await fetchApi<any>(
+        '/animation/generate',
+        {
+          method: 'POST',
+          body: JSON.stringify({ prompt }),
+        }
+      );
 
-      console.log('Received animation data from generate endpoint:', data);
+      console.log('Received animation data from generate endpoint');
 
-      // Validate the response data
-      if (!data.elements || !Array.isArray(data.elements)) {
-        console.error('Invalid response: elements is not an array', data);
-        throw new Error('Invalid response format: missing elements array');
+      // Handle both new SVG-based responses and legacy element-based responses
+      if (data.svg) {
+        return {
+          svg: data.svg,
+          message: data.message || 'Animation created successfully!'
+        };
+      } else if (data.elements && Array.isArray(data.elements)) {
+        console.warn('Received legacy element-based response. Using fallback error SVG.');
+        return {
+          svg: createFallbackSvg('Legacy element response received. Please update backend.'),
+          message: data.message || 'Animation created successfully (legacy format).'
+        };
+      } else {
+        console.error('Invalid response format:', data);
+        throw new Error('Invalid response format: missing SVG and elements');
       }
-
-      console.log('Element count in response:', data.elements.length);
-
-      // Process elements for React compatibility
-      const processedElements = processElements(data.elements);
-      console.log('Processed elements:', processedElements);
-
-      return {
-        elements: processedElements,
-        message: data.message,
-      };
     } catch (error) {
       console.error('Error generating animation:', error);
       throw error;
@@ -116,35 +84,37 @@ export const AnimationApi = {
    */
   update: async (
     prompt: string,
-    currentElements: SVGElement[]
-  ): Promise<{ elements: SVGElement[]; message: string }> => {
+    currentSvg: string
+  ): Promise<{ svg: string; message: string }> => {
     console.log('Updating animation with prompt:', prompt);
-    console.log('Current elements:', currentElements);
 
     try {
-      const data = await fetchApi<ApiResponse>('/animation/update', {
-        method: 'POST',
-        body: JSON.stringify({ prompt, currentElements }),
-      });
+      const data = await fetchApi<any>(
+        '/animation/update',
+        {
+          method: 'POST',
+          body: JSON.stringify({ prompt, currentSvg }),
+        }
+      );
 
-      console.log('Received updated animation data from update endpoint:', data);
+      console.log('Received updated animation data from update endpoint');
 
-      // Validate the response data
-      if (!data.elements || !Array.isArray(data.elements)) {
-        console.error('Invalid response: elements is not an array', data);
-        throw new Error('Invalid response format: missing elements array');
+      // Handle both new SVG-based responses and legacy element-based responses
+      if (data.svg) {
+        return {
+          svg: data.svg,
+          message: data.message || 'Animation updated successfully!'
+        };
+      } else if (data.elements && Array.isArray(data.elements)) {
+        console.warn('Received legacy element-based response. Using fallback error SVG.');
+        return {
+          svg: createFallbackSvg('Legacy element response received. Please update backend.'),
+          message: data.message || 'Animation updated successfully (legacy format).'
+        };
+      } else {
+        console.error('Invalid response format:', data);
+        throw new Error('Invalid response format: missing SVG and elements');
       }
-
-      console.log('Element count in response:', data.elements.length);
-
-      // Process elements for React compatibility
-      const processedElements = processElements(data.elements);
-      console.log('Processed elements:', processedElements);
-
-      return {
-        elements: processedElements,
-        message: data.message,
-      };
     } catch (error) {
       console.error('Error updating animation:', error);
       throw error;
@@ -156,30 +126,61 @@ export const AnimationApi = {
    */
   getPreset: async (
     name: string
-  ): Promise<{ elements: SVGElement[]; message: string }> => {
+  ): Promise<{ svg: string; message: string }> => {
     console.log('Fetching preset:', name);
 
     try {
-      const data = await fetchApi<{ success: boolean; preset: any }>(`/animation/presets/${name}`);
+      const data = await fetchApi<any>(
+        `/animation/presets/${name}`
+      );
 
       console.log('Received preset data:', data);
 
-      if (!data.preset || !data.preset.elements || !Array.isArray(data.preset.elements)) {
-        console.error('Invalid preset data:', data);
+      // Handle both SVG-based and element-based preset responses
+      if (data.preset && data.preset.svg) {
+        return {
+          svg: data.preset.svg,
+          message: data.preset.message || `Preset "${name}" loaded successfully!`
+        };
+      } else if (data.preset && data.preset.elements && Array.isArray(data.preset.elements)) {
+        console.warn('Received legacy element-based preset. Using fallback error SVG.');
+        return {
+          svg: createFallbackSvg(`Legacy preset "${name}" received. Please update backend.`),
+          message: data.preset.message || `Preset "${name}" loaded (legacy format).`
+        };
+      } else {
+        console.error('Invalid preset data format:', data);
         throw new Error('Invalid preset data format');
       }
-
-      // Process elements for React compatibility
-      const processedElements = processElements(data.preset.elements);
-      console.log('Processed preset elements:', processedElements);
-
-      return {
-        elements: processedElements,
-        message: data.preset.message,
-      };
     } catch (error) {
       console.error('Error fetching preset:', error);
       throw error;
     }
   }
 };
+
+/**
+ * Create a fallback SVG for when we receive legacy responses
+ */
+function createFallbackSvg(message: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+    <rect width="800" height="600" fill="#1a1a2e" />
+    <circle cx="400" cy="250" r="60" fill="#ffdf00" />
+    <text x="400" y="400" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+      SVG Conversion Required
+    </text>
+    <text x="400" y="440" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="600">
+      ${message}
+    </text>
+    <style>
+      @keyframes pulse {
+        0% { r: 60; }
+        50% { r: 70; }
+        100% { r: 60; }
+      }
+      circle {
+        animation: pulse 2s ease-in-out infinite;
+      }
+    </style>
+  </svg>`;
+}

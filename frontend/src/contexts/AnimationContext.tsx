@@ -1,50 +1,19 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { batSignalPreset } from '../utils/animationPresets';
+import React, { createContext, useContext, useState, ReactNode, useRef, useCallback } from 'react';
 import { AnimationApi } from '../services/api';
-
-// Define the SVG element type
-export interface SVGElement {
-  id: string;
-  type: 'circle' | 'rect' | 'path' | 'text' | 'line' | 'group';
-  attributes: Record<string, string | number>;
-  animations: Animation[];
-}
-
-// Define the animation type
-export interface Animation {
-  id: string;
-  targetProperty: string;
-  keyframes: Keyframe[];
-  duration: number;
-  easing: string;
-  delay: number;
-  iterationCount: number | 'infinite';
-}
-
-export interface Keyframe {
-  offset: number; // 0 to 1
-  value: string | number;
-}
 
 // Define the context interface
 interface AnimationContextType {
-  elements: SVGElement[];
-  currentTime: number;
+  svgContent: string;
   playing: boolean;
-  duration: number;
-  setElements: React.Dispatch<React.SetStateAction<SVGElement[]>>;
-  setCurrentTime: (time: number) => void;
   setPlaying: (playing: boolean) => void;
-  setDuration: (duration: number) => void;
-  addElement: (element: SVGElement) => void;
-  updateElement: (id: string, updates: Partial<SVGElement>) => void;
-  removeElement: (id: string) => void;
-  addAnimation: (elementId: string, animation: Animation) => void;
-  updateAnimation: (elementId: string, animationId: string, updates: Partial<Animation>) => void;
-  removeAnimation: (elementId: string, animationId: string) => void;
-  loadPreset: (presetName: string) => Promise<string>;
+  setSvgContent: React.Dispatch<React.SetStateAction<string>>;
+  setSvgRef: (ref: SVGSVGElement | null) => void;
   generateAnimationFromPrompt: (prompt: string) => Promise<string>;
   updateAnimationFromPrompt: (prompt: string) => Promise<string>;
+  loadPreset: (presetName: string) => Promise<string>;
+  pauseAnimations: () => void;
+  resumeAnimations: () => void;
+  resetAnimations: () => void;
 }
 
 // Create the context
@@ -52,156 +21,45 @@ const AnimationContext = createContext<AnimationContextType | undefined>(undefin
 
 // Create a provider component
 export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [elements, setElements] = useState<SVGElement[]>([]);
-  const [currentTime, setCurrentTime] = useState<number>(0);
-  const [playing, setPlaying] = useState<boolean>(false);
-  const [duration, setDuration] = useState<number>(5000); // 5 seconds default
+  const [svgContent, setSvgContent] = useState<string>('');
+  const [playing, setPlaying] = useState<boolean>(true);
+  const [svgRef, setSvgRefState] = useState<SVGSVGElement | null>(null);
+  
+  // Use a ref to track the current SVG element to avoid unnecessary state updates
+  const svgElementRef = useRef<SVGSVGElement | null>(null);
 
-  // Debug log when elements change
-  useEffect(() => {
-    console.log('Animation elements updated in context. Count:', elements.length);
-    console.log('Element IDs:', elements.map(el => el.id).join(', '));
+  // Create a stable reference for setting the SVG reference
+  const setSvgRef = useCallback((ref: SVGSVGElement | null) => {
+    // Only update state if the reference is different (by object identity)
+    if (ref !== svgElementRef.current) {
+      console.log('Setting SVG reference:', ref ? 'SVG Element' : 'null');
+      svgElementRef.current = ref; // Update the ref first
+      setSvgRefState(ref); // Then update the state, which will cause re-renders
+    }
+  }, []);
 
-    // Check if any elements have required attributes
-    elements.forEach(element => {
-      console.log(`Element ${element.id} (${element.type}) attributes:`, element.attributes);
-
-      // Check for required attributes based on type (using camelCase for React)
-      const requiredAttributes = {
-        circle: ['cx', 'cy', 'r', 'fill'],
-        rect: ['x', 'y', 'width', 'height', 'fill'],
-        path: ['d', 'fill'],
-        text: ['x', 'y', 'fontSize', 'fill'], // Changed from font-size to fontSize
-        line: ['x1', 'y1', 'x2', 'y2', 'stroke'],
-        group: []
-      };
-
-      if (element.type in requiredAttributes) {
-        // Convert attribute names to both hyphenated and camelCase versions for checking
-        const elementAttributes = Object.keys(element.attributes).map(key => key.toLowerCase());
-
-        const missingAttributes = requiredAttributes[element.type as keyof typeof requiredAttributes]
-          .filter(attr => {
-            // Check for both camelCase and hyphenated versions of the attribute
-            const camelCaseAttr = attr.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-            const hyphenatedAttr = camelCaseAttr.replace(/([A-Z])/g, '-$1').toLowerCase();
-
-            return !elementAttributes.includes(camelCaseAttr.toLowerCase()) &&
-                   !elementAttributes.includes(hyphenatedAttr.toLowerCase());
-          });
-
-        if (missingAttributes.length > 0) {
-          console.warn(`Element ${element.id} missing required attributes:`, missingAttributes);
-        }
-      }
-
-      // Log animations
-      if (element.animations && element.animations.length > 0) {
-        console.log(`Element ${element.id} has ${element.animations.length} animations`);
-        element.animations.forEach(anim => {
-          console.log(`Animation ${anim.id} for property ${anim.targetProperty}:`, anim);
-        });
-      } else {
-        console.log(`Element ${element.id} has no animations`);
-      }
-    });
-  }, [elements]);
-
-  // Debug when currentTime changes
-  useEffect(() => {
-    console.log('Animation current time updated:', currentTime);
-  }, [currentTime]);
-
-  // Debug when playing state changes
-  useEffect(() => {
-    console.log('Animation playing state changed:', playing);
-  }, [playing]);
-
-  const addElement = (element: SVGElement) => {
-    console.log('Adding element:', element);
-    setElements(prev => [...prev, element]);
-  };
-
-  const updateElement = (id: string, updates: Partial<SVGElement>) => {
-    console.log('Updating element:', id, updates);
-    setElements(prev =>
-      prev.map(el => el.id === id ? { ...el, ...updates } : el)
-    );
-  };
-
-  const removeElement = (id: string) => {
-    console.log('Removing element:', id);
-    setElements(prev => prev.filter(el => el.id !== id));
-  };
-
-  const addAnimation = (elementId: string, animation: Animation) => {
-    console.log('Adding animation to element:', elementId, animation);
-    setElements(prev =>
-      prev.map(el =>
-        el.id === elementId
-          ? { ...el, animations: [...el.animations, animation] }
-          : el
-      )
-    );
-  };
-
-  const updateAnimation = (elementId: string, animationId: string, updates: Partial<Animation>) => {
-    console.log('Updating animation:', elementId, animationId, updates);
-    setElements(prev =>
-      prev.map(el =>
-        el.id === elementId
-          ? {
-              ...el,
-              animations: el.animations.map(anim =>
-                anim.id === animationId ? { ...anim, ...updates } : anim
-              )
-            }
-          : el
-      )
-    );
-  };
-
-  const removeAnimation = (elementId: string, animationId: string) => {
-    console.log('Removing animation:', elementId, animationId);
-    setElements(prev =>
-      prev.map(el =>
-        el.id === elementId
-          ? { ...el, animations: el.animations.filter(anim => anim.id !== animationId) }
-          : el
-      )
-    );
-  };
-
+  // Load a preset animation by name
   const loadPreset = async (presetName: string): Promise<string> => {
     console.log('Loading preset:', presetName);
     try {
-      // First try to fetch the preset from the API
+      // Try to fetch the preset from the API
       const presetData = await AnimationApi.getPreset(presetName);
       console.log('Loaded preset data:', presetData);
-      setElements(presetData.elements);
+      setSvgContent(presetData.svg);
       return presetData.message;
     } catch (error) {
-      console.error(`Error loading preset from API: ${error}`);
-
-      // Fall back to local presets if API fails
-      switch (presetName) {
-        case 'batSignal':
-          console.log('Using local batSignal preset');
-          setElements(batSignalPreset);
-          return "I've created the bat signal with a dramatic reveal.";
-        default:
-          console.warn(`Preset '${presetName}' not found`);
-          return '';
-      }
+      console.error(`Error loading preset: ${error}`);
+      return 'Error loading preset animation.';
     }
   };
 
+  // Generate a new animation from a prompt
   const generateAnimationFromPrompt = async (prompt: string): Promise<string> => {
     console.log('Generating animation from prompt:', prompt);
     try {
       const result = await AnimationApi.generate(prompt);
-      console.log('Generated animation result:', result);
-      setElements(result.elements);
+      console.log('Generated animation result');
+      setSvgContent(result.svg);
       return result.message;
     } catch (error: any) {
       console.error('Error generating animation:', error);
@@ -209,12 +67,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // Update the current animation from a prompt
   const updateAnimationFromPrompt = async (prompt: string): Promise<string> => {
     console.log('Updating animation from prompt:', prompt);
     try {
-      const result = await AnimationApi.update(prompt, elements);
-      console.log('Updated animation result:', result);
-      setElements(result.elements);
+      const result = await AnimationApi.update(prompt, svgContent);
+      console.log('Updated animation result');
+      setSvgContent(result.svg);
       return result.message;
     } catch (error: any) {
       console.error('Error updating animation:', error);
@@ -222,25 +81,63 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // Animation control methods
+  const pauseAnimations = useCallback(() => {
+    if (svgRef) {
+      console.log('Pausing animations');
+      svgRef.pauseAnimations();
+      setPlaying(false);
+    } else {
+      console.warn('Cannot pause animations: SVG reference is null');
+    }
+  }, [svgRef]);
+
+  const resumeAnimations = useCallback(() => {
+    if (svgRef) {
+      console.log('Resuming animations');
+      svgRef.unpauseAnimations();
+      setPlaying(true);
+    } else {
+      console.warn('Cannot resume animations: SVG reference is null');
+    }
+  }, [svgRef]);
+
+  // Resets animations by re-inserting the SVG content
+  const resetAnimations = useCallback(() => {
+    console.log('Resetting animations');
+    setSvgContent(prevContent => {
+      // Force a re-render by adding and immediately removing a comment
+      return prevContent ? prevContent + '<!-- reset -->' : prevContent;
+    });
+    
+    // Remove the comment after a short delay
+    setTimeout(() => {
+      setSvgContent(prevContent => {
+        return prevContent ? prevContent.replace('<!-- reset -->', '') : prevContent;
+      });
+    }, 50);
+    
+    setPlaying(true);
+  }, []);
+
+  // Debug logs for SVG content changes
+  React.useEffect(() => {
+    console.log('SVG Content changed:', svgContent ? 'Has content' : 'Empty');
+  }, [svgContent]);
+
   return (
     <AnimationContext.Provider value={{
-      elements,
-      currentTime,
+      svgContent,
       playing,
-      duration,
-      setElements,
-      setCurrentTime,
       setPlaying,
-      setDuration,
-      addElement,
-      updateElement,
-      removeElement,
-      addAnimation,
-      updateAnimation,
-      removeAnimation,
-      loadPreset,
+      setSvgContent,
+      setSvgRef,
       generateAnimationFromPrompt,
-      updateAnimationFromPrompt
+      updateAnimationFromPrompt,
+      loadPreset,
+      pauseAnimations,
+      resumeAnimations,
+      resetAnimations
     }}>
       {children}
     </AnimationContext.Provider>
@@ -254,4 +151,10 @@ export const useAnimation = (): AnimationContextType => {
     throw new Error('useAnimation must be used within an AnimationProvider');
   }
   return context;
+};
+
+// Export a hook to get the setSvgRef function
+export const useSvgRef = () => {
+  const { setSvgRef } = useAnimation();
+  return setSvgRef;
 };

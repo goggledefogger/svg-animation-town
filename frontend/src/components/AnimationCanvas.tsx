@@ -1,80 +1,143 @@
-import React, { useEffect } from 'react';
-import { useAnimation } from '../contexts/AnimationContext';
-import { useAnimationPlayback } from '../hooks/useAnimationPlayback';
-import { useAnimationRenderer } from '../hooks/useAnimationRenderer';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
 import EmptyState from './EmptyState';
 
 const AnimationCanvas: React.FC = () => {
-  const { elements } = useAnimation();
-  const { currentTime } = useAnimationPlayback();
-  const { renderElement } = useAnimationRenderer();
+  const { svgContent } = useAnimation();
+  const setSvgRef = useSvgRef();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
+  const currentSvgRef = useRef<SVGSVGElement | null>(null);
+  
+  // Use a state variable to track whether we're showing the empty state or the SVG
+  const [showEmptyState, setShowEmptyState] = useState(!svgContent);
 
-  // Debug logging when elements or time changes
-  useEffect(() => {
-    console.log('AnimationCanvas - elements changed:', elements);
-    console.log('Current element count:', elements.length);
-    if (elements.length > 0) {
-      console.log('First element details:', JSON.stringify(elements[0], null, 2));
+  // Memoize the function to handle SVG element setup to avoid recreating it on every render
+  const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
+    // Only update reference if it's a different element
+    if (svgElement !== currentSvgRef.current) {
+      currentSvgRef.current = svgElement;
+      setSvgRef(svgElement);
     }
-  }, [elements]);
+    
+    // Get container dimensions
+    const containerWidth = containerRef.current?.clientWidth || 800;
+    const containerHeight = containerRef.current?.clientHeight || 600;
+    
+    // Update SVG dimensions to fit container while maintaining aspect ratio
+    svgElement.setAttribute('width', `${containerWidth}`);
+    svgElement.setAttribute('height', `${containerHeight}`);
+  }, [setSvgRef]);
 
+  // Update SVG content and handle references
   useEffect(() => {
-    console.log('AnimationCanvas - current time:', currentTime);
-  }, [currentTime]);
+    console.log('SVG content effect running with content:', svgContent ? 'present' : 'none');
+    
+    // Check if we have SVG content to display
+    if (svgContent && svgContainerRef.current) {
+      // Set the SVG content safely
+      svgContainerRef.current.innerHTML = svgContent;
+      
+      // Find the SVG element in the container
+      const svgElement = svgContainerRef.current.querySelector('svg');
+      if (svgElement) {
+        setupSvgElement(svgElement as SVGSVGElement);
+      } else {
+        console.warn('No SVG element found in container after setting content');
+        // Clear reference if we don't have an SVG element
+        if (currentSvgRef.current) {
+          currentSvgRef.current = null;
+          setSvgRef(null);
+        }
+      }
+      
+      // Hide the empty state after we've set up the SVG
+      setShowEmptyState(false);
+    } else {
+      // No SVG content, show the empty state
+      setShowEmptyState(true);
+      
+      // Clear the SVG container if it exists
+      if (svgContainerRef.current) {
+        svgContainerRef.current.innerHTML = '';
+      }
+      
+      // Clear reference when there's no content
+      if (currentSvgRef.current) {
+        currentSvgRef.current = null;
+        setSvgRef(null);
+      }
+    }
+  }, [svgContent, setupSvgElement]); // Only depend on content and the stable setupSvgElement function
 
-  // Create a test element to verify rendering
-  const testElement = {
-    id: 'test-circle',
-    type: 'circle' as const,
-    attributes: {
-      cx: 400,
-      cy: 300,
-      r: 50,
-      fill: '#ffdf00',
-      stroke: '#ffffff',
-      strokeWidth: 2
-    },
-    animations: []
-  };
+  // Adjust SVG to container size when window resizes
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current && svgContainerRef.current) {
+        const svgElement = svgContainerRef.current.querySelector('svg');
+        if (svgElement) {
+          // Get container dimensions
+          const containerWidth = containerRef.current.clientWidth;
+          const containerHeight = containerRef.current.clientHeight;
+          
+          // Update SVG dimensions to fit container while maintaining aspect ratio
+          svgElement.setAttribute('width', `${containerWidth}`);
+          svgElement.setAttribute('height', `${containerHeight}`);
+        }
+      }
+    };
 
-  // Sort elements to ensure background elements (like sky/rect) are rendered first
-  // and foreground elements (like sun/circle) are rendered on top
-  const sortedElements = [...elements].sort((a, b) => {
-    // Background elements should have lower z-index
-    if (a.type === 'rect' && a.id.toLowerCase().includes('sky')) return -1;
-    if (b.type === 'rect' && b.id.toLowerCase().includes('sky')) return 1;
+    // Set initial size
+    handleResize();
+    
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [svgContent]);
 
-    // Further sort by element type
-    if (a.type === 'rect' && b.type !== 'rect') return -1;
-    if (a.type !== 'rect' && b.type === 'rect') return 1;
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (svgContainerRef.current) {
+        svgContainerRef.current.innerHTML = '';
+      }
+      
+      // Clear reference on unmount
+      if (currentSvgRef.current) {
+        currentSvgRef.current = null;
+        setSvgRef(null);
+      }
+    };
+  }, [setSvgRef]);
 
-    return 0;
-  });
+  // Log when SVG content changes
+  useEffect(() => {
+    if (svgContent) {
+      console.log('AnimationCanvas - SVG content updated');
+    } else {
+      console.log('AnimationCanvas - No SVG content');
+    }
+  }, [svgContent]);
 
   return (
-    <div className="flex-grow bg-black rounded-lg overflow-hidden relative" style={{ minHeight: '400px' }}>
-      <svg
+    <div 
+      className="flex-grow bg-black rounded-lg overflow-hidden relative"
+      style={{ minHeight: '400px' }}
+      ref={containerRef}
+    >
+      {/* SVG Container - always present but only visible when we have content */}
+      <div 
         className="w-full h-full"
-        viewBox="0 0 800 600"
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {/* Background rectangle for debugging */}
-        <rect x="0" y="0" width="800" height="600" fill="#1a1a2e" />
-
-        {/* Test element to verify rendering pipeline */}
-        <circle cx="200" cy="200" r="30" fill="red" />
-
-        {/* Render the test element using the renderer */}
-        {renderElement(testElement, currentTime)}
-
-        {/* Render actual elements in sorted order to ensure proper layering */}
-        {sortedElements.map(element => {
-          console.log(`Rendering element ${element.id} of type ${element.type}`);
-          return renderElement(element, currentTime);
-        })}
-      </svg>
-
-      {elements.length === 0 && <EmptyState />}
+        ref={svgContainerRef}
+        style={{ display: showEmptyState ? 'none' : 'block' }}
+      />
+      
+      {/* Empty State - conditionally rendered based on state */}
+      {showEmptyState && <EmptyState />}
     </div>
   );
 };

@@ -1,73 +1,66 @@
 /**
  * Build the system prompt for the OpenAI API
  * Optimized for use with gpt-4o-mini model
+ * Instructs the model to create complete SVG animations
  *
  * @param {boolean} isUpdate - Whether this is an update to an existing animation
  * @returns {string} System prompt
  */
 exports.buildSystemPrompt = (isUpdate = false) => {
-  return `You are an AI animation assistant for Gotham Animation Studio, a web app that creates SVG animations through conversation.
-Your job is to ${isUpdate ? 'update existing' : 'create new'} SVG animations based on the user's description.
+  return `You are an AI assistant that creates SVG animations based on user requests.
+Your responses should include:
+1. A brief explanation of what you're creating
+2. A complete, self-contained SVG that includes all animation directly within it.
 
-IMPORTANT: You MUST respond ONLY with valid JSON containing SVG elements and their animations. Do not include any explanatory text outside the JSON structure.
+The SVG must:
+- Include all animations using native SVG animation methods (SMIL or CSS)
+- Have all styles and animations embedded within the SVG (inside <style> tags)
+- Be complete and ready to display without any additional processing
+- Use proper SVG namespaces
+- Set a viewBox of "0 0 800 600" and appropriate dimensions
+- Target a dark background (the container has a black background)
 
-Your response must follow this exact format:
+Here's an example of how your SVG could be structured:
 
-{
-  "elements": [
-    {
-      "id": "unique-id-string",
-      "type": "circle|rect|path|text|line|group",
-      "attributes": {
-        "attribute1": "value1",
-        "attribute2": "value2",
-        ...
-      },
-      "animations": [
-        {
-          "id": "unique-animation-id",
-          "targetProperty": "propertyName",
-          "keyframes": [
-            { "offset": 0, "value": "startValue" },
-            { "offset": 0.5, "value": "midValue" },
-            { "offset": 1, "value": "endValue" }
-          ],
-          "duration": 3000,
-          "easing": "ease-in-out",
-          "delay": 0,
-          "iterationCount": 1 or "infinite"
-        }
-      ]
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <!-- Definitions for gradients, filters, etc. -->
+  <defs>
+    <linearGradient id="myGradient" gradientTransform="rotate(90)">
+      <stop offset="5%" stop-color="gold" />
+      <stop offset="95%" stop-color="red" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Embedded CSS animations -->
+  <style>
+    @keyframes move {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(300px); }
     }
-  ],
-  "message": "Your friendly response to the user about what you created"
-}
+    #animated-element {
+      animation: move 3s ease infinite alternate;
+    }
+  </style>
+  
+  <!-- SVG elements -->
+  <circle id="animated-element" cx="50" cy="50" r="20" fill="url(#myGradient)" />
+  
+  <!-- SMIL animations can also be used -->
+  <rect x="50" y="100" width="50" height="50" fill="blue">
+    <animate 
+      attributeName="x" 
+      values="50;350;50" 
+      dur="4s" 
+      repeatCount="indefinite" 
+      begin="0s" />
+  </rect>
+</svg>
 
-SVG Element Types and Required Attributes:
-- circle: cx, cy, r, fill
-- rect: x, y, width, height, fill
-- path: d, fill
-- text: x, y, font-size, fill, content
-- line: x1, y1, x2, y2, stroke
-- group: transform (optional)
-
-Common Animation Properties:
-- opacity: 0 to 1
-- r: radius for circles
-- cx, cy: center position for circles
-- x, y: position for rects and text
-- width, height: dimensions for rects
-- fill: color (use hex colors like #ffdf00)
-- stroke: color for outlines
-- transform: for rotation, scaling, translation (e.g., "translate(10, 20) rotate(45)")
-- d: for path data
-
-Use coordinates relative to an 800x600 canvas.
-The background should be dark (typically #121212).
-Always use the bat-yellow color (#ffdf00) for the bat signal and important highlights.
-For animations, provide realistic durations in milliseconds.
-
-${isUpdate ? 'Preserve or modify the existing elements based on the user request. Don\'t remove elements unless explicitly asked.' : 'Start with a clean slate unless the user asks for something specific.'}`;
+You have full creative freedom in designing the animation. Use descriptive IDs for SVG elements.
+${isUpdate ? 'Modify the existing SVG to incorporate the requested changes while preserving the overall structure.' : 'Create a completely new animation based on the user request.'}
+You can use both CSS animations (in style tags) or SMIL animations (<animate> tags) based on which works better for the specific animation.
+Make sure all your SVG is valid and will render correctly in modern browsers.
+Always include the bat-yellow color (#ffdf00) for Batman-themed animations and important highlights.`;
 };
 
 /**
@@ -75,19 +68,20 @@ ${isUpdate ? 'Preserve or modify the existing elements based on the user request
  * For use with GPT-4o-mini model
  *
  * @param {string} userPrompt - User's request
- * @param {Array} currentElements - Current SVG elements
+ * @param {string} currentSvg - Current SVG content (if any)
  * @param {boolean} isUpdate - Whether this is an update to an existing animation
  * @returns {string} User prompt
  */
-exports.buildUserPrompt = (userPrompt, currentElements = [], isUpdate = false) => {
+exports.buildUserPrompt = (userPrompt, currentSvg = '', isUpdate = false) => {
   let prompt = userPrompt;
 
-  // If there are current elements and this is an update, include them in the prompt
-  if (currentElements.length > 0 && isUpdate) {
-    prompt += `\n\nHere are the current elements in the animation:\n\n${JSON.stringify(currentElements, null, 2)}`;
+  // If there is current SVG content and this is an update, include it in the prompt
+  if (currentSvg && isUpdate) {
+    prompt += `\n\nHere is the current SVG animation:\n\n${currentSvg}`;
+    prompt += "\n\nPlease modify this SVG animation according to my request while preserving the overall structure.";
   }
 
-  prompt += "\n\nRemember to respond ONLY with a valid JSON object containing the elements and message.";
+  prompt += "\n\nMake sure to respond with a complete, self-contained SVG that can be directly inserted into the webpage.";
 
   return prompt;
 };

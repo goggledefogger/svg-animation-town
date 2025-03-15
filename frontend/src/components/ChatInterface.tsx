@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
 import { generateId } from '../utils/helpers';
-import { AnimationApi } from '../services/api';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 
@@ -27,9 +26,10 @@ const ChatInterface: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
-    elements,
-    setElements,
-    loadPreset
+    svgContent,
+    setSvgContent,
+    generateAnimationFromPrompt,
+    updateAnimationFromPrompt
   } = useAnimation();
 
   // Scroll to bottom of chat
@@ -56,85 +56,30 @@ const ChatInterface: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Check for preset keywords
-      if (text.toLowerCase().includes('bat signal') ||
-          text.toLowerCase().includes('batman')) {
-        try {
-          const presetData = await AnimationApi.getPreset('batSignal');
-          setElements(presetData.elements);
+      // Determine if this is a new animation or an update
+      const isUpdate = !!svgContent;
+      let responseMessage: string;
 
-          // Add AI response with the preset message
-          const aiMessage: Message = {
-            id: generateId(),
-            sender: 'ai',
-            text: presetData.message,
-            timestamp: new Date()
-          };
-
-          setMessages(prev => [...prev, aiMessage]);
-        } catch (error) {
-          console.error('Error loading preset:', error);
-          // Fallback to local preset
-          loadPreset('batSignal');
-
-          // Add AI response
-          const aiMessage: Message = {
-            id: generateId(),
-            sender: 'ai',
-            text: "I've created the bat signal with a dramatic reveal. The spotlight grows from the center, then the bat symbol fades in with a pulsing glow effect.",
-            timestamp: new Date()
-          };
-
-          setMessages(prev => [...prev, aiMessage]);
-        }
+      // Generate or update animation based on whether there is existing content
+      if (isUpdate) {
+        responseMessage = await updateAnimationFromPrompt(text);
       } else {
-        // Generate or update animation based on whether there are existing elements
-        const result = elements.length === 0
-          ? await AnimationApi.generate(text)
-          : await AnimationApi.update(text, elements);
-
-        // Debug the received response
-        console.log('Received API response for animation:', JSON.stringify(result, null, 2));
-        console.log('Setting elements to:', result.elements);
-        console.log('Element count:', result.elements.length);
-
-        // Add extra validation for the elements
-        if (result.elements.length > 0) {
-          // Log the structure of each element
-          result.elements.forEach((element, index) => {
-            console.log(`Element ${index + 1}:`, element);
-
-            // Check if the element has the required properties
-            if (!element.id || !element.type || !element.attributes) {
-              console.warn(`Element ${index + 1} is missing required properties:`, element);
-            }
-
-            // Check animations
-            if (!element.animations || !Array.isArray(element.animations)) {
-              console.warn(`Element ${index + 1} has invalid animations:`, element.animations);
-              // Ensure animations is an array
-              element.animations = [];
-            }
-          });
-        } else {
-          console.warn('No elements received from API');
-        }
-
-        // Update the animation elements - log before and after for debugging
-        console.log('Setting elements in context, before:', elements);
-        setElements(result.elements);
-        console.log('Elements should be set in context');
-
-        // Add AI response
-        const aiMessage: Message = {
-          id: generateId(),
-          sender: 'ai',
-          text: result.message,
-          timestamp: new Date()
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
+        responseMessage = await generateAnimationFromPrompt(text);
       }
+
+      // Extract only the user-friendly part of the message
+      // The server response typically includes SVG implementation details after certain markers
+      const userFriendlyMessage = responseMessage.split(/Here's the (updated )?SVG:|\n\n###|\n###|You can directly insert/)[0].trim();
+
+      // Add AI response
+      const aiMessage: Message = {
+        id: generateId(),
+        sender: 'ai',
+        text: userFriendlyMessage,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
     } catch (error: any) {
       // Handle error
       const errorMessage: Message = {

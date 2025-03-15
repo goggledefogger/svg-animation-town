@@ -1,6 +1,71 @@
 const { v4: uuidv4 } = require('uuid');
 
 /**
+ * Extract SVG code and explanatory text from the LLM response
+ * 
+ * @param {string} responseText - The raw response from the LLM
+ * @returns {Object} - Object containing the SVG code and explanatory text
+ */
+exports.extractSvgAndText = (responseText) => {
+  try {
+    console.log('Extracting SVG and text from LLM response');
+    
+    // Try to extract SVG tag
+    const svgMatch = responseText.match(/<svg[\s\S]*?<\/svg>/);
+    const svg = svgMatch ? svgMatch[0] : '';
+    
+    // Get the text content by removing the SVG
+    let text = responseText.replace(/<svg[\s\S]*?<\/svg>/, '').trim();
+    
+    // Clean up text (remove markdown code blocks if present)
+    text = text.replace(/```svg[\s\S]*?```/g, '');
+    text = text.replace(/```xml[\s\S]*?```/g, '');
+    text = text.replace(/```html[\s\S]*?```/g, '');
+    text = text.replace(/```[\s\S]*?```/g, '');
+    
+    // Remove any excessive newlines and trim
+    text = text.replace(/\n{3,}/g, '\n\n').trim();
+    
+    if (!svg) {
+      console.warn('No SVG found in LLM response');
+      return {
+        svg: createErrorSvg('No SVG found in response'),
+        text: 'Sorry, I had trouble creating that animation. Please try again with a different description.'
+      };
+    }
+    
+    return { svg, text };
+  } catch (error) {
+    console.error('Error parsing LLM response:', error);
+    return {
+      svg: createErrorSvg(`Error parsing SVG: ${error.message}`),
+      text: 'Sorry, there was an error processing the animation.'
+    };
+  }
+};
+
+/**
+ * Create a simple error SVG to display when there's a problem
+ * 
+ * @param {string} errorMessage - The error message to display
+ * @returns {string} - SVG code for an error indicator
+ */
+function createErrorSvg(errorMessage) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+    <rect width="800" height="600" fill="#1a1a2e" />
+    <circle cx="400" cy="250" r="60" fill="#ff4040" />
+    <rect x="390" y="200" width="20" height="60" fill="white" />
+    <circle cx="400" cy="290" r="10" fill="white" />
+    <text x="400" y="400" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+      Animation Error
+    </text>
+    <text x="400" y="440" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle">
+      ${errorMessage}
+    </text>
+  </svg>`;
+}
+
+/**
  * Parse the OpenAI response to get SVG elements
  *
  * @param {string} jsonString - OpenAI response as JSON string

@@ -1,19 +1,19 @@
-import { SVGElement } from '../contexts/AnimationContext';
-
 /**
- * Standard API response format
+ * API response interface
  */
 export interface ApiResponse {
   success: boolean;
-  elements: SVGElement[];
   message: string;
+  svg?: string;
+  elements?: any[];
 }
 
 /**
- * Error response format
+ * API error interface
  */
 export interface ApiError {
   success: false;
   message: string;
   error?: string;
+  status?: number;
 }

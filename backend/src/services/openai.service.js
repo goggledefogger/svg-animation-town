@@ -9,21 +9,20 @@ const openai = new OpenAI({
 });
 
 /**
- * Generate a new animation based on user prompt
+ * Generate a new SVG animation based on user prompt
  * Uses GPT-4o-mini by default
  *
  * @param {string} prompt - User's animation request
- * @param {Array} currentElements - Current SVG elements (if any)
- * @returns {Object} OpenAI response
+ * @returns {Object} OpenAI response with SVG content
  */
-exports.generateAnimation = async (prompt, currentElements = []) => {
+exports.generateAnimation = async (prompt) => {
   if (!config.openai.apiKey) {
     throw new ServiceUnavailableError('OpenAI API key is not configured');
   }
 
   try {
     const systemPrompt = buildSystemPrompt();
-    const userPrompt = buildUserPrompt(prompt, currentElements);
+    const userPrompt = buildUserPrompt(prompt);
 
     const completion = await openai.chat.completions.create({
       model: config.openai.model,
@@ -32,8 +31,6 @@ exports.generateAnimation = async (prompt, currentElements = []) => {
         { role: 'user', content: userPrompt }
       ],
       temperature: config.openai.temperature,
-      max_tokens: config.openai.maxTokens,
-      response_format: { type: 'json_object' }
     });
 
     if (!completion.choices || !completion.choices.length) {
@@ -60,21 +57,21 @@ exports.generateAnimation = async (prompt, currentElements = []) => {
 };
 
 /**
- * Update an existing animation based on user prompt
+ * Update an existing animation based on user prompt and previous SVG content
  * Uses GPT-4o-mini by default
  *
  * @param {string} prompt - User's animation update request
- * @param {Array} currentElements - Current SVG elements
- * @returns {Object} OpenAI response
+ * @param {string} currentSvg - Current SVG content (if any)
+ * @returns {Object} OpenAI response with updated SVG content
  */
-exports.updateAnimation = async (prompt, currentElements) => {
+exports.updateAnimation = async (prompt, currentSvg = '') => {
   if (!config.openai.apiKey) {
     throw new ServiceUnavailableError('OpenAI API key is not configured');
   }
 
   try {
     const systemPrompt = buildSystemPrompt(true); // true for update mode
-    const userPrompt = buildUserPrompt(prompt, currentElements, true); // true for update mode
+    const userPrompt = buildUserPrompt(prompt, currentSvg, true); // true for update mode
 
     const completion = await openai.chat.completions.create({
       model: config.openai.model,
@@ -83,8 +80,6 @@ exports.updateAnimation = async (prompt, currentElements) => {
         { role: 'user', content: userPrompt }
       ],
       temperature: config.openai.temperature,
-      max_tokens: config.openai.maxTokens,
-      response_format: { type: 'json_object' }
     });
 
     if (!completion.choices || !completion.choices.length) {

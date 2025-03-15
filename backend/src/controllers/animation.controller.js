@@ -1,13 +1,13 @@
 const OpenAIService = require('../services/openai.service');
 const presetService = require('../services/preset.service');
-const { parseOpenAIResponse } = require('../utils/parser');
+const { extractSvgAndText } = require('../utils/parser');
 const { asyncHandler, BadRequestError, NotFoundError, ServiceUnavailableError } = require('../utils/errors');
 
 /**
  * Generate a new animation based on a text prompt
  */
 exports.generateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, currentElements = [] } = req.body;
+  const { prompt } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
@@ -15,15 +15,15 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
 
   try {
     // Call OpenAI to generate the animation
-    const openaiResponse = await OpenAIService.generateAnimation(prompt, currentElements);
+    const llmResponse = await OpenAIService.generateAnimation(prompt);
 
-    // Parse the OpenAI response into our SVG element format
-    const parsedElements = parseOpenAIResponse(openaiResponse);
+    // Extract SVG and text from the response
+    const { svg, text } = extractSvgAndText(llmResponse);
 
     return res.status(200).json({
       success: true,
-      elements: parsedElements.elements,
-      message: parsedElements.message
+      svg,
+      message: text
     });
   } catch (error) {
     console.error('Error generating animation:', error);
@@ -35,27 +35,23 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
  * Update an existing animation based on a text prompt
  */
 exports.updateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, currentElements = [] } = req.body;
+  const { prompt, currentSvg } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
   }
 
-  if (!currentElements || !currentElements.length) {
-    throw new BadRequestError('Current elements are required for updates');
-  }
-
   try {
     // Call OpenAI to update the animation
-    const openaiResponse = await OpenAIService.updateAnimation(prompt, currentElements);
+    const llmResponse = await OpenAIService.updateAnimation(prompt, currentSvg);
 
-    // Parse the OpenAI response into our SVG element format
-    const parsedElements = parseOpenAIResponse(openaiResponse);
+    // Extract SVG and text from the response
+    const { svg, text } = extractSvgAndText(llmResponse);
 
     return res.status(200).json({
       success: true,
-      elements: parsedElements.elements,
-      message: parsedElements.message
+      svg,
+      message: text
     });
   } catch (error) {
     console.error('Error updating animation:', error);
