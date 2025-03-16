@@ -8,6 +8,8 @@ interface MessageInputProps {
 const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) => {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const [isTouched, setIsTouched] = useState(false);
 
   // Handle submit
   const handleSubmit = (e: React.FormEvent) => {
@@ -15,6 +17,43 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) =
 
     if (!inputValue.trim() || isProcessing) return;
 
+    onSubmit(inputValue);
+    setInputValue('');
+  };
+
+  // Separate touch start handler to track touch events
+  const handleTouchStart = () => {
+    setIsTouched(true);
+  };
+
+  // Handle touch end - better for mobile than click
+  const handleTouchEnd = () => {
+    if (!inputValue.trim() || isProcessing) return;
+
+    // Only proceed if we've detected a touch start
+    if (isTouched) {
+      // Blur the input to dismiss keyboard
+      inputRef.current?.blur();
+
+      // Reset touch state
+      setIsTouched(false);
+
+      // Use a longer delay to ensure keyboard is fully dismissed
+      setTimeout(() => {
+        onSubmit(inputValue);
+        setInputValue('');
+      }, 300);
+    }
+  };
+
+  // Handle button click for non-touch devices
+  const handleClick = () => {
+    if (!inputValue.trim() || isProcessing) return;
+
+    // For non-touch devices or as fallback
+    inputRef.current?.blur();
+
+    // Submit the form
     onSubmit(inputValue);
     setInputValue('');
   };
@@ -30,7 +69,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) =
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex">
+    <form ref={formRef} onSubmit={handleSubmit} className="flex">
       <input
         ref={inputRef}
         type="text"
@@ -42,8 +81,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) =
         disabled={isProcessing}
       />
       <button
-        type="submit"
+        type="button"
         className="btn btn-primary ml-2 p-2"
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         disabled={!inputValue.trim() || isProcessing}
       >
         {isProcessing ? (
