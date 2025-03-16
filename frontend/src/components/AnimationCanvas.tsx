@@ -14,6 +14,8 @@ const AnimationCanvas: React.FC = () => {
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
+    console.log('Setting up SVG element');
+
     // Only update reference if it's a different element
     if (svgElement !== currentSvgRef.current) {
       currentSvgRef.current = svgElement;
@@ -23,6 +25,8 @@ const AnimationCanvas: React.FC = () => {
     // Get container dimensions
     const containerWidth = containerRef.current?.clientWidth || 800;
     const containerHeight = containerRef.current?.clientHeight || 600;
+
+    console.log(`Container dimensions: ${containerWidth}x${containerHeight}`);
 
     // Update SVG dimensions to fit container while maintaining aspect ratio
     svgElement.setAttribute('width', `${containerWidth}`);
@@ -35,7 +39,7 @@ const AnimationCanvas: React.FC = () => {
 
     // Check if we have SVG content to display
     if (svgContent && svgContainerRef.current) {
-      // Set the SVG content safely
+      console.log('Setting SVG content to container');
 
       // Clear previous content and set the new SVG content
       svgContainerRef.current.innerHTML = svgContent;
@@ -43,6 +47,7 @@ const AnimationCanvas: React.FC = () => {
       // Find the SVG element in the container
       const svgElement = svgContainerRef.current.querySelector('svg');
       if (svgElement) {
+        console.log('Found SVG element in container');
         setupSvgElement(svgElement as SVGSVGElement);
         // SVG was found and setup, hide the empty state
         setShowEmptyState(false);
@@ -67,12 +72,6 @@ const AnimationCanvas: React.FC = () => {
       }
     }
   }, [svgContent, setupSvgElement]);
-
-  // Initial state when component mounts
-  useEffect(() => {
-    // Set initial state based on whether we have SVG content
-    setShowEmptyState(!svgContent);
-  }, []);
 
   // Adjust SVG to container size when window resizes
   useEffect(() => {
@@ -133,16 +132,16 @@ const AnimationCanvas: React.FC = () => {
       className="relative flex-1 bg-black/30 rounded-lg overflow-visible flex items-center justify-center"
       style={{ touchAction: 'pan-x pan-y', minHeight: '300px' }}
     >
-      {showEmptyState ? (
+      {/* Always render both, but control visibility with CSS */}
+      <div className={showEmptyState ? 'block' : 'hidden'}>
         <EmptyState />
-      ) : (
-        <div
-          ref={svgContainerRef}
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ maxHeight: '100%', maxWidth: '100%' }}
-          data-testid="svg-container"
-        />
-      )}
+      </div>
+      <div
+        ref={svgContainerRef}
+        className={`absolute inset-0 flex items-center justify-center ${showEmptyState ? 'hidden' : 'block'}`}
+        style={{ maxHeight: '100%', maxWidth: '100%' }}
+        data-testid="svg-container"
+      />
     </div>
   );
 };
