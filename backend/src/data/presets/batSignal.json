@@ -8,9 +8,23 @@
         "y": 0,
         "width": "100%",
         "height": "100%",
-        "fill": "#0a0e14"
+        "fill": "#0a1020"
       },
-      "animations": []
+      "animations": [
+        {
+          "id": "backgroundShift",
+          "targetProperty": "fill",
+          "keyframes": [
+            { "offset": 0, "value": "#0a1020" },
+            { "offset": 0.5, "value": "#0c1530" },
+            { "offset": 1, "value": "#0a1020" }
+          ],
+          "duration": 15000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
     },
     {
       "id": "stars",
@@ -22,8 +36,8 @@
         {
           "type": "circle",
           "attributes": {
-            "cx": 100,
-            "cy": 100,
+            "cx": 50,
+            "cy": 50,
             "r": 1,
             "fill": "#ffffff"
           },
@@ -32,11 +46,11 @@
               "id": "twinkle1",
               "targetProperty": "opacity",
               "keyframes": [
-                { "offset": 0, "value": 0.3 },
-                { "offset": 0.5, "value": 1 },
-                { "offset": 1, "value": 0.3 }
+                { "offset": 0, "value": 0.8 },
+                { "offset": 0.5, "value": 0.3 },
+                { "offset": 1, "value": 0.8 }
               ],
-              "duration": 7000,
+              "duration": 4000,
               "easing": "ease-in-out",
               "delay": 0,
               "iterationCount": "infinite"
@@ -46,8 +60,8 @@
         {
           "type": "circle",
           "attributes": {
-            "cx": 200,
-            "cy": 150,
+            "cx": 120,
+            "cy": 30,
             "r": 1.5,
             "fill": "#ffffff"
           },
@@ -56,9 +70,9 @@
               "id": "twinkle2",
               "targetProperty": "opacity",
               "keyframes": [
-                { "offset": 0, "value": 0.3 },
-                { "offset": 0.5, "value": 1 },
-                { "offset": 1, "value": 0.3 }
+                { "offset": 0, "value": 0.7 },
+                { "offset": 0.5, "value": 0.2 },
+                { "offset": 1, "value": 0.7 }
               ],
               "duration": 5000,
               "easing": "ease-in-out",
@@ -70,8 +84,8 @@
         {
           "type": "circle",
           "attributes": {
-            "cx": 300,
-            "cy": 120,
+            "cx": 200,
+            "cy": 70,
             "r": 1,
             "fill": "#ffffff"
           },
@@ -80,11 +94,11 @@
               "id": "twinkle3",
               "targetProperty": "opacity",
               "keyframes": [
-                { "offset": 0, "value": 0.3 },
-                { "offset": 0.5, "value": 1 },
-                { "offset": 1, "value": 0.3 }
+                { "offset": 0, "value": 0.9 },
+                { "offset": 0.5, "value": 0.4 },
+                { "offset": 1, "value": 0.9 }
               ],
-              "duration": 6000,
+              "duration": 3500,
               "easing": "ease-in-out",
               "delay": 500,
               "iterationCount": "infinite"
@@ -94,8 +108,8 @@
         {
           "type": "circle",
           "attributes": {
-            "cx": 550,
-            "cy": 180,
+            "cx": 280,
+            "cy": 40,
             "r": 1.2,
             "fill": "#ffffff"
           },
@@ -104,35 +118,11 @@
               "id": "twinkle4",
               "targetProperty": "opacity",
               "keyframes": [
-                { "offset": 0, "value": 0.3 },
-                { "offset": 0.5, "value": 1 },
-                { "offset": 1, "value": 0.3 }
+                { "offset": 0, "value": 0.6 },
+                { "offset": 0.5, "value": 0.1 },
+                { "offset": 1, "value": 0.6 }
               ],
-              "duration": 9000,
-              "easing": "ease-in-out",
-              "delay": 800,
-              "iterationCount": "infinite"
-            }
-          ]
-        },
-        {
-          "type": "circle",
-          "attributes": {
-            "cx": 650,
-            "cy": 90,
-            "r": 1,
-            "fill": "#ffffff"
-          },
-          "animations": [
-            {
-              "id": "twinkle5",
-              "targetProperty": "opacity",
-              "keyframes": [
-                { "offset": 0, "value": 0.3 },
-                { "offset": 0.5, "value": 1 },
-                { "offset": 1, "value": 0.3 }
-              ],
-              "duration": 8000,
+              "duration": 4500,
               "easing": "ease-in-out",
               "delay": 1500,
               "iterationCount": "infinite"
@@ -142,9 +132,33 @@
         {
           "type": "circle",
           "attributes": {
-            "cx": 720,
-            "cy": 140,
-            "r": 1.3,
+            "cx": 350,
+            "cy": 90,
+            "r": 1,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle5",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.8 },
+                { "offset": 0.5, "value": 0.3 },
+                { "offset": 1, "value": 0.8 }
+              ],
+              "duration": 4200,
+              "easing": "ease-in-out",
+              "delay": 200,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 420,
+            "cy": 20,
+            "r": 1.5,
             "fill": "#ffffff"
           },
           "animations": [
@@ -152,66 +166,64 @@
               "id": "twinkle6",
               "targetProperty": "opacity",
               "keyframes": [
-                { "offset": 0, "value": 0.3 },
-                { "offset": 0.5, "value": 1 },
-                { "offset": 1, "value": 0.3 }
+                { "offset": 0, "value": 0.7 },
+                { "offset": 0.5, "value": 0.2 },
+                { "offset": 1, "value": 0.7 }
               ],
-              "duration": 7500,
+              "duration": 3800,
               "easing": "ease-in-out",
-              "delay": 200,
+              "delay": 1200,
               "iterationCount": "infinite"
             }
           ]
-        }
-      ]
-    },
-    {
-      "id": "distantBat",
-      "type": "path",
-      "attributes": {
-        "d": "M120 100 Q125 95 130 100 Q135 95 140 100 Q138 98 136 99 Q134 97 130 98 Q126 97 124 99 Q122 98 120 100",
-        "fill": "#000000",
-        "opacity": 0.6,
-        "transform": "translate(0, 0)"
-      },
-      "animations": [
+        },
         {
-          "id": "batFly",
-          "targetProperty": "transform",
-          "keyframes": [
-            { "offset": 0, "value": "translate(0, 0)" },
-            { "offset": 1, "value": "translate(600, 50)" }
-          ],
-          "duration": 45000,
-          "easing": "ease-in-out",
-          "delay": 5000,
-          "iterationCount": "infinite",
-          "direction": "alternate"
-        }
-      ]
-    },
-    {
-      "id": "cloudsBehind",
-      "type": "path",
-      "attributes": {
-        "d": "M100,250 Q150,230 200,250 Q230,230 260,240 Q290,220 340,250 Q380,230 420,250 Q480,230 520,250 Q580,230 620,240 Q670,220 700,250 Z",
-        "fill": "#1a222c",
-        "opacity": 0.4,
-        "transform": "translate(0, 50)"
-      },
-      "animations": [
+          "type": "circle",
+          "attributes": {
+            "cx": 95,
+            "cy": 25,
+            "r": 0.8,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle7",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.7 },
+                { "offset": 0.5, "value": 0.1 },
+                { "offset": 1, "value": 0.7 }
+              ],
+              "duration": 2000,
+              "easing": "ease-in-out",
+              "delay": 300,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
         {
-          "id": "cloudsDrift",
-          "targetProperty": "transform",
-          "keyframes": [
-            { "offset": 0, "value": "translate(0, 50)" },
-            { "offset": 1, "value": "translate(40, 50)" }
-          ],
-          "duration": 120000,
-          "easing": "ease-in-out",
-          "delay": 0,
-          "iterationCount": "infinite",
-          "direction": "alternate"
+          "type": "circle",
+          "attributes": {
+            "cx": 180,
+            "cy": 60,
+            "r": 0.6,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle8",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.8 },
+                { "offset": 0.5, "value": 0.2 },
+                { "offset": 1, "value": 0.8 }
+              ],
+              "duration": 1500,
+              "easing": "ease-in-out",
+              "delay": 800,
+              "iterationCount": "infinite"
+            }
+          ]
         }
       ]
     },
@@ -220,22 +232,200 @@
       "type": "path",
       "attributes": {
         "d": "M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z",
-        "fill": "#151a20",
+        "fill": "#050510",
         "opacity": 0.9
       },
-      "animations": []
+      "animations": [
+        {
+          "id": "citySilhouetteShift",
+          "targetProperty": "d",
+          "keyframes": [
+            {
+              "offset": 0,
+              "value": "M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z"
+            },
+            {
+              "offset": 0.5,
+              "value": "M0,600 L50,585 L100,595 L150,565 L200,590 L250,575 L300,595 L350,555 L400,585 L450,565 L500,595 L550,575 L600,585 L650,565 L700,595 L750,575 L800,595 L800,600 Z"
+            },
+            {
+              "offset": 1,
+              "value": "M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z"
+            }
+          ],
+          "duration": 7000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "cityLights",
+      "type": "g",
+      "attributes": {
+        "opacity": 1
+      },
+      "elements": [
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 35,
+            "cy": 555,
+            "r": 1,
+            "fill": "yellow"
+          },
+          "animations": [
+            {
+              "id": "lightFlicker1",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.7 },
+                { "offset": 0.5, "value": 0.2 },
+                { "offset": 1, "value": 0.7 }
+              ],
+              "duration": 3000,
+              "easing": "ease-in-out",
+              "delay": 200,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 110,
+            "cy": 565,
+            "r": 1,
+            "fill": "yellow"
+          },
+          "animations": [
+            {
+              "id": "lightFlicker2",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.8 },
+                { "offset": 0.5, "value": 0.3 },
+                { "offset": 1, "value": 0.8 }
+              ],
+              "duration": 2500,
+              "easing": "ease-in-out",
+              "delay": 700,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 240,
+            "cy": 555,
+            "r": 1,
+            "fill": "yellow"
+          },
+          "animations": [
+            {
+              "id": "lightFlicker3",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.8 },
+                { "offset": 0.5, "value": 0.3 },
+                { "offset": 1, "value": 0.8 }
+              ],
+              "duration": 3800,
+              "easing": "ease-in-out",
+              "delay": 400,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 340,
+            "cy": 535,
+            "r": 1,
+            "fill": "yellow"
+          },
+          "animations": [
+            {
+              "id": "lightFlicker4",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.7 },
+                { "offset": 0.5, "value": 0.2 },
+                { "offset": 1, "value": 0.7 }
+              ],
+              "duration": 3300,
+              "easing": "ease-in-out",
+              "delay": 1800,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 450,
+            "cy": 545,
+            "r": 1,
+            "fill": "yellow"
+          },
+          "animations": [
+            {
+              "id": "lightFlicker5",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.6 },
+                { "offset": 0.5, "value": 0.1 },
+                { "offset": 1, "value": 0.6 }
+              ],
+              "duration": 2700,
+              "easing": "ease-in-out",
+              "delay": 900,
+              "iterationCount": "infinite"
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "lightSource",
       "type": "circle",
       "attributes": {
-        "cx": 400,
-        "cy": 770,
-        "r": 30,
+        "cx": 250,
+        "cy": 350,
+        "r": 15,
         "fill": "#ffdf88",
-        "filter": "drop-shadow(0 0 20px #ffdf88)"
+        "filter": "drop-shadow(0 0 15px #ffdf88)"
       },
       "animations": [
+        {
+          "id": "lightSourcePulse",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0.9 },
+            { "offset": 0.5, "value": 1 },
+            { "offset": 1, "value": 0.9 }
+          ],
+          "duration": 1500,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        },
+        {
+          "id": "lightSourceGrow",
+          "targetProperty": "r",
+          "keyframes": [
+            { "offset": 0, "value": 10 },
+            { "offset": 0.5, "value": 12 },
+            { "offset": 1, "value": 10 }
+          ],
+          "duration": 3000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        },
         {
           "id": "lightSourceGlow",
           "targetProperty": "filter",
@@ -255,7 +445,7 @@
       "id": "mainBeam",
       "type": "path",
       "attributes": {
-        "d": "M370,770 L300,300 L500,300 L430,770 Z",
+        "d": "M235,350 L100,50 L400,50 L265,350 Z",
         "fill": "url(#beamGradient)",
         "opacity": 0,
         "transform": "translate(0, 0)"
@@ -276,12 +466,12 @@
         },
         {
           "id": "beamSearch",
-          "targetProperty": "transform",
+          "targetProperty": "d",
           "keyframes": [
-            { "offset": 0, "value": "translate(0, 0)" },
-            { "offset": 0.25, "value": "translate(-70, 0)" },
-            { "offset": 0.75, "value": "translate(70, 0)" },
-            { "offset": 1, "value": "translate(0, 0)" }
+            { "offset": 0, "value": "M235,350 L100,50 L400,50 L265,350 Z" },
+            { "offset": 0.4, "value": "M225,350 L80,50 L380,50 L275,350 Z" },
+            { "offset": 0.8, "value": "M245,350 L120,50 L420,50 L255,350 Z" },
+            { "offset": 1, "value": "M235,350 L100,50 L400,50 L265,350 Z" }
           ],
           "duration": 25000,
           "easing": "ease-in-out",
@@ -294,14 +484,14 @@
       "id": "pulsingBeam",
       "type": "path",
       "attributes": {
-        "d": "M380,770 L360,300 L440,300 L420,770 Z",
+        "d": "M240,350 L120,90 L380,90 L260,350 Z",
         "fill": "url(#pulseBeamGradient)",
         "opacity": 0,
         "transform": "translate(0, 0)"
       },
       "animations": [
         {
-          "id": "beamFadeIn",
+          "id": "pulseBeamFadeIn",
           "targetProperty": "opacity",
           "keyframes": [
             { "offset": 0, "value": 0 },
@@ -314,11 +504,11 @@
           "fill": "forwards"
         },
         {
-          "id": "beamPulse",
+          "id": "pulseBeamPulse",
           "targetProperty": "opacity",
           "keyframes": [
             { "offset": 0, "value": 0.1 },
-            { "offset": 0.5, "value": 0.5 },
+            { "offset": 0.5, "value": 0.4 },
             { "offset": 1, "value": 0.1 }
           ],
           "duration": 3000,
@@ -327,13 +517,13 @@
           "iterationCount": "infinite"
         },
         {
-          "id": "beamSearch",
-          "targetProperty": "transform",
+          "id": "pulseBeamSearch",
+          "targetProperty": "d",
           "keyframes": [
-            { "offset": 0, "value": "translate(0, 0)" },
-            { "offset": 0.25, "value": "translate(-70, 0)" },
-            { "offset": 0.75, "value": "translate(70, 0)" },
-            { "offset": 1, "value": "translate(0, 0)" }
+            { "offset": 0, "value": "M240,350 L120,90 L380,90 L260,350 Z" },
+            { "offset": 0.4, "value": "M230,350 L100,90 L360,90 L270,350 Z" },
+            { "offset": 0.8, "value": "M250,350 L140,90 L400,90 L250,350 Z" },
+            { "offset": 1, "value": "M240,350 L120,90 L380,90 L260,350 Z" }
           ],
           "duration": 25000,
           "easing": "ease-in-out",
@@ -343,37 +533,12 @@
       ]
     },
     {
-      "id": "cloudsAround",
-      "type": "path",
-      "attributes": {
-        "d": "M300,250 Q350,220 400,250 Q450,220 500,250 Q550,270 580,250 Q630,220 680,250 Z",
-        "fill": "#283040",
-        "opacity": 0.6,
-        "transform": "translate(0, 40)"
-      },
-      "animations": [
-        {
-          "id": "cloudsDrift2",
-          "targetProperty": "transform",
-          "keyframes": [
-            { "offset": 0, "value": "translate(0, 40)" },
-            { "offset": 1, "value": "translate(-30, 40)" }
-          ],
-          "duration": 100000,
-          "easing": "ease-in-out",
-          "delay": 0,
-          "iterationCount": "infinite",
-          "direction": "alternate"
-        }
-      ]
-    },
-    {
       "id": "spotlightCircle",
       "type": "circle",
       "attributes": {
-        "cx": 400,
-        "cy": 300,
-        "r": 120,
+        "cx": 250,
+        "cy": 80,
+        "r": 80,
         "fill": "#ffdf88",
         "opacity": 0,
         "transform": "translate(0, 0)"
@@ -384,7 +549,7 @@
           "targetProperty": "opacity",
           "keyframes": [
             { "offset": 0, "value": 0 },
-            { "offset": 1, "value": 0.9 }
+            { "offset": 1, "value": 0.8 }
           ],
           "duration": 5000,
           "easing": "ease-in",
@@ -397,8 +562,8 @@
           "targetProperty": "transform",
           "keyframes": [
             { "offset": 0, "value": "translate(0, 0)" },
-            { "offset": 0.25, "value": "translate(-70, 0)" },
-            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 0.4, "value": "translate(-15, 0)" },
+            { "offset": 0.8, "value": "translate(15, 0)" },
             { "offset": 1, "value": "translate(0, 0)" }
           ],
           "duration": 25000,
@@ -412,9 +577,9 @@
       "id": "spotlightGlow",
       "type": "circle",
       "attributes": {
-        "cx": 400,
-        "cy": 300,
-        "r": 150,
+        "cx": 250,
+        "cy": 80,
+        "r": 95,
         "fill": "url(#glowGradient)",
         "opacity": 0,
         "filter": "drop-shadow(0 0 20px #ffdf88)",
@@ -426,7 +591,7 @@
           "targetProperty": "opacity",
           "keyframes": [
             { "offset": 0, "value": 0 },
-            { "offset": 1, "value": 0.8 }
+            { "offset": 1, "value": 0.7 }
           ],
           "duration": 5000,
           "easing": "ease-in",
@@ -435,12 +600,25 @@
           "fill": "forwards"
         },
         {
+          "id": "glowPulse",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0.7 },
+            { "offset": 0.5, "value": 0.9 },
+            { "offset": 1, "value": 0.7 }
+          ],
+          "duration": 6000,
+          "easing": "ease-in-out",
+          "delay": 5000,
+          "iterationCount": "infinite"
+        },
+        {
           "id": "glowSearch",
           "targetProperty": "transform",
           "keyframes": [
             { "offset": 0, "value": "translate(0, 0)" },
-            { "offset": 0.25, "value": "translate(-70, 0)" },
-            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 0.4, "value": "translate(-15, 0)" },
+            { "offset": 0.8, "value": "translate(15, 0)" },
             { "offset": 1, "value": "translate(0, 0)" }
           ],
           "duration": 25000,
@@ -454,10 +632,10 @@
       "id": "batSymbol",
       "type": "path",
       "attributes": {
-        "d": "M370 300 Q410 240 450 300 Q490 240 530 300 Q510 280 490 290 Q480 260 450 280 Q420 260 410 290 Q390 280 370 300",
+        "d": "M160 80 Q180 50 200 80 Q220 50 240 80 Q230 70 220 75 Q215 60 200 70 Q185 60 180 75 Q170 70 160 80",
         "fill": "#000000",
         "opacity": 0,
-        "transform": "translate(0, 0)"
+        "transform": "translate(50, 0)"
       },
       "animations": [
         {
@@ -474,17 +652,388 @@
           "fill": "forwards"
         },
         {
+          "id": "symbolPulse",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(50, 0) scale(1)" },
+            { "offset": 0.25, "value": "translate(50, 0) scale(1.02)" },
+            { "offset": 0.5, "value": "translate(50, 0) scale(1)" },
+            { "offset": 0.75, "value": "translate(50, 0) scale(1.01)" },
+            { "offset": 1, "value": "translate(50, 0) scale(1)" }
+          ],
+          "duration": 4000,
+          "easing": "ease-in-out",
+          "delay": 5000,
+          "iterationCount": "infinite"
+        },
+        {
           "id": "symbolSearch",
           "targetProperty": "transform",
           "keyframes": [
-            { "offset": 0, "value": "translate(0, 0)" },
-            { "offset": 0.25, "value": "translate(-70, 0)" },
-            { "offset": 0.75, "value": "translate(70, 0)" },
-            { "offset": 1, "value": "translate(0, 0)" }
+            { "offset": 0, "value": "translate(50, 0)" },
+            { "offset": 0.4, "value": "translate(35, 0)" },
+            { "offset": 0.8, "value": "translate(65, 0)" },
+            { "offset": 1, "value": "translate(50, 0)" }
           ],
           "duration": 25000,
           "easing": "ease-in-out",
           "delay": 6000,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "cloudsBehind",
+      "type": "path",
+      "attributes": {
+        "d": "M-100,100 Q0,80 100,100 T300,90 Q400,100 500,80 T700,100",
+        "fill": "none",
+        "stroke": "#a0a0c0",
+        "stroke-width": 15,
+        "stroke-opacity": 0.2,
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "cloudsDrift1",
+          "targetProperty": "d",
+          "keyframes": [
+            {
+              "offset": 0,
+              "value": "M-100,100 Q0,80 100,100 T300,90 Q400,100 500,80 T700,100"
+            },
+            {
+              "offset": 0.5,
+              "value": "M-100,110 Q0,90 100,110 T300,100 Q400,110 500,90 T700,110"
+            },
+            {
+              "offset": 1,
+              "value": "M-100,100 Q0,80 100,100 T300,90 Q400,100 500,80 T700,100"
+            }
+          ],
+          "duration": 25000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        },
+        {
+          "id": "cloudsMove1",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 1, "value": "translate(-200, 0)" }
+          ],
+          "duration": 35000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "cloudsAround",
+      "type": "path",
+      "attributes": {
+        "d": "M600,150 Q500,140 400,150 T200,140 Q100,150 0,140 T-200,150",
+        "fill": "none",
+        "stroke": "#a0a0c0",
+        "stroke-width": 20,
+        "stroke-opacity": 0.3,
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "cloudsDrift2",
+          "targetProperty": "d",
+          "keyframes": [
+            {
+              "offset": 0,
+              "value": "M600,150 Q500,140 400,150 T200,140 Q100,150 0,140 T-200,150"
+            },
+            {
+              "offset": 0.5,
+              "value": "M600,160 Q500,150 400,160 T200,150 Q100,160 0,150 T-200,160"
+            },
+            {
+              "offset": 1,
+              "value": "M600,150 Q500,140 400,150 T200,140 Q100,150 0,140 T-200,150"
+            }
+          ],
+          "duration": 20000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        },
+        {
+          "id": "cloudsMove2",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 1, "value": "translate(-250, 0)" }
+          ],
+          "duration": 25000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "cloudsForeground",
+      "type": "path",
+      "attributes": {
+        "d": "M700,180 Q600,170 500,180 T300,170 Q200,180 100,170 T-100,180",
+        "fill": "none",
+        "stroke": "#c0c0d0",
+        "stroke-width": 25,
+        "stroke-opacity": 0.4,
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "cloudsDrift3",
+          "targetProperty": "d",
+          "keyframes": [
+            {
+              "offset": 0,
+              "value": "M700,180 Q600,170 500,180 T300,170 Q200,180 100,170 T-100,180"
+            },
+            {
+              "offset": 0.5,
+              "value": "M700,190 Q600,180 500,190 T300,180 Q200,190 100,180 T-100,190"
+            },
+            {
+              "offset": 1,
+              "value": "M700,180 Q600,170 500,180 T300,170 Q200,180 100,170 T-100,180"
+            }
+          ],
+          "duration": 15000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        },
+        {
+          "id": "cloudsMove3",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 1, "value": "translate(-300, 0)" }
+          ],
+          "duration": 20000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "rain",
+      "type": "g",
+      "attributes": {
+        "opacity": 0
+      },
+      "elements": [
+        {
+          "type": "line",
+          "attributes": {
+            "x1": 100,
+            "y1": 0,
+            "x2": 90,
+            "y2": 50,
+            "stroke": "#8899aa",
+            "stroke-width": 0.8,
+            "opacity": 0.6
+          },
+          "animations": [
+            {
+              "id": "rainDrop1",
+              "targetProperty": "x1",
+              "keyframes": [
+                { "offset": 0, "value": 100 },
+                { "offset": 0.1, "value": 110 },
+                { "offset": 0.2, "value": 120 },
+                { "offset": 0.3, "value": 130 },
+                { "offset": 0.4, "value": 140 },
+                { "offset": 0.5, "value": 150 },
+                { "offset": 0.6, "value": 160 },
+                { "offset": 0.7, "value": 170 },
+                { "offset": 0.8, "value": 180 },
+                { "offset": 0.9, "value": 190 },
+                { "offset": 1, "value": 200 }
+              ],
+              "duration": 800,
+              "easing": "linear",
+              "delay": 0,
+              "iterationCount": "infinite"
+            },
+            {
+              "id": "rainDrop1Move",
+              "targetProperty": "x2",
+              "keyframes": [
+                { "offset": 0, "value": 90 },
+                { "offset": 0.1, "value": 100 },
+                { "offset": 0.2, "value": 110 },
+                { "offset": 0.3, "value": 120 },
+                { "offset": 0.4, "value": 130 },
+                { "offset": 0.5, "value": 140 },
+                { "offset": 0.6, "value": 150 },
+                { "offset": 0.7, "value": 160 },
+                { "offset": 0.8, "value": 170 },
+                { "offset": 0.9, "value": 180 },
+                { "offset": 1, "value": 190 }
+              ],
+              "duration": 800,
+              "easing": "linear",
+              "delay": 0,
+              "iterationCount": "infinite"
+            },
+            {
+              "id": "rainDrop1Fall",
+              "targetProperty": "y2",
+              "keyframes": [
+                { "offset": 0, "value": 50 },
+                { "offset": 0.1, "value": 100 },
+                { "offset": 0.2, "value": 150 },
+                { "offset": 0.3, "value": 200 },
+                { "offset": 0.4, "value": 250 },
+                { "offset": 0.5, "value": 300 },
+                { "offset": 0.6, "value": 350 },
+                { "offset": 0.7, "value": 400 },
+                { "offset": 0.8, "value": 0 },
+                { "offset": 0.9, "value": 50 },
+                { "offset": 1, "value": 50 }
+              ],
+              "duration": 800,
+              "easing": "linear",
+              "delay": 0,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "line",
+          "attributes": {
+            "x1": 220,
+            "y1": 0,
+            "x2": 210,
+            "y2": 50,
+            "stroke": "#8899aa",
+            "stroke-width": 0.8,
+            "opacity": 0.6
+          },
+          "animations": [
+            {
+              "id": "rainDrop2",
+              "targetProperty": "x1",
+              "keyframes": [
+                { "offset": 0, "value": 220 },
+                { "offset": 0.1, "value": 230 },
+                { "offset": 0.2, "value": 240 },
+                { "offset": 0.3, "value": 250 },
+                { "offset": 0.4, "value": 260 },
+                { "offset": 0.5, "value": 270 },
+                { "offset": 0.6, "value": 280 },
+                { "offset": 0.7, "value": 290 },
+                { "offset": 0.8, "value": 300 },
+                { "offset": 0.9, "value": 310 },
+                { "offset": 1, "value": 320 }
+              ],
+              "duration": 700,
+              "easing": "linear",
+              "delay": 0,
+              "iterationCount": "infinite"
+            },
+            {
+              "id": "rainDrop2Move",
+              "targetProperty": "x2",
+              "keyframes": [
+                { "offset": 0, "value": 210 },
+                { "offset": 0.1, "value": 220 },
+                { "offset": 0.2, "value": 230 },
+                { "offset": 0.3, "value": 240 },
+                { "offset": 0.4, "value": 250 },
+                { "offset": 0.5, "value": 260 },
+                { "offset": 0.6, "value": 270 },
+                { "offset": 0.7, "value": 280 },
+                { "offset": 0.8, "value": 290 },
+                { "offset": 0.9, "value": 300 },
+                { "offset": 1, "value": 310 }
+              ],
+              "duration": 700,
+              "easing": "linear",
+              "delay": 0,
+              "iterationCount": "infinite"
+            },
+            {
+              "id": "rainDrop2Fall",
+              "targetProperty": "y2",
+              "keyframes": [
+                { "offset": 0, "value": 50 },
+                { "offset": 0.1, "value": 100 },
+                { "offset": 0.2, "value": 150 },
+                { "offset": 0.3, "value": 200 },
+                { "offset": 0.4, "value": 250 },
+                { "offset": 0.5, "value": 300 },
+                { "offset": 0.6, "value": 350 },
+                { "offset": 0.7, "value": 400 },
+                { "offset": 0.8, "value": 0 },
+                { "offset": 0.9, "value": 50 },
+                { "offset": 1, "value": 50 }
+              ],
+              "duration": 700,
+              "easing": "linear",
+              "delay": 0,
+              "iterationCount": "infinite"
+            }
+          ]
+        }
+      ],
+      "animations": [
+        {
+          "id": "rainAppear",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0 },
+            { "offset": 0.2, "value": 0 },
+            { "offset": 0.3, "value": 0.4 },
+            { "offset": 0.4, "value": 0.4 },
+            { "offset": 0.5, "value": 0 },
+            { "offset": 1, "value": 0 }
+          ],
+          "duration": 30000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "lightning",
+      "type": "rect",
+      "attributes": {
+        "x": 0,
+        "y": 0,
+        "width": 500,
+        "height": 400,
+        "fill": "white",
+        "opacity": 0
+      },
+      "animations": [
+        {
+          "id": "lightningFlash",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0 },
+            { "offset": 0.4, "value": 0 },
+            { "offset": 0.45, "value": 0.7 },
+            { "offset": 0.5, "value": 0 },
+            { "offset": 0.53, "value": 0.5 },
+            { "offset": 0.56, "value": 0 },
+            { "offset": 1, "value": 0 }
+          ],
+          "duration": 20000,
+          "easing": "ease-in-out",
+          "delay": 0,
           "iterationCount": "infinite"
         }
       ]
@@ -598,6 +1147,6 @@
       ]
     }
   ],
-  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 600\" width=\"800\" height=\"600\">\n  <defs>\n    <linearGradient id=\"beamGradient\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"0.6\"/>\n      <stop offset=\"40%\" stop-color=\"#ffdf88\" stop-opacity=\"0.2\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0.1\"/>\n    </linearGradient>\n    <linearGradient id=\"pulseBeamGradient\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"0.7\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0.3\"/>\n    </linearGradient>\n    <radialGradient id=\"glowGradient\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\" fx=\"0.5\" fy=\"0.5\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"1\"/>\n      <stop offset=\"70%\" stop-color=\"#ffdf88\" stop-opacity=\"0.7\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0\"/>\n    </radialGradient>\n  </defs>\n  <rect id=\"background\" x=\"0\" y=\"0\" width=\"100%\" height=\"100%\" fill=\"#0a0e14\"></rect>\n  <g id=\"stars\" opacity=\"0.7\">\n    <circle cx=\"100\" cy=\"100\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"7s\" repeatCount=\"indefinite\"/>\n    </circle>\n    <circle cx=\"200\" cy=\"150\" r=\"1.5\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"5s\" repeatCount=\"indefinite\" begin=\"1s\"/>\n    </circle>\n    <circle cx=\"300\" cy=\"120\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"6s\" repeatCount=\"indefinite\" begin=\"0.5s\"/>\n    </circle>\n    <circle cx=\"550\" cy=\"180\" r=\"1.2\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"9s\" repeatCount=\"indefinite\" begin=\"0.8s\"/>\n    </circle>\n    <circle cx=\"650\" cy=\"90\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"8s\" repeatCount=\"indefinite\" begin=\"1.5s\"/>\n    </circle>\n    <circle cx=\"720\" cy=\"140\" r=\"1.3\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"7.5s\" repeatCount=\"indefinite\" begin=\"0.2s\"/>\n    </circle>\n  </g>\n  <path id=\"distantBat\" d=\"M120 100 Q125 95 130 100 Q135 95 140 100 Q138 98 136 99 Q134 97 130 98 Q126 97 124 99 Q122 98 120 100\" fill=\"#000000\" opacity=\"0.6\">\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(600, 50)\" dur=\"45s\" repeatCount=\"indefinite\" begin=\"5s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1\" direction=\"alternate\"/>\n  </path>\n  <path id=\"cloudsBehind\" d=\"M100,250 Q150,230 200,250 Q230,230 260,240 Q290,220 340,250 Q380,230 420,250 Q480,230 520,250 Q580,230 620,240 Q670,220 700,250 Z\" fill=\"#1a222c\" opacity=\"0.4\" transform=\"translate(0, 50)\">\n    <animate attributeName=\"transform\" values=\"translate(0, 50); translate(40, 50)\" dur=\"120s\" repeatCount=\"indefinite\" begin=\"0s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1\" direction=\"alternate\"/>\n  </path>\n  <path id=\"cityScape\" d=\"M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z\" fill=\"#151a20\" opacity=\"0.9\"></path>\n  <circle id=\"lightSource\" cx=\"400\" cy=\"770\" r=\"30\" fill=\"#ffdf88\" filter=\"drop-shadow(0 0 20px #ffdf88)\">\n    <animate attributeName=\"filter\" values=\"drop-shadow(0 0 15px #ffdf88); drop-shadow(0 0 25px #ffdf88); drop-shadow(0 0 15px #ffdf88)\" dur=\"4s\" repeatCount=\"indefinite\" begin=\"0s\"/>\n  </circle>\n  <path id=\"mainBeam\" d=\"M370,770 L300,300 L500,300 L430,770 Z\" fill=\"url(#beamGradient)\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.25\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </path>\n  <path id=\"pulsingBeam\" d=\"M380,770 L360,300 L440,300 L420,770 Z\" fill=\"url(#pulseBeamGradient)\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.1\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"opacity\" values=\"0.1; 0.5; 0.1\" dur=\"3s\" repeatCount=\"indefinite\" begin=\"5s\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </path>\n  <path id=\"cloudsAround\" d=\"M300,250 Q350,220 400,250 Q450,220 500,250 Q550,270 580,250 Q630,220 680,250 Z\" fill=\"#283040\" opacity=\"0.6\" transform=\"translate(0, 40)\">\n    <animate attributeName=\"transform\" values=\"translate(0, 40); translate(-30, 40)\" dur=\"100s\" repeatCount=\"indefinite\" begin=\"0s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1\" direction=\"alternate\"/>\n  </path>\n  <circle id=\"spotlightCircle\" cx=\"400\" cy=\"300\" r=\"120\" fill=\"#ffdf88\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.9\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </circle>\n  <circle id=\"spotlightGlow\" cx=\"400\" cy=\"300\" r=\"150\" fill=\"url(#glowGradient)\" opacity=\"0\" filter=\"drop-shadow(0 0 20px #ffdf88)\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.8\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </circle>\n  <path id=\"batSymbol\" d=\"M370 300 Q410 240 450 300 Q490 240 530 300 Q510 280 490 290 Q480 260 450 280 Q420 260 410 290 Q390 280 370 300\" fill=\"#000000\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 1\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </path>\n</svg>",
-  "message": "The Bat Signal now shines in the night sky with the iconic bat symbol perfectly centered in the bright yellow spotlight. After fading in, the spotlight and beam slowly search across the sky in a sweeping motion, looking for criminals in the dark corners of Gotham. The entire light apparatus moves as one cohesive unit, maintaining the perfect alignment between the beam, spotlight, and bat symbol as it scans from side to side."
+  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 500 400\" width=\"500\" height=\"400\">\n  <defs>\n    <linearGradient id=\"beamGradient\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"0.6\"/>\n      <stop offset=\"40%\" stop-color=\"#ffdf88\" stop-opacity=\"0.2\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0.1\"/>\n    </linearGradient>\n    <linearGradient id=\"pulseBeamGradient\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"0.7\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0.3\"/>\n    </linearGradient>\n    <radialGradient id=\"glowGradient\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\" fx=\"0.5\" fy=\"0.5\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"1\"/>\n      <stop offset=\"70%\" stop-color=\"#ffdf88\" stop-opacity=\"0.7\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0\"/>\n    </radialGradient>\n  </defs>\n  <rect id=\"background\" x=\"0\" y=\"0\" width=\"100%\" height=\"100%\" fill=\"#0a1020\">\n    <animate attributeName=\"fill\" values=\"#0a1020;#0c1530;#0a1020\" dur=\"15s\" repeatCount=\"indefinite\"/>\n  </rect>\n  <g id=\"stars\" opacity=\"0.7\">\n    <circle cx=\"50\" cy=\"50\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.8;0.3;0.8\" dur=\"4s\" repeatCount=\"indefinite\"/>\n    </circle>\n    <circle cx=\"120\" cy=\"30\" r=\"1.5\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.7;0.2;0.7\" dur=\"5s\" repeatCount=\"indefinite\" begin=\"1s\"/>\n    </circle>\n    <circle cx=\"200\" cy=\"70\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.9;0.4;0.9\" dur=\"3.5s\" repeatCount=\"indefinite\" begin=\"0.5s\"/>\n    </circle>\n    <circle cx=\"280\" cy=\"40\" r=\"1.2\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.6;0.1;0.6\" dur=\"4.5s\" repeatCount=\"indefinite\" begin=\"1.5s\"/>\n    </circle>\n    <circle cx=\"350\" cy=\"90\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.8;0.3;0.8\" dur=\"4.2s\" repeatCount=\"indefinite\" begin=\"0.2s\"/>\n    </circle>\n    <circle cx=\"420\" cy=\"20\" r=\"1.5\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.7;0.2;0.7\" dur=\"3.8s\" repeatCount=\"indefinite\" begin=\"1.2s\"/>\n    </circle>\n  </g>\n  <path id=\"cityScape\" d=\"M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z\" fill=\"#050510\" opacity=\"0.9\">\n    <animate attributeName=\"d\" values=\"M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z;M0,600 L50,585 L100,595 L150,565 L200,590 L250,575 L300,595 L350,555 L400,585 L450,565 L500,595 L550,575 L600,585 L650,565 L700,595 L750,575 L800,595 L800,600 Z;M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z\" dur=\"7s\" repeatCount=\"indefinite\"/>\n  </path>\n  <circle id=\"lightSource\" cx=\"250\" cy=\"350\" r=\"15\" fill=\"#ffdf88\" filter=\"drop-shadow(0 0 15px #ffdf88)\">\n    <animate attributeName=\"opacity\" values=\"0.9;1;0.9\" dur=\"1.5s\" repeatCount=\"indefinite\"/>\n    <animate attributeName=\"r\" values=\"10;12;10\" dur=\"3s\" repeatCount=\"indefinite\"/>\n    <animate attributeName=\"filter\" values=\"drop-shadow(0 0 15px #ffdf88);drop-shadow(0 0 25px #ffdf88);drop-shadow(0 0 15px #ffdf88)\" dur=\"4s\" repeatCount=\"indefinite\"/>\n  </circle>\n  <path id=\"mainBeam\" d=\"M235,350 L100,50 L400,50 L265,350 Z\" fill=\"url(#beamGradient)\" opacity=\"0\">\n    <animate attributeName=\"opacity\" values=\"0;0.25\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"d\" values=\"M235,350 L100,50 L400,50 L265,350 Z;M225,350 L80,50 L380,50 L275,350 Z;M245,350 L120,50 L420,50 L255,350 Z;M235,350 L100,50 L400,50 L265,350 Z\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\"/>\n  </path>\n  <circle id=\"spotlightCircle\" cx=\"250\" cy=\"80\" r=\"80\" fill=\"#ffdf88\" opacity=\"0\">\n    <animate attributeName=\"opacity\" values=\"0;0.8\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0);translate(-15, 0);translate(15, 0);translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\"/>\n  </circle>\n  <circle id=\"spotlightGlow\" cx=\"250\" cy=\"80\" r=\"95\" fill=\"url(#glowGradient)\" opacity=\"0\" filter=\"drop-shadow(0 0 20px #ffdf88)\">\n    <animate attributeName=\"opacity\" values=\"0;0.7\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"opacity\" values=\"0.7;0.9;0.7\" dur=\"6s\" repeatCount=\"indefinite\" begin=\"5s\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0);translate(-15, 0);translate(15, 0);translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\"/>\n  </circle>\n  <path id=\"batSymbol\" d=\"M160 80 Q180 50 200 80 Q220 50 240 80 Q230 70 220 75 Q215 60 200 70 Q185 60 180 75 Q170 70 160 80\" fill=\"#000000\" opacity=\"0\" transform=\"translate(50, 0)\">\n    <animate attributeName=\"opacity\" values=\"0;1\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(50, 0) scale(1);translate(50, 0) scale(1.02);translate(50, 0) scale(1);translate(50, 0) scale(1.01);translate(50, 0) scale(1)\" dur=\"4s\" repeatCount=\"indefinite\" begin=\"5s\"/>\n    <animate attributeName=\"transform\" values=\"translate(50, 0);translate(35, 0);translate(65, 0);translate(50, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" additive=\"sum\"/>\n  </path>\n  <path id=\"cloudsBehind\" d=\"M-100,100 Q0,80 100,100 T300,90 Q400,100 500,80 T700,100\" fill=\"none\" stroke=\"#a0a0c0\" stroke-width=\"15\" stroke-opacity=\"0.2\">\n    <animate attributeName=\"d\" values=\"M-100,100 Q0,80 100,100 T300,90 Q400,100 500,80 T700,100;M-100,110 Q0,90 100,110 T300,100 Q400,110 500,90 T700,110;M-100,100 Q0,80 100,100 T300,90 Q400,100 500,80 T700,100\" dur=\"25s\" repeatCount=\"indefinite\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0);translate(-200, 0)\" dur=\"35s\" repeatCount=\"indefinite\"/>\n  </path>\n  <path id=\"cloudsAround\" d=\"M600,150 Q500,140 400,150 T200,140 Q100,150 0,140 T-200,150\" fill=\"none\" stroke=\"#a0a0c0\" stroke-width=\"20\" stroke-opacity=\"0.3\">\n    <animate attributeName=\"d\" values=\"M600,150 Q500,140 400,150 T200,140 Q100,150 0,140 T-200,150;M600,160 Q500,150 400,160 T200,150 Q100,160 0,150 T-200,160;M600,150 Q500,140 400,150 T200,140 Q100,150 0,140 T-200,150\" dur=\"20s\" repeatCount=\"indefinite\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0);translate(-250, 0)\" dur=\"25s\" repeatCount=\"indefinite\"/>\n  </path>\n  <rect id=\"lightning\" x=\"0\" y=\"0\" width=\"500\" height=\"400\" fill=\"white\" opacity=\"0\">\n    <animate attributeName=\"opacity\" values=\"0;0;0;0;0;0.7;0;0.5;0;0;0;0\" dur=\"20s\" repeatCount=\"indefinite\"/>\n  </rect>\n</svg>",
+  "message": "The Bat Signal shines in the night sky of Gotham City, with the iconic bat symbol centered in a bright spotlight. The beam projects from the ground upward, illuminating the clouds. Stars twinkle in the background while distant clouds drift by. Occasional lightning flashes illuminate the entire scene momentarily, adding dramatic tension. The spotlight and bat symbol move in unison, searching across the dark sky, calling for the Dark Knight to respond."
 }
