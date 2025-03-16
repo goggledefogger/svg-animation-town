@@ -3,6 +3,14 @@ import { ApiResponse, ApiError } from '../types/api';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 /**
+ * Dispatch API call events for loading animations
+ */
+function dispatchApiCallEvent(isStarting: boolean) {
+  const eventName = isStarting ? 'api-call-start' : 'api-call-end';
+  window.dispatchEvent(new CustomEvent(eventName));
+}
+
+/**
  * Generic fetch wrapper with error handling
  */
 async function fetchApi<T>(
@@ -12,6 +20,9 @@ async function fetchApi<T>(
   try {
     console.log(`Making API request to: ${API_URL}${endpoint}`);
     console.log('Request options:', options);
+
+    // Dispatch API call start event
+    dispatchApiCallEvent(true);
 
     const response = await fetch(`${API_URL}${endpoint}`, {
       headers: {
@@ -23,12 +34,18 @@ async function fetchApi<T>(
     const data = await response.json();
     console.log('API response:', data);
 
+    // Dispatch API call end event
+    dispatchApiCallEvent(false);
+
     if (!response.ok) {
       throw new Error(data.message || 'Something went wrong');
     }
 
     return data;
   } catch (error: any) {
+    // Ensure API call end event is dispatched even on error
+    dispatchApiCallEvent(false);
+
     console.error('API Error:', error);
     throw new Error(`API Error: ${error.message}`);
   }

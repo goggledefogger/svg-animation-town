@@ -11,43 +11,58 @@ const AnimationCanvas: React.FC = () => {
 
   // Use a state variable to track whether we're showing the empty state or the SVG
   const [showEmptyState, setShowEmptyState] = useState(true);
+  // Track loading state from API calls
+  const [isLoading, setIsLoading] = useState(false);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
-    console.log('Setting up SVG element');
-
     // Only update reference if it's a different element
     if (svgElement !== currentSvgRef.current) {
       currentSvgRef.current = svgElement;
-      setSvgRef(svgElement);
+
+      // Force a small delay to ensure the SVG is fully loaded in the DOM
+      // This helps ensure animations can be properly paused/resumed
+      setTimeout(() => {
+        setSvgRef(svgElement);
+      }, 50);
     }
 
     // Get container dimensions
     const containerWidth = containerRef.current?.clientWidth || 800;
     const containerHeight = containerRef.current?.clientHeight || 600;
 
-    console.log(`Container dimensions: ${containerWidth}x${containerHeight}`);
+    // Ensure SVG is contained within the container boundaries
+    // We'll set both width/height and viewBox to control boundaries
+    svgElement.setAttribute('width', '100%');
+    svgElement.setAttribute('height', '100%');
 
-    // Update SVG dimensions to fit container while maintaining aspect ratio
-    svgElement.setAttribute('width', `${containerWidth}`);
-    svgElement.setAttribute('height', `${containerHeight}`);
+    // Preserve aspect ratio and ensure proper scaling
+    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+    // Ensure SVG has a viewBox if missing
+    if (!svgElement.getAttribute('viewBox')) {
+      // Get original width/height from the SVG if available
+      const originalWidth = svgElement.getAttribute('width') || containerWidth.toString();
+      const originalHeight = svgElement.getAttribute('height') || containerHeight.toString();
+
+      // Parse numeric values from original dimensions
+      const width = parseInt(originalWidth.toString(), 10) || containerWidth;
+      const height = parseInt(originalHeight.toString(), 10) || containerHeight;
+
+      svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    }
   }, [setSvgRef]);
 
   // Update SVG content and handle references
   useEffect(() => {
-    console.log('SVG content effect running with content:', svgContent ? 'present' : 'none');
-
     // Check if we have SVG content to display
     if (svgContent && svgContainerRef.current) {
-      console.log('Setting SVG content to container');
-
       // Clear previous content and set the new SVG content
       svgContainerRef.current.innerHTML = svgContent;
 
       // Find the SVG element in the container
       const svgElement = svgContainerRef.current.querySelector('svg');
       if (svgElement) {
-        console.log('Found SVG element in container');
         setupSvgElement(svgElement as SVGSVGElement);
         // SVG was found and setup, hide the empty state
         setShowEmptyState(false);
@@ -72,6 +87,31 @@ const AnimationCanvas: React.FC = () => {
       }
     }
   }, [svgContent, setupSvgElement]);
+
+  // Monitor API calls to show loading animation
+  useEffect(() => {
+    // Function to listen for API calls starting
+    const handleApiCallStart = () => {
+      console.log('API call started - showing loading animation');
+      setIsLoading(true);
+    };
+
+    // Function to listen for API calls completing
+    const handleApiCallEnd = () => {
+      console.log('API call ended - hiding loading animation');
+      setIsLoading(false);
+    };
+
+    // Add event listeners for custom API events
+    window.addEventListener('api-call-start', handleApiCallStart);
+    window.addEventListener('api-call-end', handleApiCallEnd);
+
+    return () => {
+      // Remove event listeners on cleanup
+      window.removeEventListener('api-call-start', handleApiCallStart);
+      window.removeEventListener('api-call-end', handleApiCallEnd);
+    };
+  }, []);
 
   // Adjust SVG to container size when window resizes
   useEffect(() => {
@@ -117,32 +157,50 @@ const AnimationCanvas: React.FC = () => {
     };
   }, [setSvgRef]);
 
-  // Log when SVG content changes
-  useEffect(() => {
-    if (svgContent) {
-      console.log('AnimationCanvas - SVG content updated');
-    } else {
-      console.log('AnimationCanvas - No SVG content');
-    }
-  }, [svgContent]);
-
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 bg-black/30 rounded-lg overflow-visible flex items-center justify-center"
+      className={`relative flex-1 bg-black/30 rounded-lg overflow-hidden flex items-center justify-center ${
+        isLoading ? 'animate-pulse-subtle' : ''
+      }`}
       style={{
         touchAction: 'pan-x pan-y',
         minHeight: '260px',
         height: '100%'
       }}
     >
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 bg-black/20 z-10 flex items-center justify-center pointer-events-none">
+          <div className="relative">
+            {/* Pulsing loading indicator */}
+            <svg className="w-20 h-20 animate-spin-slow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M50,10 C40,25 20,40 15,60 C25,55 35,55 50,70 C65,55 75,55 85,60 C80,40 60,25 50,10"
+                fill="none"
+                stroke="#ffdf00"
+                strokeWidth="2"
+                strokeDasharray="240"
+                strokeDashoffset="0"
+                className="animate-dash-offset-300"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-4 h-4 bg-bat-yellow rounded-full animate-ping"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Always render both, but control visibility with CSS */}
       <div className={showEmptyState ? 'block' : 'hidden'}>
         <EmptyState />
       </div>
       <div
         ref={svgContainerRef}
-        className={`absolute inset-0 flex items-center justify-center ${showEmptyState ? 'hidden' : 'block'}`}
+        className={`absolute inset-0 flex items-center justify-center overflow-hidden ${showEmptyState ? 'hidden' : 'block'} ${
+          isLoading ? 'opacity-40 transition-opacity duration-300' : 'opacity-100'
+        }`}
         style={{ maxHeight: '100%', maxWidth: '100%' }}
         data-testid="svg-container"
       />

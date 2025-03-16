@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
 
 const AnimationControls: React.FC = () => {
-  const { playing, pauseAnimations, resumeAnimations, resetAnimations, svgContent } = useAnimation();
+  const { playing, pauseAnimations, resumeAnimations, resetAnimations, svgContent, playbackSpeed, setPlaybackSpeed } = useAnimation();
+  const [showSpeedOptions, setShowSpeedOptions] = useState(false);
 
   // Toggle play/pause
   const togglePlayback = () => {
@@ -16,6 +17,19 @@ const AnimationControls: React.FC = () => {
   // Reset animation
   const handleReset = () => {
     resetAnimations();
+  };
+
+  // Change playback speed
+  const handleSpeedChange = (speed: number | 'groovy') => {
+    setPlaybackSpeed(speed);
+    setShowSpeedOptions(false);
+  };
+
+  // Format speed for display
+  const formatSpeed = (speed: number | 'groovy') => {
+    if (speed === 'groovy') return 'Groovy';
+    if (speed === -1) return 'Reverse';
+    return `${speed}x`;
   };
 
   // Only show controls if there's SVG content
@@ -51,6 +65,74 @@ const AnimationControls: React.FC = () => {
             </svg>
           )}
         </button>
+
+        {/* Speed Control - Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowSpeedOptions(!showSpeedOptions)}
+            className="bg-purple-600 hover:bg-purple-500 text-white p-1.5 md:p-2 rounded focus:outline-none focus:ring-2 focus:ring-purple-400 flex items-center"
+            aria-label="Speed control"
+          >
+            <span className="text-xs md:text-sm">{formatSpeed(playbackSpeed)}</span>
+          </button>
+
+          {/* Speed Options */}
+          {showSpeedOptions && (
+            <div className="absolute right-0 bottom-full mb-1 bg-gray-700 rounded shadow-lg z-10 w-32 py-1 animate-fadeIn">
+              <button
+                onClick={() => handleSpeedChange(-1)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === -1 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                Reverse
+              </button>
+              <button
+                onClick={() => handleSpeedChange(0.25)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === 0.25 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                0.25x
+              </button>
+              <button
+                onClick={() => handleSpeedChange(0.5)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === 0.5 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                0.5x
+              </button>
+              <button
+                onClick={() => handleSpeedChange(0.75)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === 0.75 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                0.75x
+              </button>
+              <button
+                onClick={() => handleSpeedChange(1)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === 1 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                1x
+              </button>
+              <button
+                onClick={() => handleSpeedChange(2)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === 2 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                2x
+              </button>
+              <button
+                onClick={() => handleSpeedChange(10)}
+                className={`w-full text-left px-3 py-1.5 text-sm ${playbackSpeed === 10 ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                10x
+              </button>
+              <button
+                onClick={() => handleSpeedChange('groovy')}
+                className={`w-full text-left px-3 py-1.5 text-sm flex items-center ${playbackSpeed === 'groovy' ? 'bg-gray-600 text-white' : 'text-gray-200 hover:bg-gray-600'}`}
+              >
+                <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Groovy
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

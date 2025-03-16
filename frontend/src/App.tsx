@@ -16,10 +16,10 @@ function App() {
       // Then set the value in the --vh custom property to the root of the document
       document.documentElement.style.setProperty('--vh', `${vh}px`);
 
-      console.log('Window resized, setting viewport height:',
-        window.innerHeight,
-        `${vh}px`
-      );
+      // console.log('Window resized, setting viewport height:',
+      //   window.innerHeight,
+      //   `${vh}px`
+      // );
     };
 
     // Initial setup

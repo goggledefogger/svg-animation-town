@@ -10,7 +10,7 @@ export interface Message {
   id: string;
   sender: 'user' | 'ai';
   text: string;
-  timestamp: Date;
+  timestamp?: Date;
 }
 
 interface ChatInterfaceProps {
@@ -53,8 +53,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     const userMessage: Message = {
       id: generateId(),
       sender: 'user',
-      text,
-      timestamp: new Date()
+      text
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -80,8 +79,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       const aiMessage: Message = {
         id: generateId(),
         sender: 'ai',
-        text: userFriendlyMessage,
-        timestamp: new Date()
+        text: userFriendlyMessage
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -90,8 +88,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       const errorMessage: Message = {
         id: generateId(),
         sender: 'ai',
-        text: `I'm sorry, I couldn't process that request. ${error.message}`,
-        timestamp: new Date()
+        text: `I'm sorry, I couldn't process that request. ${error.message}`
       };
 
       setMessages(prev => [...prev, errorMessage]);

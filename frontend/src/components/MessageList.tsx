@@ -23,9 +23,6 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isTyping, messagesE
             }`}
           >
             <p>{message.text}</p>
-            <div className="text-[10px] md:text-xs opacity-70 mt-1">
-              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </div>
           </div>
         </div>
       ))}

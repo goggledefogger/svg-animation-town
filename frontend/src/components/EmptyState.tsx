@@ -17,7 +17,7 @@ const EmptyState: React.FC = memo(() => {
         />
       </svg>
       <p className="text-lg text-center">Start a conversation to create animations</p>
-      <p className="text-sm mt-2 text-center">Or select a preset from the menu above</p>
+      <p className="text-sm mt-2 text-center">Vectorize your life</p>
     </div>
   );
 });
