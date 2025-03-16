@@ -8,46 +8,445 @@
         "y": 0,
         "width": "100%",
         "height": "100%",
-        "fill": "#121212"
+        "fill": "#0a0e14"
       },
       "animations": []
     },
     {
-      "id": "lightBeam",
+      "id": "stars",
+      "type": "g",
+      "attributes": {
+        "opacity": 0.7
+      },
+      "elements": [
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 100,
+            "cy": 100,
+            "r": 1,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle1",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.3 },
+                { "offset": 0.5, "value": 1 },
+                { "offset": 1, "value": 0.3 }
+              ],
+              "duration": 7000,
+              "easing": "ease-in-out",
+              "delay": 0,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 200,
+            "cy": 150,
+            "r": 1.5,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle2",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.3 },
+                { "offset": 0.5, "value": 1 },
+                { "offset": 1, "value": 0.3 }
+              ],
+              "duration": 5000,
+              "easing": "ease-in-out",
+              "delay": 1000,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 300,
+            "cy": 120,
+            "r": 1,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle3",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.3 },
+                { "offset": 0.5, "value": 1 },
+                { "offset": 1, "value": 0.3 }
+              ],
+              "duration": 6000,
+              "easing": "ease-in-out",
+              "delay": 500,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 550,
+            "cy": 180,
+            "r": 1.2,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle4",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.3 },
+                { "offset": 0.5, "value": 1 },
+                { "offset": 1, "value": 0.3 }
+              ],
+              "duration": 9000,
+              "easing": "ease-in-out",
+              "delay": 800,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 650,
+            "cy": 90,
+            "r": 1,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle5",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.3 },
+                { "offset": 0.5, "value": 1 },
+                { "offset": 1, "value": 0.3 }
+              ],
+              "duration": 8000,
+              "easing": "ease-in-out",
+              "delay": 1500,
+              "iterationCount": "infinite"
+            }
+          ]
+        },
+        {
+          "type": "circle",
+          "attributes": {
+            "cx": 720,
+            "cy": 140,
+            "r": 1.3,
+            "fill": "#ffffff"
+          },
+          "animations": [
+            {
+              "id": "twinkle6",
+              "targetProperty": "opacity",
+              "keyframes": [
+                { "offset": 0, "value": 0.3 },
+                { "offset": 0.5, "value": 1 },
+                { "offset": 1, "value": 0.3 }
+              ],
+              "duration": 7500,
+              "easing": "ease-in-out",
+              "delay": 200,
+              "iterationCount": "infinite"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "distantBat",
+      "type": "path",
+      "attributes": {
+        "d": "M120 100 Q125 95 130 100 Q135 95 140 100 Q138 98 136 99 Q134 97 130 98 Q126 97 124 99 Q122 98 120 100",
+        "fill": "#000000",
+        "opacity": 0.6,
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "batFly",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 1, "value": "translate(600, 50)" }
+          ],
+          "duration": 45000,
+          "easing": "ease-in-out",
+          "delay": 5000,
+          "iterationCount": "infinite",
+          "direction": "alternate"
+        }
+      ]
+    },
+    {
+      "id": "cloudsBehind",
+      "type": "path",
+      "attributes": {
+        "d": "M100,250 Q150,230 200,250 Q230,230 260,240 Q290,220 340,250 Q380,230 420,250 Q480,230 520,250 Q580,230 620,240 Q670,220 700,250 Z",
+        "fill": "#1a222c",
+        "opacity": 0.4,
+        "transform": "translate(0, 50)"
+      },
+      "animations": [
+        {
+          "id": "cloudsDrift",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 50)" },
+            { "offset": 1, "value": "translate(40, 50)" }
+          ],
+          "duration": 120000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite",
+          "direction": "alternate"
+        }
+      ]
+    },
+    {
+      "id": "cityScape",
+      "type": "path",
+      "attributes": {
+        "d": "M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z",
+        "fill": "#151a20",
+        "opacity": 0.9
+      },
+      "animations": []
+    },
+    {
+      "id": "lightSource",
+      "type": "circle",
+      "attributes": {
+        "cx": 400,
+        "cy": 770,
+        "r": 30,
+        "fill": "#ffdf88",
+        "filter": "drop-shadow(0 0 20px #ffdf88)"
+      },
+      "animations": [
+        {
+          "id": "lightSourceGlow",
+          "targetProperty": "filter",
+          "keyframes": [
+            { "offset": 0, "value": "drop-shadow(0 0 15px #ffdf88)" },
+            { "offset": 0.5, "value": "drop-shadow(0 0 25px #ffdf88)" },
+            { "offset": 1, "value": "drop-shadow(0 0 15px #ffdf88)" }
+          ],
+          "duration": 4000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "mainBeam",
+      "type": "path",
+      "attributes": {
+        "d": "M370,770 L300,300 L500,300 L430,770 Z",
+        "fill": "url(#beamGradient)",
+        "opacity": 0,
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "beamFadeIn",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0 },
+            { "offset": 1, "value": 0.25 }
+          ],
+          "duration": 5000,
+          "easing": "ease-in",
+          "delay": 0,
+          "iterationCount": 1,
+          "fill": "forwards"
+        },
+        {
+          "id": "beamSearch",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 0.25, "value": "translate(-70, 0)" },
+            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 1, "value": "translate(0, 0)" }
+          ],
+          "duration": 25000,
+          "easing": "ease-in-out",
+          "delay": 6000,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "pulsingBeam",
+      "type": "path",
+      "attributes": {
+        "d": "M380,770 L360,300 L440,300 L420,770 Z",
+        "fill": "url(#pulseBeamGradient)",
+        "opacity": 0,
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "beamFadeIn",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0 },
+            { "offset": 1, "value": 0.1 }
+          ],
+          "duration": 5000,
+          "easing": "ease-in",
+          "delay": 0,
+          "iterationCount": 1,
+          "fill": "forwards"
+        },
+        {
+          "id": "beamPulse",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0.1 },
+            { "offset": 0.5, "value": 0.5 },
+            { "offset": 1, "value": 0.1 }
+          ],
+          "duration": 3000,
+          "easing": "ease-in-out",
+          "delay": 5000,
+          "iterationCount": "infinite"
+        },
+        {
+          "id": "beamSearch",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 0.25, "value": "translate(-70, 0)" },
+            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 1, "value": "translate(0, 0)" }
+          ],
+          "duration": 25000,
+          "easing": "ease-in-out",
+          "delay": 6000,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "cloudsAround",
+      "type": "path",
+      "attributes": {
+        "d": "M300,250 Q350,220 400,250 Q450,220 500,250 Q550,270 580,250 Q630,220 680,250 Z",
+        "fill": "#283040",
+        "opacity": 0.6,
+        "transform": "translate(0, 40)"
+      },
+      "animations": [
+        {
+          "id": "cloudsDrift2",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 40)" },
+            { "offset": 1, "value": "translate(-30, 40)" }
+          ],
+          "duration": 100000,
+          "easing": "ease-in-out",
+          "delay": 0,
+          "iterationCount": "infinite",
+          "direction": "alternate"
+        }
+      ]
+    },
+    {
+      "id": "spotlightCircle",
       "type": "circle",
       "attributes": {
         "cx": 400,
         "cy": 300,
-        "r": 100,
-        "fill": "#666666",
-        "opacity": 0.6
+        "r": 120,
+        "fill": "#ffdf88",
+        "opacity": 0,
+        "transform": "translate(0, 0)"
       },
       "animations": [
         {
-          "id": "beamGrow",
-          "targetProperty": "r",
-          "keyframes": [
-            { "offset": 0, "value": 0 },
-            { "offset": 0.5, "value": 120 },
-            { "offset": 1, "value": 100 }
-          ],
-          "duration": 3000,
-          "easing": "ease-out",
-          "delay": 0,
-          "iterationCount": 1
-        },
-        {
-          "id": "beamFade",
+          "id": "spotlightFadeIn",
           "targetProperty": "opacity",
           "keyframes": [
             { "offset": 0, "value": 0 },
-            { "offset": 0.3, "value": 0.7 },
-            { "offset": 1, "value": 0.6 }
+            { "offset": 1, "value": 0.9 }
           ],
-          "duration": 3000,
-          "easing": "ease-out",
+          "duration": 5000,
+          "easing": "ease-in",
           "delay": 0,
-          "iterationCount": 1
+          "iterationCount": 1,
+          "fill": "forwards"
+        },
+        {
+          "id": "spotlightSearch",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 0.25, "value": "translate(-70, 0)" },
+            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 1, "value": "translate(0, 0)" }
+          ],
+          "duration": 25000,
+          "easing": "ease-in-out",
+          "delay": 6000,
+          "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "spotlightGlow",
+      "type": "circle",
+      "attributes": {
+        "cx": 400,
+        "cy": 300,
+        "r": 150,
+        "fill": "url(#glowGradient)",
+        "opacity": 0,
+        "filter": "drop-shadow(0 0 20px #ffdf88)",
+        "transform": "translate(0, 0)"
+      },
+      "animations": [
+        {
+          "id": "glowFadeIn",
+          "targetProperty": "opacity",
+          "keyframes": [
+            { "offset": 0, "value": 0 },
+            { "offset": 1, "value": 0.8 }
+          ],
+          "duration": 5000,
+          "easing": "ease-in",
+          "delay": 0,
+          "iterationCount": 1,
+          "fill": "forwards"
+        },
+        {
+          "id": "glowSearch",
+          "targetProperty": "transform",
+          "keyframes": [
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 0.25, "value": "translate(-70, 0)" },
+            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 1, "value": "translate(0, 0)" }
+          ],
+          "duration": 25000,
+          "easing": "ease-in-out",
+          "delay": 6000,
+          "iterationCount": "infinite"
         }
       ]
     },
@@ -55,41 +454,150 @@
       "id": "batSymbol",
       "type": "path",
       "attributes": {
-        "d": "M50 25 C45 35 30 45 25 55 C35 52 40 52 50 60 C60 52 65 52 75 55 C70 45 55 35 50 25",
-        "fill": "#ffdf00",
-        "transform": "translate(350, 250) scale(2)",
-        "opacity": 0
+        "d": "M370 300 Q410 240 450 300 Q490 240 530 300 Q510 280 490 290 Q480 260 450 280 Q420 260 410 290 Q390 280 370 300",
+        "fill": "#000000",
+        "opacity": 0,
+        "transform": "translate(0, 0)"
       },
       "animations": [
         {
-          "id": "symbolReveal",
+          "id": "symbolFadeIn",
           "targetProperty": "opacity",
           "keyframes": [
             { "offset": 0, "value": 0 },
-            { "offset": 0.5, "value": 0 },
-            { "offset": 0.8, "value": 1 },
             { "offset": 1, "value": 1 }
           ],
-          "duration": 3000,
-          "easing": "ease-in-out",
+          "duration": 5000,
+          "easing": "ease-in",
           "delay": 0,
-          "iterationCount": 1
+          "iterationCount": 1,
+          "fill": "forwards"
         },
         {
-          "id": "symbolGlow",
-          "targetProperty": "filter",
+          "id": "symbolSearch",
+          "targetProperty": "transform",
           "keyframes": [
-            { "offset": 0, "value": "drop-shadow(0 0 2px #ffdf00)" },
-            { "offset": 0.5, "value": "drop-shadow(0 0 15px #ffdf00)" },
-            { "offset": 1, "value": "drop-shadow(0 0 2px #ffdf00)" }
+            { "offset": 0, "value": "translate(0, 0)" },
+            { "offset": 0.25, "value": "translate(-70, 0)" },
+            { "offset": 0.75, "value": "translate(70, 0)" },
+            { "offset": 1, "value": "translate(0, 0)" }
           ],
-          "duration": 2000,
+          "duration": 25000,
           "easing": "ease-in-out",
-          "delay": 3000,
+          "delay": 6000,
           "iterationCount": "infinite"
+        }
+      ]
+    },
+    {
+      "id": "definitionsElement",
+      "type": "defs",
+      "attributes": {},
+      "elements": [
+        {
+          "id": "beamGradient",
+          "type": "linearGradient",
+          "attributes": {
+            "x1": "0",
+            "y1": "1",
+            "x2": "0",
+            "y2": "0"
+          },
+          "elements": [
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "0%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0.6"
+              }
+            },
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "40%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0.2"
+              }
+            },
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "100%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0.1"
+              }
+            }
+          ]
+        },
+        {
+          "id": "pulseBeamGradient",
+          "type": "linearGradient",
+          "attributes": {
+            "x1": "0",
+            "y1": "1",
+            "x2": "0",
+            "y2": "0"
+          },
+          "elements": [
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "0%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0.7"
+              }
+            },
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "100%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0.3"
+              }
+            }
+          ]
+        },
+        {
+          "id": "glowGradient",
+          "type": "radialGradient",
+          "attributes": {
+            "cx": "0.5",
+            "cy": "0.5",
+            "r": "0.5",
+            "fx": "0.5",
+            "fy": "0.5"
+          },
+          "elements": [
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "0%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "1"
+              }
+            },
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "70%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0.7"
+              }
+            },
+            {
+              "type": "stop",
+              "attributes": {
+                "offset": "100%",
+                "stop-color": "#ffdf88",
+                "stop-opacity": "0"
+              }
+            }
+          ]
         }
       ]
     }
   ],
-  "message": "I've created the bat signal with a dramatic reveal. The spotlight grows from the center, then the bat symbol fades in with a pulsing glow effect."
+  "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 800 600\" width=\"800\" height=\"600\">\n  <defs>\n    <linearGradient id=\"beamGradient\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"0.6\"/>\n      <stop offset=\"40%\" stop-color=\"#ffdf88\" stop-opacity=\"0.2\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0.1\"/>\n    </linearGradient>\n    <linearGradient id=\"pulseBeamGradient\" x1=\"0\" y1=\"1\" x2=\"0\" y2=\"0\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"0.7\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0.3\"/>\n    </linearGradient>\n    <radialGradient id=\"glowGradient\" cx=\"0.5\" cy=\"0.5\" r=\"0.5\" fx=\"0.5\" fy=\"0.5\">\n      <stop offset=\"0%\" stop-color=\"#ffdf88\" stop-opacity=\"1\"/>\n      <stop offset=\"70%\" stop-color=\"#ffdf88\" stop-opacity=\"0.7\"/>\n      <stop offset=\"100%\" stop-color=\"#ffdf88\" stop-opacity=\"0\"/>\n    </radialGradient>\n  </defs>\n  <rect id=\"background\" x=\"0\" y=\"0\" width=\"100%\" height=\"100%\" fill=\"#0a0e14\"></rect>\n  <g id=\"stars\" opacity=\"0.7\">\n    <circle cx=\"100\" cy=\"100\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"7s\" repeatCount=\"indefinite\"/>\n    </circle>\n    <circle cx=\"200\" cy=\"150\" r=\"1.5\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"5s\" repeatCount=\"indefinite\" begin=\"1s\"/>\n    </circle>\n    <circle cx=\"300\" cy=\"120\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"6s\" repeatCount=\"indefinite\" begin=\"0.5s\"/>\n    </circle>\n    <circle cx=\"550\" cy=\"180\" r=\"1.2\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"9s\" repeatCount=\"indefinite\" begin=\"0.8s\"/>\n    </circle>\n    <circle cx=\"650\" cy=\"90\" r=\"1\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"8s\" repeatCount=\"indefinite\" begin=\"1.5s\"/>\n    </circle>\n    <circle cx=\"720\" cy=\"140\" r=\"1.3\" fill=\"#ffffff\">\n      <animate attributeName=\"opacity\" values=\"0.3; 1; 0.3\" dur=\"7.5s\" repeatCount=\"indefinite\" begin=\"0.2s\"/>\n    </circle>\n  </g>\n  <path id=\"distantBat\" d=\"M120 100 Q125 95 130 100 Q135 95 140 100 Q138 98 136 99 Q134 97 130 98 Q126 97 124 99 Q122 98 120 100\" fill=\"#000000\" opacity=\"0.6\">\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(600, 50)\" dur=\"45s\" repeatCount=\"indefinite\" begin=\"5s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1\" direction=\"alternate\"/>\n  </path>\n  <path id=\"cloudsBehind\" d=\"M100,250 Q150,230 200,250 Q230,230 260,240 Q290,220 340,250 Q380,230 420,250 Q480,230 520,250 Q580,230 620,240 Q670,220 700,250 Z\" fill=\"#1a222c\" opacity=\"0.4\" transform=\"translate(0, 50)\">\n    <animate attributeName=\"transform\" values=\"translate(0, 50); translate(40, 50)\" dur=\"120s\" repeatCount=\"indefinite\" begin=\"0s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1\" direction=\"alternate\"/>\n  </path>\n  <path id=\"cityScape\" d=\"M0,600 L50,580 L100,590 L150,560 L200,585 L250,570 L300,590 L350,550 L400,580 L450,560 L500,590 L550,570 L600,580 L650,560 L700,590 L750,570 L800,590 L800,600 Z\" fill=\"#151a20\" opacity=\"0.9\"></path>\n  <circle id=\"lightSource\" cx=\"400\" cy=\"770\" r=\"30\" fill=\"#ffdf88\" filter=\"drop-shadow(0 0 20px #ffdf88)\">\n    <animate attributeName=\"filter\" values=\"drop-shadow(0 0 15px #ffdf88); drop-shadow(0 0 25px #ffdf88); drop-shadow(0 0 15px #ffdf88)\" dur=\"4s\" repeatCount=\"indefinite\" begin=\"0s\"/>\n  </circle>\n  <path id=\"mainBeam\" d=\"M370,770 L300,300 L500,300 L430,770 Z\" fill=\"url(#beamGradient)\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.25\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </path>\n  <path id=\"pulsingBeam\" d=\"M380,770 L360,300 L440,300 L420,770 Z\" fill=\"url(#pulseBeamGradient)\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.1\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"opacity\" values=\"0.1; 0.5; 0.1\" dur=\"3s\" repeatCount=\"indefinite\" begin=\"5s\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </path>\n  <path id=\"cloudsAround\" d=\"M300,250 Q350,220 400,250 Q450,220 500,250 Q550,270 580,250 Q630,220 680,250 Z\" fill=\"#283040\" opacity=\"0.6\" transform=\"translate(0, 40)\">\n    <animate attributeName=\"transform\" values=\"translate(0, 40); translate(-30, 40)\" dur=\"100s\" repeatCount=\"indefinite\" begin=\"0s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1\" direction=\"alternate\"/>\n  </path>\n  <circle id=\"spotlightCircle\" cx=\"400\" cy=\"300\" r=\"120\" fill=\"#ffdf88\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.9\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </circle>\n  <circle id=\"spotlightGlow\" cx=\"400\" cy=\"300\" r=\"150\" fill=\"url(#glowGradient)\" opacity=\"0\" filter=\"drop-shadow(0 0 20px #ffdf88)\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 0.8\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </circle>\n  <path id=\"batSymbol\" d=\"M370 300 Q410 240 450 300 Q490 240 530 300 Q510 280 490 290 Q480 260 450 280 Q420 260 410 290 Q390 280 370 300\" fill=\"#000000\" opacity=\"0\" transform=\"translate(0, 0)\">\n    <animate attributeName=\"opacity\" values=\"0; 1\" dur=\"5s\" fill=\"forwards\"/>\n    <animate attributeName=\"transform\" values=\"translate(0, 0); translate(-70, 0); translate(70, 0); translate(0, 0)\" dur=\"25s\" repeatCount=\"indefinite\" begin=\"6s\" calcMode=\"spline\" keySplines=\"0.42 0 0.58 1 0.42 0 0.58 1 0.42 0 0.58 1\"/>\n  </path>\n</svg>",
+  "message": "The Bat Signal now shines in the night sky with the iconic bat symbol perfectly centered in the bright yellow spotlight. After fading in, the spotlight and beam slowly search across the sky in a sweeping motion, looking for criminals in the dark corners of Gotham. The entire light apparatus moves as one cohesive unit, maintaining the perfect alignment between the beam, spotlight, and bat symbol as it scans from side to side."
 }

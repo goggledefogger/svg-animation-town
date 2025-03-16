@@ -155,8 +155,6 @@ export const AnimationApi = {
         `/animation/presets/${name}`
       );
 
-      console.log('Received preset data:', data);
-
       // Handle both SVG-based and element-based preset responses
       if (data.preset && data.preset.svg) {
         return {

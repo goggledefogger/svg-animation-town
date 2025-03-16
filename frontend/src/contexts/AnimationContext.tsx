@@ -100,7 +100,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Get all animated elements that have CSS animations
       const styleElement = svgRef.querySelector('style');
       if (!styleElement) {
-        console.log('No style element found for CSS animations');
         return;
       }
 
