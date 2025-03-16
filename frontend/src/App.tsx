@@ -30,19 +30,19 @@ function App() {
 
   return (
     <AnimationProvider>
-      <div className="flex flex-col h-screen">
+      <div className="flex flex-col h-screen overflow-hidden">
         <Header />
         <div className="flex flex-col flex-1 overflow-hidden relative">
           {/* Main content area */}
-          <div className="flex flex-col flex-1 md:flex-row">
+          <div className="flex flex-col h-[calc(100vh-64px)] md:flex-row md:h-[calc(100vh-64px)] md:overflow-hidden">
             {/* Animation section - takes proper space on all screen sizes */}
-            <div className="flex-1 min-h-[50vh] md:min-h-0 md:w-2/3 p-4 flex flex-col z-0">
+            <div className="flex-none h-[45vh] md:flex-1 md:h-auto md:w-2/3 p-4 flex flex-col z-0">
               <AnimationCanvas />
               <AnimationControls />
             </div>
 
             {/* Chat section - conditionally shown on mobile, fixed position on mobile */}
-            <div className={`${showChat ? 'flex' : 'hidden'} md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[45vh] md:h-auto max-h-[80vh] md:max-h-none z-10 md:z-0 md:relative bg-gotham-dark md:bg-transparent`}>
+            <div className={`${showChat ? 'flex' : 'hidden'} md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[calc(100vh-45vh-64px)] md:h-auto md:max-h-[calc(100vh-64px)] z-10 md:z-0 md:relative bg-gotham-dark md:bg-transparent overflow-hidden`}>
               <ChatInterface onClose={() => setShowChat(false)} />
             </div>
           </div>

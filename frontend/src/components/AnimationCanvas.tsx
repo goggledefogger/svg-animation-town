@@ -130,7 +130,11 @@ const AnimationCanvas: React.FC = () => {
     <div
       ref={containerRef}
       className="relative flex-1 bg-black/30 rounded-lg overflow-visible flex items-center justify-center"
-      style={{ touchAction: 'pan-x pan-y', minHeight: '300px' }}
+      style={{
+        touchAction: 'pan-x pan-y',
+        minHeight: '260px',
+        height: '100%'
+      }}
     >
       {/* Always render both, but control visibility with CSS */}
       <div className={showEmptyState ? 'block' : 'hidden'}>
