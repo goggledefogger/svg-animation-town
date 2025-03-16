@@ -18,7 +18,6 @@ const DEFAULT_WELCOME_MESSAGE: Message = {
 };
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
-  const [messages, setMessages] = useState<Message[]>([DEFAULT_WELCOME_MESSAGE]);
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -27,12 +26,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     setSvgContent,
     generateAnimationFromPrompt,
     updateAnimationFromPrompt,
-    saveAnimation
+    saveAnimation,
+    chatHistory,
+    setChatHistory
   } = useAnimation();
+
+  // Initialize chat with welcome message if empty
+  useEffect(() => {
+    if (chatHistory.length === 0) {
+      setChatHistory([DEFAULT_WELCOME_MESSAGE]);
+    }
+  }, [chatHistory.length, setChatHistory]);
 
   // Reset chat to initial state
   const resetChat = () => {
-    setMessages([DEFAULT_WELCOME_MESSAGE]);
+    setChatHistory([DEFAULT_WELCOME_MESSAGE]);
     setIsProcessing(false);
   };
 
@@ -44,11 +52,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
     const handleAnimationLoaded = (event: Event) => {
       const customEvent = event as CustomEvent;
-      const chatHistory = customEvent.detail?.chatHistory;
+      const loadedChatHistory = customEvent.detail?.chatHistory;
 
-      if (chatHistory && Array.isArray(chatHistory)) {
+      if (loadedChatHistory && Array.isArray(loadedChatHistory)) {
         // Set the loaded chat history
-        setMessages(chatHistory);
+        setChatHistory(loadedChatHistory);
       } else {
         // If no chat history, set default welcome message
         resetChat();
@@ -62,7 +70,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       window.removeEventListener('animation-reset', handleAnimationReset);
       window.removeEventListener('animation-loaded', handleAnimationLoaded);
     };
-  }, []);
+  }, [setChatHistory]);
 
   // Scroll to bottom of chat
   const scrollToBottom = () => {
@@ -71,7 +79,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [chatHistory]);
 
   // Handle form submission
   const handleSubmit = async (text: string) => {
@@ -84,8 +92,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       timestamp: new Date()
     };
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    const updatedMessages = [...chatHistory, userMessage];
+    setChatHistory(updatedMessages);
     setIsProcessing(true);
 
     try {
@@ -113,27 +121,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       };
 
       const finalMessages = [...updatedMessages, aiMessage];
-      setMessages(finalMessages);
+      setChatHistory(finalMessages);
 
-      // Auto-save the animation with chat history after each update
-      // This ensures chat history is preserved on manual save
-      sessionStorage.setItem('currentChatHistory', JSON.stringify(finalMessages));
-
-    } catch (error: any) {
+      // No need to manually store in sessionStorage anymore
+      // as AnimationContext handles this automatically
+    } catch (error) {
       // Handle error
       const errorMessage: Message = {
         id: generateId(),
         sender: 'ai',
-        text: `I'm sorry, I couldn't process that request. ${error.message}`,
+        text: 'Sorry, I encountered an error while processing your request. Please try again.',
         timestamp: new Date()
       };
-
-      setMessages(prev => [...prev, errorMessage]);
-      console.error('Error processing animation request:', error);
+      setChatHistory([...updatedMessages, errorMessage]);
     } finally {
       setIsProcessing(false);
-      // Ensure we scroll to the bottom after processing is complete
-      setTimeout(scrollToBottom, 100);
     }
   };
 
@@ -157,16 +159,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 md:p-4 pb-1 bg-gotham-dark">
+      <div className="flex-grow overflow-y-auto p-4 space-y-4">
         <MessageList
-          messages={messages}
+          messages={chatHistory}
           isTyping={isProcessing}
           messagesEndRef={messagesEndRef}
         />
       </div>
 
-      <div className="p-2 md:p-4 pt-1 border-t border-gray-700 flex-shrink-0 sticky bottom-0 bg-gotham-dark">
-        <MessageInput onSubmit={handleSubmit} isProcessing={isProcessing} />
+      <div className="border-t p-4">
+        <MessageInput
+          onSubmit={handleSubmit}
+          isProcessing={isProcessing}
+        />
       </div>
     </div>
   );

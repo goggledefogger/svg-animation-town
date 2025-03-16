@@ -3,7 +3,7 @@ import { useAnimation } from '../contexts/AnimationContext';
 import ConfirmationModal from './ConfirmationModal';
 
 const Header: React.FC = () => {
-  const { loadPreset, resetEverything, saveAnimation, loadAnimation, getSavedAnimations, svgContent } = useAnimation();
+  const { loadPreset, resetEverything, saveAnimation, loadAnimation, getSavedAnimations, svgContent, chatHistory } = useAnimation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
@@ -39,18 +39,7 @@ const Header: React.FC = () => {
 
   const handleSave = () => {
     if (animationName.trim()) {
-      // Get the current chat history from sessionStorage if available
-      let chatHistory;
-      try {
-        const chatHistoryStr = sessionStorage.getItem('currentChatHistory');
-        if (chatHistoryStr) {
-          chatHistory = JSON.parse(chatHistoryStr);
-        }
-      } catch (error) {
-        console.error('Error parsing chat history:', error);
-      }
-
-      // Save animation with chat history
+      // Use chatHistory directly from AnimationContext
       saveAnimation(animationName.trim(), chatHistory);
       setShowSaveModal(false);
       setAnimationName('');

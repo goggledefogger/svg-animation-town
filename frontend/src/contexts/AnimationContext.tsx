@@ -22,6 +22,8 @@ interface AnimationContextType {
   saveAnimation: (name: string, chatHistory?: Message[]) => void;
   loadAnimation: (name: string) => ChatData | null;
   getSavedAnimations: () => string[];
+  chatHistory: Message[];
+  setChatHistory: React.Dispatch<React.SetStateAction<Message[]>>;
 }
 
 // Message type for chat history
@@ -42,6 +44,9 @@ export interface ChatData {
 // Create the context
 const AnimationContext = createContext<AnimationContextType | undefined>(undefined);
 
+// Key for session storage
+const SESSION_STORAGE_KEY = 'current_animation_state';
+
 // Create a provider component
 export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [svgContent, setSvgContent] = useState<string>('');
@@ -49,10 +54,78 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [svgRef, setSvgRefState] = useState<SVGSVGElement | null>(null);
   const [aiProvider, setAIProvider] = useState<'openai' | 'claude'>('openai');
   const [playbackSpeed, setPlaybackSpeed] = useState<number | 'groovy'>(1);
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const groovyIntervalRef = useRef<number | null>(null);
 
   // Use a ref to track the current SVG element to avoid unnecessary state updates
   const svgElementRef = useRef<SVGSVGElement | null>(null);
+
+  // Try to restore state from session storage on initial load
+  useEffect(() => {
+    try {
+      const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        if (parsedState.svgContent) {
+          setSvgContent(parsedState.svgContent);
+        }
+        if (parsedState.chatHistory) {
+          setChatHistory(parsedState.chatHistory);
+        }
+        if (parsedState.aiProvider) {
+          setAIProvider(parsedState.aiProvider);
+        }
+        if (parsedState.playbackSpeed !== undefined) {
+          setPlaybackSpeed(parsedState.playbackSpeed);
+        }
+        console.log('Restored animation state from session storage');
+      }
+    } catch (error) {
+      console.error('Error restoring animation state:', error);
+    }
+  }, []);
+
+  // Save state when visibility changes or before unloading
+  useEffect(() => {
+    // Skip saving if there's no content to save
+    if (!svgContent && chatHistory.length === 0) return;
+
+    const saveCurrentState = () => {
+      try {
+        const stateToSave = {
+          svgContent,
+          chatHistory,
+          aiProvider,
+          playbackSpeed,
+          timestamp: new Date().toISOString()
+        };
+        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stateToSave));
+        console.log('Saved animation state to session storage');
+      } catch (error) {
+        console.error('Error saving animation state:', error);
+      }
+    };
+
+    // Handle visibility change (when minimizing browser or screen turns off)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrentState();
+      }
+    };
+
+    // Handle before unload (when refreshing or closing tab)
+    const handleBeforeUnload = () => {
+      saveCurrentState();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [svgContent, chatHistory, aiProvider, playbackSpeed]);
 
   // Create a stable reference for setting the SVG reference
   const setSvgRef = useCallback((ref: SVGSVGElement | null) => {
@@ -491,6 +564,10 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Reset other state values to their defaults
     setPlaying(true);
     setPlaybackSpeed(1);
+    setChatHistory([]);
+
+    // Clear session storage
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
 
     // Clear any running intervals
     if (groovyIntervalRef.current) {
@@ -526,7 +603,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       setPlaybackSpeed,
       saveAnimation,
       loadAnimation,
-      getSavedAnimations
+      getSavedAnimations,
+      chatHistory,
+      setChatHistory
     }}>
       {children}
     </AnimationContext.Provider>
