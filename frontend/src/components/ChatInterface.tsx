@@ -3,6 +3,7 @@ import { useAnimation } from '../contexts/AnimationContext';
 import { generateId } from '../utils/helpers';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
+import AIProviderSelector from './AIProviderSelector';
 
 // Message types
 export interface Message {
@@ -12,7 +13,11 @@ export interface Message {
   timestamp: Date;
 }
 
-const ChatInterface: React.FC = () => {
+interface ChatInterfaceProps {
+  onClose?: () => void;
+}
+
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: generateId(),
@@ -98,18 +103,32 @@ const ChatInterface: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-2 md:p-4 bg-gotham-blue border-b border-gray-700 flex-shrink-0">
+      <div className="p-2 md:p-4 bg-gotham-blue border-b border-gray-700 flex-shrink-0 flex items-center justify-between">
         <h2 className="text-lg font-medium text-white">Chat</h2>
+        <div className="flex items-center space-x-2">
+          <AIProviderSelector className="block" />
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-gray-300 hover:text-white ml-2 md:hidden"
+              aria-label="Close chat"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto p-2 md:p-4 pb-1">
-        <MessageList 
-          messages={messages} 
-          isTyping={isProcessing} 
-          messagesEndRef={messagesEndRef} 
+        <MessageList
+          messages={messages}
+          isTyping={isProcessing}
+          messagesEndRef={messagesEndRef}
         />
       </div>
-      
+
       <div className="p-2 md:p-4 pt-1 border-t border-gray-700 flex-shrink-0 sticky bottom-0 bg-gotham-dark">
         <MessageInput onSubmit={handleSubmit} isProcessing={isProcessing} />
       </div>

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
-import AIProviderSelector from './AIProviderSelector';
 
 const Header: React.FC = () => {
   const { loadPreset } = useAnimation();
@@ -26,7 +25,6 @@ const Header: React.FC = () => {
           </h1>
         </div>
         <div className="flex items-center space-x-2">
-          <AIProviderSelector className="hidden md:block" />
           <div className="flex space-x-1 md:space-x-2">
             <button
               className="btn btn-outline text-xs md:text-sm py-1 px-2 md:py-2 md:px-4"
