@@ -81,7 +81,7 @@ const Header: React.FC = () => {
               className="animate-pulse-glow"
             />
           </svg>
-          <h1 className="text-lg md:text-xl font-bold text-white truncate">
+          <h1 className="hidden md:block text-lg md:text-xl font-bold text-white truncate">
             Gotham Animation
           </h1>
         </div>
