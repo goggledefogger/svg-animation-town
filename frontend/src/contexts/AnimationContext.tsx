@@ -19,6 +19,24 @@ interface AnimationContextType {
   resetAnimations: () => void;
   resetEverything: () => void;
   setPlaybackSpeed: (speed: number | 'groovy') => void;
+  saveAnimation: (name: string, chatHistory?: Message[]) => void;
+  loadAnimation: (name: string) => ChatData | null;
+  getSavedAnimations: () => string[];
+}
+
+// Message type for chat history
+export interface Message {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  timestamp?: Date;
+}
+
+// Data structure for saved animations
+export interface ChatData {
+  svg: string;
+  chatHistory?: Message[];
+  timestamp: string;
 }
 
 // Create the context
@@ -42,6 +60,73 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (ref !== svgElementRef.current) {
       svgElementRef.current = ref; // Update the ref first
       setSvgRefState(ref); // Then update the state, which will cause re-renders
+    }
+  }, []);
+
+  // Save the current animation to localStorage with a given name
+  const saveAnimation = useCallback((name: string, chatHistory?: Message[]) => {
+    if (!svgContent) {
+      console.warn('No animation to save');
+      return;
+    }
+
+    try {
+      // Get existing saved animations
+      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+      const savedAnimations = JSON.parse(savedAnimationsStr);
+
+      // Add/update the current animation with chat history
+      savedAnimations[name] = {
+        svg: svgContent,
+        chatHistory,
+        timestamp: new Date().toISOString()
+      };
+
+      // Save back to localStorage
+      localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
+      console.log(`Animation saved: ${name}`);
+    } catch (error) {
+      console.error(`Error saving animation: ${error}`);
+    }
+  }, [svgContent]);
+
+  // Load an animation from localStorage by name
+  const loadAnimation = useCallback((name: string): ChatData | null => {
+    try {
+      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+      const savedAnimations = JSON.parse(savedAnimationsStr);
+
+      if (savedAnimations[name]) {
+        const animationData = savedAnimations[name] as ChatData;
+        setSvgContent(animationData.svg);
+        console.log(`Animation loaded: ${name}`);
+
+        // Dispatch a custom event to notify components about animation load
+        const loadEvent = new CustomEvent('animation-loaded', {
+          detail: { chatHistory: animationData.chatHistory }
+        });
+        window.dispatchEvent(loadEvent);
+
+        return animationData;
+      } else {
+        console.warn(`Animation not found: ${name}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error loading animation: ${error}`);
+      return null;
+    }
+  }, []);
+
+  // Get list of saved animation names
+  const getSavedAnimations = useCallback((): string[] => {
+    try {
+      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+      const savedAnimations = JSON.parse(savedAnimationsStr);
+      return Object.keys(savedAnimations);
+    } catch (error) {
+      console.error(`Error getting saved animations: ${error}`);
+      return [];
     }
   }, []);
 
@@ -438,7 +523,10 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       resumeAnimations,
       resetAnimations,
       resetEverything,
-      setPlaybackSpeed
+      setPlaybackSpeed,
+      saveAnimation,
+      loadAnimation,
+      getSavedAnimations
     }}>
       {children}
     </AnimationContext.Provider>

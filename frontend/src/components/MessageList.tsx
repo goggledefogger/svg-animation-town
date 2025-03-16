@@ -1,5 +1,5 @@
 import React from 'react';
-import { Message } from './ChatInterface';
+import { Message } from '../contexts/AnimationContext';
 
 interface MessageListProps {
   messages: Message[];

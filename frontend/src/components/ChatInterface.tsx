@@ -1,32 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
+import { Message } from '../contexts/AnimationContext';
 import { generateId } from '../utils/helpers';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import AIProviderSelector from './AIProviderSelector';
 
-// Message types
-export interface Message {
-  id: string;
-  sender: 'user' | 'ai';
-  text: string;
-  timestamp?: Date;
-}
-
 interface ChatInterfaceProps {
   onClose?: () => void;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: generateId(),
-      sender: 'ai',
-      text: "Welcome to Gotham Animation Studio! I'm your animation assistant. Describe what you'd like to create, and I'll help bring it to life. Try saying 'Create a bat signal in the night sky' or 'Make stars twinkle in the background'.",
-      timestamp: new Date()
-    }
-  ]);
+const DEFAULT_WELCOME_MESSAGE: Message = {
+  id: generateId(),
+  sender: 'ai',
+  text: "Welcome to Gotham Animation Studio! I'm your animation assistant. Describe what you'd like to create, and I'll help bring it to life. Try saying 'Create a bat signal in the night sky' or 'Make stars twinkle in the background'.",
+  timestamp: new Date()
+};
 
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
+  const [messages, setMessages] = useState<Message[]>([DEFAULT_WELCOME_MESSAGE]);
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -34,19 +26,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     svgContent,
     setSvgContent,
     generateAnimationFromPrompt,
-    updateAnimationFromPrompt
+    updateAnimationFromPrompt,
+    saveAnimation
   } = useAnimation();
 
   // Reset chat to initial state
   const resetChat = () => {
-    setMessages([
-      {
-        id: generateId(),
-        sender: 'ai',
-        text: "Welcome to Gotham Animation Studio! I'm your animation assistant. Describe what you'd like to create, and I'll help bring it to life. Try saying 'Create a bat signal in the night sky' or 'Make stars twinkle in the background'.",
-        timestamp: new Date()
-      }
-    ]);
+    setMessages([DEFAULT_WELCOME_MESSAGE]);
     setIsProcessing(false);
   };
 
@@ -56,9 +42,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       resetChat();
     };
 
+    const handleAnimationLoaded = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const chatHistory = customEvent.detail?.chatHistory;
+
+      if (chatHistory && Array.isArray(chatHistory)) {
+        // Set the loaded chat history
+        setMessages(chatHistory);
+      } else {
+        // If no chat history, set default welcome message
+        resetChat();
+      }
+    };
+
     window.addEventListener('animation-reset', handleAnimationReset);
+    window.addEventListener('animation-loaded', handleAnimationLoaded);
+
     return () => {
       window.removeEventListener('animation-reset', handleAnimationReset);
+      window.removeEventListener('animation-loaded', handleAnimationLoaded);
     };
   }, []);
 
@@ -78,10 +80,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     const userMessage: Message = {
       id: generateId(),
       sender: 'user',
-      text
+      text,
+      timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setIsProcessing(true);
 
     try {
@@ -104,16 +108,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       const aiMessage: Message = {
         id: generateId(),
         sender: 'ai',
-        text: userFriendlyMessage
+        text: userFriendlyMessage,
+        timestamp: new Date()
       };
 
-      setMessages(prev => [...prev, aiMessage]);
+      const finalMessages = [...updatedMessages, aiMessage];
+      setMessages(finalMessages);
+
+      // Auto-save the animation with chat history after each update
+      // This ensures chat history is preserved on manual save
+      sessionStorage.setItem('currentChatHistory', JSON.stringify(finalMessages));
+
     } catch (error: any) {
       // Handle error
       const errorMessage: Message = {
         id: generateId(),
         sender: 'ai',
-        text: `I'm sorry, I couldn't process that request. ${error.message}`
+        text: `I'm sorry, I couldn't process that request. ${error.message}`,
+        timestamp: new Date()
       };
 
       setMessages(prev => [...prev, errorMessage]);
