@@ -17,6 +17,7 @@ interface AnimationContextType {
   pauseAnimations: () => void;
   resumeAnimations: () => void;
   resetAnimations: () => void;
+  resetEverything: () => void;
   setPlaybackSpeed: (speed: number | 'groovy') => void;
 }
 
@@ -346,8 +347,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Animation control methods
   const pauseAnimations = useCallback(() => {
-    console.log('Pausing animations, svgRef:', svgRef ? 'exists' : 'null');
-
     if (svgRef) {
       try {
         // Pause SMIL animations (animate tags)
@@ -366,8 +365,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [svgRef, controlCssAnimations]);
 
   const resumeAnimations = useCallback(() => {
-    console.log('Resuming animations, svgRef:', svgRef ? 'exists' : 'null');
-
     if (svgRef) {
       try {
         // Resume SMIL animations (animate tags)
@@ -387,7 +384,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Resets animations by re-inserting the SVG content
   const resetAnimations = useCallback(() => {
-    console.log('Resetting animations');
     setSvgContent(prevContent => {
       // Force a re-render by adding and immediately removing a comment
       return prevContent ? prevContent + '<!-- reset -->' : prevContent;
@@ -401,6 +397,29 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }, 50);
 
     setPlaying(true);
+  }, []);
+
+  // Completely reset everything to initial state
+  const resetEverything = useCallback(() => {
+    // Reset SVG content to empty string
+    setSvgContent('');
+
+    // Reset other state values to their defaults
+    setPlaying(true);
+    setPlaybackSpeed(1);
+
+    // Clear any running intervals
+    if (groovyIntervalRef.current) {
+      clearInterval(groovyIntervalRef.current);
+      groovyIntervalRef.current = null;
+    }
+
+    // Reset SVG references
+    svgElementRef.current = null;
+    setSvgRefState(null);
+
+    // Dispatch a custom event to notify other components about the reset
+    window.dispatchEvent(new CustomEvent('animation-reset'));
   }, []);
 
   return (
@@ -419,6 +438,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       pauseAnimations,
       resumeAnimations,
       resetAnimations,
+      resetEverything,
       setPlaybackSpeed
     }}>
       {children}

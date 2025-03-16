@@ -37,6 +37,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     updateAnimationFromPrompt
   } = useAnimation();
 
+  // Reset chat to initial state
+  const resetChat = () => {
+    setMessages([
+      {
+        id: generateId(),
+        sender: 'ai',
+        text: "Welcome to Gotham Animation Studio! I'm your animation assistant. Describe what you'd like to create, and I'll help bring it to life. Try saying 'Create a bat signal in the night sky' or 'Make stars twinkle in the background'.",
+        timestamp: new Date()
+      }
+    ]);
+    setIsProcessing(false);
+  };
+
+  // Listen for animation reset event
+  useEffect(() => {
+    const handleAnimationReset = () => {
+      resetChat();
+    };
+
+    window.addEventListener('animation-reset', handleAnimationReset);
+    return () => {
+      window.removeEventListener('animation-reset', handleAnimationReset);
+    };
+  }, []);
+
   // Scroll to bottom of chat
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

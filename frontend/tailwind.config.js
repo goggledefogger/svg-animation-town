@@ -17,6 +17,7 @@ module.exports = {
         'spin-slow': 'spin 3s linear infinite',
         'dash-offset-300': 'dash-offset 1.5s ease-in-out infinite',
         'fadeIn': 'fadeIn 0.2s ease-in-out',
+        'fade-in': 'fadeIn 0.2s ease-in-out',
         'ping': 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
       },
       keyframes: {

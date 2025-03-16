@@ -13,6 +13,8 @@ const AnimationCanvas: React.FC = () => {
   const [showEmptyState, setShowEmptyState] = useState(true);
   // Track loading state from API calls
   const [isLoading, setIsLoading] = useState(false);
+  // Track if a message has been sent to hide the empty state
+  const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -68,12 +70,12 @@ const AnimationCanvas: React.FC = () => {
         setShowEmptyState(false);
       } else {
         console.warn('No SVG element found in container after setting content');
-        // No SVG element found, show the empty state
-        setShowEmptyState(true);
+        // No SVG element found, show the empty state if no message has been sent
+        setShowEmptyState(!hasMessageBeenSent);
       }
     } else {
-      // No SVG content, show the empty state
-      setShowEmptyState(true);
+      // No SVG content, show the empty state only if no message has been sent
+      setShowEmptyState(!hasMessageBeenSent || !isLoading);
 
       // Clear the SVG container if it exists
       if (svgContainerRef.current) {
@@ -86,7 +88,7 @@ const AnimationCanvas: React.FC = () => {
         setSvgRef(null);
       }
     }
-  }, [svgContent, setupSvgElement]);
+  }, [svgContent, setupSvgElement, hasMessageBeenSent, isLoading]);
 
   // Monitor API calls to show loading animation
   useEffect(() => {
@@ -94,6 +96,8 @@ const AnimationCanvas: React.FC = () => {
     const handleApiCallStart = () => {
       console.log('API call started - showing loading animation');
       setIsLoading(true);
+      setHasMessageBeenSent(true);
+      setShowEmptyState(false);
     };
 
     // Function to listen for API calls completing
