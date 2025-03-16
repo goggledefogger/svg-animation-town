@@ -67,3 +67,29 @@
 .h-mobile-content {
   height: calc(var(--vh, 1vh) * 55 - 64px);
 }
+
+/* Mobile keyboard fix - adjust behavior when input is focused */
+@media (max-width: 768px) {
+  /* Move the input to the top of the viewport when it has focus */
+  input:focus {
+    position: relative;
+    z-index: 100;
+  }
+
+  /* Prevent content from being hidden beneath keyboard */
+  .js-focus-visible input:focus,
+  input:focus {
+    padding-bottom: 1rem;
+  }
+
+  /* Make sure we can always see what we're typing by allowing window scroll when input is focused */
+  input:focus ~ * {
+    position: static !important;
+  }
+
+  body:has(input:focus) {
+    position: static !important;
+    overflow: auto !important;
+    height: auto !important;
+  }
+}

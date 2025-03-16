@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 interface MessageInputProps {
   onSubmit: (text: string) => void;
@@ -7,7 +7,7 @@ interface MessageInputProps {
 
 const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) => {
   const [inputValue, setInputValue] = useState('');
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Handle submit
   const handleSubmit = (e: React.FormEvent) => {
@@ -19,39 +19,26 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) =
     setInputValue('');
   };
 
-  // Detect possible keyboard visibility on mobile
-  useEffect(() => {
-    const handleResize = () => {
-      // Simple heuristic - if viewport height changes significantly, keyboard may be visible
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      const windowHeight = window.innerHeight;
-      setIsKeyboardVisible(windowHeight - viewportHeight > 150);
-    };
-
-    // Use visualViewport API if available
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleResize);
-    } else {
-      window.addEventListener('resize', handleResize);
-    }
-
-    return () => {
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', handleResize);
-      } else {
-        window.removeEventListener('resize', handleResize);
-      }
-    };
-  }, []);
+  // Simple focus handler to ensure the input is visible when the keyboard appears
+  const handleFocus = () => {
+    // Ensure the input is visible by scrolling to it after a short delay
+    // to let the keyboard appear first
+    setTimeout(() => {
+      // Use simple window.scrollTo to ensure the input is visible
+      window.scrollTo(0, document.body.scrollHeight);
+    }, 300);
+  };
 
   return (
     <form onSubmit={handleSubmit} className="flex">
       <input
+        ref={inputRef}
         type="text"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
+        onFocus={handleFocus}
         placeholder="Describe animation..."
-        className={`input flex-grow text-sm md:text-base ${isKeyboardVisible ? 'pb-8' : ''}`}
+        className="input flex-grow text-sm md:text-base"
         disabled={isProcessing}
       />
       <button

@@ -98,6 +98,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       console.error('Error processing animation request:', error);
     } finally {
       setIsProcessing(false);
+      // Ensure we scroll to the bottom after processing is complete
+      setTimeout(scrollToBottom, 100);
     }
   };
 
