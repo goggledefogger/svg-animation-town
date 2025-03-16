@@ -6,7 +6,7 @@
   html {
     height: -webkit-fill-available;
   }
-  
+
   body {
     @apply bg-gotham-dark text-gray-100 font-sans min-h-screen;
     min-height: -webkit-fill-available;
@@ -21,6 +21,11 @@
     .h-screen {
       height: -webkit-fill-available;
     }
+  }
+
+  /* Dynamic viewport height CSS variables */
+  :root {
+    --vh: 1vh;
   }
 }
 
@@ -40,4 +45,25 @@
   .input {
     @apply bg-gotham-blue border border-gray-700 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-1 focus:ring-bat-yellow text-sm md:text-base;
   }
+}
+
+/* Utility classes for dynamic viewport height */
+.h-mobile-screen {
+  height: calc(var(--vh, 1vh) * 100);
+}
+
+.h-mobile-screen-minus-header {
+  height: calc(var(--vh, 1vh) * 100 - 64px);
+}
+
+.h-mobile-partial {
+  height: calc(var(--vh, 1vh) * 45);
+}
+
+.max-h-mobile-screen-minus-header {
+  max-height: calc(var(--vh, 1vh) * 100 - 64px);
+}
+
+.h-mobile-content {
+  height: calc(var(--vh, 1vh) * 55 - 64px);
 }
