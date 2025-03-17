@@ -1,16 +1,30 @@
 import React, { useState } from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
+import { useMovie } from '../contexts/MovieContext';
 
 const AnimationControls: React.FC = () => {
   const { playing, pauseAnimations, resumeAnimations, resetAnimations, svgContent, playbackSpeed, setPlaybackSpeed } = useAnimation();
+  const { activeClipId, getActiveClip, isPlaying, setIsPlaying } = useMovie();
   const [showSpeedOptions, setShowSpeedOptions] = useState(false);
 
-  // Toggle play/pause
+  // Get the active clip
+  const activeClip = activeClipId ? getActiveClip() : null;
+
+  // Determine if we should show controls based on either svgContent or activeClip
+  const hasContent = svgContent || activeClip?.svgContent;
+
+  // Toggle play/pause - use movie context if we have an active clip
   const togglePlayback = () => {
-    if (playing) {
-      pauseAnimations();
+    if (activeClipId) {
+      // Using movie playback controls
+      setIsPlaying(!isPlaying);
     } else {
-      resumeAnimations();
+      // Using animation playback controls
+      if (playing) {
+        pauseAnimations();
+      } else {
+        resumeAnimations();
+      }
     }
   };
 
@@ -32,8 +46,11 @@ const AnimationControls: React.FC = () => {
     return `${speed}x`;
   };
 
-  // Only show controls if there's SVG content
-  if (!svgContent) {
+  // Determine which play state to use - active clip or animation
+  const isCurrentlyPlaying = activeClipId ? isPlaying : playing;
+
+  // Only show controls if there's content to control
+  if (!hasContent) {
     return null;
   }
 
@@ -52,9 +69,9 @@ const AnimationControls: React.FC = () => {
         <button
           onClick={togglePlayback}
           className="bg-blue-600 hover:bg-blue-500 text-white p-1.5 md:p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={isCurrentlyPlaying ? "Pause" : "Play"}
         >
-          {playing ? (
+          {isCurrentlyPlaying ? (
             <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -65,6 +82,13 @@ const AnimationControls: React.FC = () => {
             </svg>
           )}
         </button>
+
+        {/* Active clip info */}
+        {activeClip && (
+          <div className="text-xs md:text-sm text-gray-300 ml-2 flex-1 overflow-hidden whitespace-nowrap overflow-ellipsis">
+            {activeClip.name}
+          </div>
+        )}
 
         {/* Speed Control - Dropdown */}
         <div className="relative">

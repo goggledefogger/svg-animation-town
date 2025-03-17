@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
+import { useMovie } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 
 const AnimationCanvas: React.FC = () => {
   const { svgContent } = useAnimation();
+  const { currentStoryboard, activeClipId, getActiveClip } = useMovie();
   const setSvgRef = useSvgRef();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -15,6 +17,12 @@ const AnimationCanvas: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   // Track if a message has been sent to hide the empty state
   const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
+
+  // Get the current active clip's SVG content
+  const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
+
+  // Determine which SVG content to use - prefer active clip, fall back to animation context
+  const displaySvgContent = activeClipSvgContent || svgContent;
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -55,12 +63,22 @@ const AnimationCanvas: React.FC = () => {
     }
   }, [setSvgRef]);
 
+  // Log when active clip changes
+  useEffect(() => {
+    if (activeClipId) {
+      const activeClip = getActiveClip();
+      console.log('Active clip changed:', activeClip?.name);
+    }
+  }, [activeClipId, getActiveClip]);
+
   // Update SVG content and handle references
   useEffect(() => {
     // Check if we have SVG content to display
-    if (svgContent && svgContainerRef.current) {
+    if (displaySvgContent && svgContainerRef.current) {
+      console.log('Updating SVG display with content length:', displaySvgContent.length);
+
       // Clear previous content and set the new SVG content
-      svgContainerRef.current.innerHTML = svgContent;
+      svgContainerRef.current.innerHTML = displaySvgContent;
 
       // Find the SVG element in the container
       const svgElement = svgContainerRef.current.querySelector('svg');
@@ -88,7 +106,7 @@ const AnimationCanvas: React.FC = () => {
         setSvgRef(null);
       }
     }
-  }, [svgContent, setupSvgElement, hasMessageBeenSent, isLoading]);
+  }, [displaySvgContent, setupSvgElement, hasMessageBeenSent, isLoading]);
 
   // Monitor API calls to show loading animation
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useMovie } from '../contexts/MovieContext';
 import StoryboardPanel from '../components/StoryboardPanel';
@@ -8,7 +8,7 @@ import StoryboardGeneratorModal from '../components/StoryboardGeneratorModal';
 import { MovieApi, StoryboardResponse } from '../services/movie.api';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { AnimationApi } from '../services/api';
-import { MovieClip } from '../contexts/MovieContext';
+import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import { Message } from '../contexts/AnimationContext';
 
 const MovieEditorPage: React.FC = () => {
@@ -22,8 +22,98 @@ const MovieEditorPage: React.FC = () => {
     setIsPlaying,
     createStoryboardFromResponse,
     saveCurrentAnimationAsClip,
-    setCurrentStoryboard
+    setCurrentStoryboard,
+    savedStoryboards,
+    loadStoryboard,
+    currentPlaybackPosition,
+    getActiveClip,
+    setCurrentPlaybackPosition
   } = useMovie();
+
+  // Add useEffect to track changes to currentStoryboard
+  useEffect(() => {
+    console.log('Current storyboard updated:', currentStoryboard.id);
+    console.log('Clips count:', currentStoryboard.clips.length);
+    if (currentStoryboard.clips.length > 0) {
+      console.log('First clip:', currentStoryboard.clips[0].name);
+    }
+  }, [currentStoryboard]);
+
+  // Playback timer for clips
+  useEffect(() => {
+    if (!isPlaying || !activeClipId) return;
+
+    const activeClip = getActiveClip();
+    if (!activeClip) return;
+
+    let lastTimestamp: number | null = null;
+    let animationFrameId: number;
+
+    // Animation loop to update playback position
+    const updatePlayback = (timestamp: number) => {
+      if (lastTimestamp === null) {
+        lastTimestamp = timestamp;
+      }
+
+      // Calculate time elapsed since last frame
+      const elapsed = (timestamp - lastTimestamp) / 1000; // convert to seconds
+      lastTimestamp = timestamp;
+
+      // Update playback position
+      const newPosition = currentPlaybackPosition + elapsed;
+
+      // If we've reached the end of the clip, loop back to start
+      if (newPosition >= (activeClip.duration || 5)) {
+        setCurrentPlaybackPosition(0);
+      } else {
+        setCurrentPlaybackPosition(newPosition);
+      }
+
+      // Continue the animation loop
+      animationFrameId = requestAnimationFrame(updatePlayback);
+    };
+
+    // Start the animation loop
+    animationFrameId = requestAnimationFrame(updatePlayback);
+
+    // Clean up when component unmounts or dependencies change
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [isPlaying, activeClipId, getActiveClip, currentPlaybackPosition, setCurrentPlaybackPosition]);
+
+  // Load the most recent storyboard on component mount if available
+  useEffect(() => {
+    const savedStoryboardIds = savedStoryboards;
+    if (savedStoryboardIds.length > 0 && currentStoryboard.clips.length === 0) {
+      // Sort by last updated date and load the most recent one
+      const storyboardsString = localStorage.getItem('svg-animator-storyboards');
+      if (storyboardsString) {
+        try {
+          const storyboards = JSON.parse(storyboardsString);
+          const storyboardsList = Object.values(storyboards) as Storyboard[];
+
+          // Convert stored dates back to Date objects for comparison
+          storyboardsList.forEach((sb) => {
+            sb.updatedAt = new Date(sb.updatedAt);
+          });
+
+          // Sort by updated date (newest first)
+          storyboardsList.sort((a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+
+          if (storyboardsList.length > 0) {
+            const newestStoryboard = storyboardsList[0];
+            console.log(`Loading most recent storyboard: ${newestStoryboard.name} with ${newestStoryboard.clips?.length || 0} clips`);
+            loadStoryboard(newestStoryboard.id);
+          }
+        } catch (error) {
+          console.error('Error loading most recent storyboard:', error);
+        }
+      }
+    }
+  }, [savedStoryboards, currentStoryboard.clips.length, loadStoryboard]);
 
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -206,8 +296,12 @@ const MovieEditorPage: React.FC = () => {
       }
 
       // Save the new storyboard
-      saveStoryboard();
+      await saveStoryboard();
       console.log(`Storyboard saved with ${newStoryboard.clips.length} clips`);
+
+      // Force refresh the state to make sure UI updates
+      const refreshedStoryboard = {...newStoryboard, updatedAt: new Date()};
+      setCurrentStoryboard(refreshedStoryboard);
 
       // Hide the progress modal
       setShowGeneratingClipsModal(false);
@@ -316,6 +410,10 @@ const MovieEditorPage: React.FC = () => {
         {/* Left panel - Storyboard */}
         <div className="w-1/4 border-r border-gray-700 bg-gotham-black p-4 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4">Storyboard</h2>
+          {/* Add debugging info about clips */}
+          <div className="text-xs text-gray-500 mb-2">
+            {currentStoryboard.clips.length} clips available
+          </div>
           {/* Storyboard panel component will be implemented separately */}
           <StoryboardPanel
             clips={currentStoryboard.clips}
@@ -349,10 +447,24 @@ const MovieEditorPage: React.FC = () => {
                 </svg>
               )}
             </button>
-            <div className="flex-1 h-2 bg-gray-700 rounded-full">
+            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
               {/* Playback progress bar */}
-              <div className="h-full bg-bat-yellow rounded-full" style={{ width: '30%' }}></div>
+              <div
+                className="h-full bg-bat-yellow rounded-full transition-all duration-200"
+                style={{
+                  width: activeClipId ?
+                    `${(currentPlaybackPosition / (getActiveClip()?.duration || 5)) * 100}%` :
+                    '0%'
+                }}
+              ></div>
             </div>
+
+            {/* Display current time and duration */}
+            {activeClipId && (
+              <div className="ml-2 text-xs text-gray-300">
+                {Math.floor(currentPlaybackPosition)}s / {getActiveClip()?.duration || 5}s
+              </div>
+            )}
           </div>
         </div>
 

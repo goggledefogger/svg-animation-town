@@ -52,10 +52,10 @@ interface MovieContextType {
   createNewStoryboard: (name?: string, description?: string) => void;
   renameStoryboard: (name: string) => void;
   updateStoryboardDescription: (description: string) => void;
-  saveStoryboard: () => void;
-  loadStoryboard: (storyboardId: string) => void;
+  saveStoryboard: () => Promise<boolean>;
+  loadStoryboard: (storyboardId: string) => boolean;
   getSavedStoryboards: () => string[];
-  deleteStoryboard: (storyboardId: string) => void;
+  deleteStoryboard: (storyboardId: string) => boolean;
 
   // Clip management
   addClip: (clip: Omit<MovieClip, 'id' | 'order'>) => string;
@@ -153,34 +153,37 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Save storyboard to local storage
   const saveStoryboard = useCallback(() => {
-    try {
-      // Get existing storyboards
-      const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
-      const storyboards: Record<string, Storyboard> = storyboardsString
-        ? JSON.parse(storyboardsString)
-        : {};
+    return new Promise<boolean>((resolve) => {
+      try {
+        // Get existing storyboards
+        const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
+        const storyboards: Record<string, Storyboard> = storyboardsString
+          ? JSON.parse(storyboardsString)
+          : {};
 
-      // Update storyboard with current date
-      const updatedStoryboard = {
-        ...currentStoryboard,
-        updatedAt: new Date()
-      };
+        // Update storyboard with current date
+        const updatedStoryboard = {
+          ...currentStoryboard,
+          updatedAt: new Date()
+        };
 
-      // Save updated storyboard
-      storyboards[updatedStoryboard.id] = updatedStoryboard;
-      localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
+        // Save updated storyboard
+        storyboards[updatedStoryboard.id] = updatedStoryboard;
+        localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
 
-      // Update saved storyboards list
-      setSavedStoryboards(Object.keys(storyboards));
+        // Update saved storyboards list
+        setSavedStoryboards(Object.keys(storyboards));
 
-      // Also update current storyboard state
-      setCurrentStoryboard(updatedStoryboard);
+        // Also update current storyboard state
+        setCurrentStoryboard(updatedStoryboard);
 
-      return true;
-    } catch (error) {
-      console.error('Error saving storyboard:', error);
-      return false;
-    }
+        console.log('Storyboard saved successfully with', updatedStoryboard.clips.length, 'clips');
+        resolve(true);
+      } catch (error) {
+        console.error('Error saving storyboard:', error);
+        resolve(false);
+      }
+    });
   }, [currentStoryboard]);
 
   // Load storyboard from local storage
