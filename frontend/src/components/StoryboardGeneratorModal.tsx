@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface StoryboardGeneratorModalProps {
   isOpen: boolean;
@@ -15,12 +15,32 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const [provider, setProvider] = useState<'openai' | 'claude'>('openai');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownRef]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (prompt.trim()) {
       onGenerate(prompt.trim(), provider);
     }
+  };
+
+  const getProviderDisplayName = (providerValue: 'openai' | 'claude') => {
+    return providerValue === 'openai' ? 'OpenAI' : 'Claude';
   };
 
   if (!isOpen) {
@@ -69,37 +89,65 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
             <label className="block text-sm font-medium text-gray-300 mb-2">
               AI Provider
             </label>
-            <div className="flex space-x-4">
-              <div className="flex items-center">
-                <input
-                  id="openai"
-                  type="radio"
-                  name="provider"
-                  value="openai"
-                  checked={provider === 'openai'}
-                  onChange={() => setProvider('openai')}
-                  className="h-4 w-4 text-bat-yellow focus:ring-bat-yellow"
-                  disabled={isLoading}
-                />
-                <label htmlFor="openai" className="ml-2 text-gray-300">
-                  OpenAI
-                </label>
-              </div>
-              <div className="flex items-center">
-                <input
-                  id="claude"
-                  type="radio"
-                  name="provider"
-                  value="claude"
-                  checked={provider === 'claude'}
-                  onChange={() => setProvider('claude')}
-                  className="h-4 w-4 text-bat-yellow focus:ring-bat-yellow"
-                  disabled={isLoading}
-                />
-                <label htmlFor="claude" className="ml-2 text-gray-300">
-                  Claude
-                </label>
-              </div>
+
+            {/* Dropdown for AI Provider selection */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                className={`
+                  flex items-center justify-between w-full px-4 py-2 text-sm
+                  bg-gray-700 border ${isLoading ? 'border-gray-600' : 'border-gray-600 hover:border-gray-500'}
+                  rounded-md focus:outline-none ${provider === 'openai' ? 'text-bat-yellow' : provider === 'claude' ? 'text-bat-yellow' : 'text-white'}
+                `}
+                onClick={() => !isLoading && setDropdownOpen(!dropdownOpen)}
+                disabled={isLoading}
+              >
+                <span>{getProviderDisplayName(provider)}</span>
+                <svg
+                  className={`ml-2 w-4 h-4 transition-transform ${dropdownOpen ? 'transform rotate-180' : ''}`}
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+
+              {dropdownOpen && (
+                <div className="absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg">
+                  <ul className="py-1 text-sm">
+                    <li>
+                      <button
+                        type="button"
+                        className={`w-full px-4 py-2 text-left ${provider === 'openai' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                        onClick={() => {
+                          setProvider('openai');
+                          setDropdownOpen(false);
+                        }}
+                      >
+                        OpenAI
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        type="button"
+                        className={`w-full px-4 py-2 text-left ${provider === 'claude' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                        onClick={() => {
+                          setProvider('claude');
+                          setDropdownOpen(false);
+                        }}
+                      >
+                        Claude
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
 

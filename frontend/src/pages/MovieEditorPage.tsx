@@ -394,26 +394,32 @@ const MovieEditorPage: React.FC = () => {
                       .map((clip) => (
                         <div
                           key={clip.id}
-                          className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all w-40 flex-shrink-0 ${
-                            clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'
+                          className={`flex-shrink-0 w-40 ${
+                            clip.id === activeClipId ? 'p-0.5' : 'p-0'
                           }`}
-                          onClick={() => handleClipSelect(clip.id)}
                         >
-                          {/* Clip thumbnail preview */}
-                          <div className="aspect-video overflow-hidden">
-                            {clip.svgContent ? (
-                              <SvgThumbnail svgContent={clip.svgContent} />
-                            ) : (
-                              <div className="text-gray-500 text-xs flex items-center justify-center h-full">No preview</div>
-                            )}
-                          </div>
+                          <div
+                            className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all h-full ${
+                              clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'
+                            }`}
+                            onClick={() => handleClipSelect(clip.id)}
+                          >
+                            {/* Clip thumbnail preview */}
+                            <div className="aspect-video overflow-hidden">
+                              {clip.svgContent ? (
+                                <SvgThumbnail svgContent={clip.svgContent} />
+                              ) : (
+                                <div className="text-gray-500 text-xs flex items-center justify-center h-full">No preview</div>
+                              )}
+                            </div>
 
-                          {/* Clip info */}
-                          <div className="p-2 bg-gotham-black">
-                            <div className="text-sm font-medium truncate">{clip.name}</div>
-                            <div className="flex justify-between text-xs text-gray-400 mt-1">
-                              <span>{clip.duration}s</span>
-                              <span>#{clip.order + 1}</span>
+                            {/* Clip info */}
+                            <div className="p-2 bg-gotham-black">
+                              <div className="text-sm font-medium truncate">{clip.name}</div>
+                              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                                <span>{clip.duration}s</span>
+                                <span>#{clip.order + 1}</span>
+                              </div>
                             </div>
                           </div>
                         </div>

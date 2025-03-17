@@ -27,7 +27,9 @@ const Header: React.FC<HeaderProps> = ({
   const [animationName, setAnimationName] = useState('');
   const [savedAnimations, setSavedAnimations] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
   const isMovieEditorPage = location.pathname === '/movie-editor';
@@ -43,6 +45,9 @@ const Header: React.FC<HeaderProps> = ({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false);
       }
+      if (mobileNavRef.current && !mobileNavRef.current.contains(event.target as Node)) {
+        setShowMobileNav(false);
+      }
     }
 
     // Add event listener
@@ -51,7 +56,7 @@ const Header: React.FC<HeaderProps> = ({
       // Remove event listener on cleanup
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [dropdownRef]);
+  }, [dropdownRef, mobileNavRef]);
 
   const handleResetConfirm = () => {
     resetEverything();
@@ -90,6 +95,51 @@ const Header: React.FC<HeaderProps> = ({
             className="h-6 md:h-8 mr-2"
           />
         </div>
+
+        {/* Mobile Editor Selector Dropdown */}
+        <div className="md:hidden relative" ref={mobileNavRef}>
+          <button
+            className="flex items-center space-x-1 px-3 py-1 border border-gray-700 rounded-md bg-gotham-blue text-gray-300 hover:bg-gray-700 focus:outline-none"
+            onClick={() => setShowMobileNav(!showMobileNav)}
+          >
+            <span>{isMovieEditorPage ? 'Movie' : 'Animation'}</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+
+          {showMobileNav && (
+            <div className="absolute top-full left-0 mt-1 bg-gotham-blue border border-gray-700 rounded-md shadow-lg z-50 w-48">
+              <div className="py-1">
+                <Link
+                  to="/"
+                  className={`block px-4 py-2 ${
+                    !isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
+                  }`}
+                  onClick={() => setShowMobileNav(false)}
+                >
+                  Animation
+                </Link>
+                <Link
+                  to="/movie-editor"
+                  className={`block px-4 py-2 ${
+                    isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
+                  }`}
+                  onClick={() => setShowMobileNav(false)}
+                >
+                  Movie
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Navigation Links */}
         <nav className="hidden md:flex space-x-4">
           <Link
             to="/"
