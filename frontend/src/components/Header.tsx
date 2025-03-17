@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { useAnimation } from '../contexts/AnimationContext';
 import ConfirmationModal from './ConfirmationModal';
+import ExportModal from './ExportModal';
 
 const Header: React.FC = () => {
-  const { loadPreset, resetEverything, saveAnimation, loadAnimation, getSavedAnimations, svgContent, chatHistory } = useAnimation();
+  const { loadPreset, resetEverything, saveAnimation, loadAnimation, getSavedAnimations, exportAnimation, svgContent, chatHistory } = useAnimation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
   const [savedAnimations, setSavedAnimations] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -52,6 +54,16 @@ const Header: React.FC = () => {
     if (e.key === 'Enter' && animationName.trim()) {
       handleSave();
     }
+  };
+
+  const handleExport = (filename: string, format: 'svg' | 'json') => {
+    exportAnimation(filename, format);
+    setShowExportModal(false);
+  };
+
+  // Handle export button click
+  const handleExportClick = () => {
+    setShowExportModal(true);
   };
 
   return (
@@ -195,6 +207,8 @@ const Header: React.FC = () => {
 
             <button
               className="btn btn-primary flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
+              onClick={handleExportClick}
+              disabled={!svgContent}
               aria-label="Export"
             >
               <svg
@@ -259,6 +273,14 @@ const Header: React.FC = () => {
           setShowSaveModal(false);
           setAnimationName('');
         }}
+      />
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onCancel={() => setShowExportModal(false)}
+        onExport={handleExport}
+        svgContent={svgContent}
       />
     </header>
   );

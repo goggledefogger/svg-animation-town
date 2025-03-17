@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
 import { AnimationApi } from '../services/api';
+import { exportAnimation as exportAnimationUtil, canExportAsSvg } from '../utils/exportUtils';
 
 // Define the context interface
 interface AnimationContextType {
@@ -22,6 +23,8 @@ interface AnimationContextType {
   saveAnimation: (name: string, chatHistory?: Message[]) => void;
   loadAnimation: (name: string) => ChatData | null;
   getSavedAnimations: () => string[];
+  exportAnimation: (filename: string, format: 'svg' | 'json') => void;
+  canExportAsSvg: () => boolean;
   chatHistory: Message[];
   setChatHistory: React.Dispatch<React.SetStateAction<Message[]>>;
 }
@@ -583,6 +586,21 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     window.dispatchEvent(new CustomEvent('animation-reset'));
   }, []);
 
+  // Function to export animation
+  const exportAnimationFn = useCallback((filename: string, format: 'svg' | 'json') => {
+    if (!svgContent) {
+      console.warn('No animation to export');
+      return;
+    }
+
+    exportAnimationUtil(svgContent, filename, format, chatHistory);
+  }, [svgContent, chatHistory]);
+
+  // Check if SVG can be exported with animations
+  const canExportAsSvgFn = useCallback(() => {
+    return canExportAsSvg(svgContent);
+  }, [svgContent]);
+
   return (
     <AnimationContext.Provider value={{
       svgContent,
@@ -604,6 +622,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       saveAnimation,
       loadAnimation,
       getSavedAnimations,
+      exportAnimation: exportAnimationFn,
+      canExportAsSvg: canExportAsSvgFn,
       chatHistory,
       setChatHistory
     }}>
@@ -623,6 +643,9 @@ export const useAnimation = (): AnimationContextType => {
 
 // Export a hook to get the setSvgRef function
 export const useSvgRef = () => {
-  const { setSvgRef } = useAnimation();
-  return setSvgRef;
+  const context = useContext(AnimationContext);
+  if (context === undefined) {
+    throw new Error('useSvgRef must be used within an AnimationProvider');
+  }
+  return context.setSvgRef;
 };
