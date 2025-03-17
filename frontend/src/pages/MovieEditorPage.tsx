@@ -11,6 +11,7 @@ import { AnimationApi } from '../services/api';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import { Message } from '../contexts/AnimationContext';
 import ClipEditor from '../components/ClipEditor';
+import Header from '../components/Header';
 
 const MovieEditorPage: React.FC = () => {
   const {
@@ -333,104 +334,14 @@ const MovieEditorPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen h-mobile-screen overflow-hidden">
-      {/* Header for Movie Editor */}
-      <header className="bg-gotham-black p-4 shadow-lg border-b border-gray-700 flex justify-between items-center">
-        <div className="flex items-center">
-          <h1 className="text-lg md:text-xl font-bold mr-4 text-bat-yellow">
-            {currentStoryboard.name || 'New Movie'}
-          </h1>
-        </div>
-
-        <div className="flex space-x-2">
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowStoryboardGeneratorModal(true)}
-            aria-label="Generate"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-              />
-            </svg>
-            <span className="hidden md:inline">Generate with AI</span>
-          </button>
-
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowSaveModal(true)}
-            aria-label="Save"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
-            <span className="hidden md:inline">Save</span>
-          </button>
-
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowLoadModal(true)}
-            aria-label="Load"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            <span className="hidden md:inline">Load</span>
-          </button>
-
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowExportModal(true)}
-            aria-label="Export"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            <span className="hidden md:inline">Export</span>
-          </button>
-        </div>
-      </header>
+      {/* Use the shared Header component instead of custom header */}
+      <Header
+        storyboardName={currentStoryboard.name || 'New Movie'}
+        onGenerate={() => setShowStoryboardGeneratorModal(true)}
+        onSave={() => setShowSaveModal(true)}
+        onLoad={() => setShowLoadModal(true)}
+        onExport={() => setShowExportModal(true)}
+      />
 
       {/* Main content area */}
       <div className="flex flex-1 overflow-hidden">

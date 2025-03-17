@@ -95,7 +95,7 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [savedStoryboards, setSavedStoryboards] = useState<string[]>([]);
 
   // Playback state
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
   const [currentPlaybackPosition, setCurrentPlaybackPosition] = useState(0);
 
   // Load saved storyboard list on mount

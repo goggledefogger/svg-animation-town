@@ -44,8 +44,8 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
             <div className="aspect-video bg-gotham-gray flex items-center justify-center">
               {clip.svgContent ? (
                 <div
-                  className="w-full h-full"
-                  dangerouslySetInnerHTML={{ __html: clip.svgContent }}
+                  className="w-full h-full flex items-center justify-center"
+                  dangerouslySetInnerHTML={{ __html: clip.svgContent.replace('<svg', '<svg preserveAspectRatio="xMidYMid meet" width="100%" height="100%"') }}
                 />
               ) : (
                 <div className="text-gray-500 text-xs">No preview</div>

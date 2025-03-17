@@ -1,10 +1,25 @@
 import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAnimation } from '../contexts/AnimationContext';
+import { useMovie } from '../contexts/MovieContext';
 import ConfirmationModal from './ConfirmationModal';
 import ExportModal from './ExportModal';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  onExport?: () => void;
+  onSave?: () => void;
+  onLoad?: () => void;
+  onGenerate?: () => void;
+  storyboardName?: string;
+}
+
+const Header: React.FC<HeaderProps> = ({
+  onExport,
+  onSave,
+  onLoad,
+  onGenerate,
+  storyboardName
+}) => {
   const { loadPreset, resetEverything, saveAnimation, loadAnimation, getSavedAnimations, exportAnimation, svgContent, chatHistory } = useAnimation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -14,6 +29,8 @@ const Header: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+
+  const isMovieEditorPage = location.pathname === '/movie-editor';
 
   // Load the list of saved animations when the component mounts or when a new animation is saved
   useEffect(() => {
@@ -63,17 +80,16 @@ const Header: React.FC = () => {
     setShowExportModal(false);
   };
 
-  // Handle export button click
-  const handleExportClick = () => {
-    setShowExportModal(true);
-  };
-
   return (
     <header className="bg-gotham-black p-4 shadow-lg border-b border-gray-700 flex justify-between items-center">
       <div className="flex items-center">
-        <h1 className="text-lg md:text-xl font-bold mr-4 text-bat-yellow">
-          SVG Animator
-        </h1>
+        <div className="flex items-center">
+          <img
+            src="/favicon.svg"
+            alt="Gotham Logo"
+            className="h-6 md:h-8 mr-2"
+          />
+        </div>
         <nav className="hidden md:flex space-x-4">
           <Link
             to="/"
@@ -98,10 +114,43 @@ const Header: React.FC = () => {
         </nav>
       </div>
 
-      {/* Only show these controls on the main animation page */}
-      {location.pathname === '/' && (
-        <div className="flex space-x-2">
-          {/* Reset Button */}
+      {/* Controls section - shows different controls based on page */}
+      <div className="flex space-x-2">
+        {/* Storyboard name - only shown on movie editor page */}
+        {isMovieEditorPage && storyboardName && (
+          <span className="hidden md:flex items-center text-sm text-gray-300 mr-4">
+            <span className="text-xs text-gray-400 mr-1">Storyboard:</span>
+            {storyboardName}
+          </span>
+        )}
+
+        {/* Generate button - only shown on movie editor page */}
+        {isMovieEditorPage && onGenerate && (
+          <button
+            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+            onClick={onGenerate}
+            aria-label="Generate"
+          >
+            <svg
+              className="w-4 h-4 md:mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+              />
+            </svg>
+            <span className="hidden md:inline">Generate with AI</span>
+          </button>
+        )}
+
+        {/* Reset Button - only shown on animation editor page */}
+        {!isMovieEditorPage && (
           <button
             className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
             onClick={() => setShowResetModal(true)}
@@ -123,13 +172,38 @@ const Header: React.FC = () => {
             </svg>
             <span className="hidden md:inline">Reset</span>
           </button>
+        )}
 
-          {/* Export Button */}
+        {/* Save Button */}
+        <button
+          className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+          onClick={isMovieEditorPage && onSave ? onSave : () => setShowSaveModal(true)}
+          disabled={!isMovieEditorPage && !svgContent}
+          aria-label="Save"
+        >
+          <svg
+            className="w-4 h-4 md:mr-1"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+            />
+          </svg>
+          <span className="hidden md:inline">Save</span>
+        </button>
+
+        {/* Load Button - Either dropdown for Animation Editor or modal trigger for Movie Editor */}
+        {isMovieEditorPage && onLoad ? (
           <button
             className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowExportModal(true)}
-            disabled={!svgContent}
-            aria-label="Export"
+            onClick={onLoad}
+            aria-label="Load"
           >
             <svg
               className="w-4 h-4 md:mr-1"
@@ -142,40 +216,15 @@ const Header: React.FC = () => {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
               />
             </svg>
-            <span className="hidden md:inline">Export</span>
+            <span className="hidden md:inline">Load</span>
           </button>
-
-          {/* Save Button */}
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
-            onClick={() => setShowSaveModal(true)}
-            disabled={!svgContent}
-            aria-label="Save"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-              />
-            </svg>
-            <span className="hidden md:inline">Save</span>
-          </button>
-
-          {/* Load Dropdown */}
+        ) : (
           <div className="relative" ref={dropdownRef}>
             <button
-              className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
+              className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
               onClick={() => setDropdownOpen(!dropdownOpen)}
               disabled={savedAnimations.length === 0}
               aria-label="Load"
@@ -221,8 +270,32 @@ const Header: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Export Button */}
+        <button
+          className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+          onClick={isMovieEditorPage && onExport ? onExport : () => setShowExportModal(true)}
+          disabled={!isMovieEditorPage && !svgContent}
+          aria-label="Export"
+        >
+          <svg
+            className="w-4 h-4 md:mr-1"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+            />
+          </svg>
+          <span className="hidden md:inline">Export</span>
+        </button>
+      </div>
 
       {/* Reset Confirmation Modal */}
       <ConfirmationModal
