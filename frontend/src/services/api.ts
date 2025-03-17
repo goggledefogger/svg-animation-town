@@ -1,4 +1,5 @@
 import { ApiResponse, ApiError } from '../types/api';
+import { ApiError as CustomApiError } from './movie.api';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -13,7 +14,7 @@ function dispatchApiCallEvent(isStarting: boolean) {
 /**
  * Generic fetch wrapper with error handling
  */
-async function fetchApi<T>(
+export async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -31,14 +32,40 @@ async function fetchApi<T>(
       ...options,
     });
 
-    const data = await response.json();
-    console.log('API response:', data);
-
     // Dispatch API call end event
     dispatchApiCallEvent(false);
 
+    // Parse the response
+    let data;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+      console.log('API response:', data);
+    } else {
+      const text = await response.text();
+      console.log('API text response:', text.substring(0, 200) + (text.length > 200 ? '...' : ''));
+      try {
+        // Try to parse it as JSON anyway
+        data = JSON.parse(text);
+      } catch (e) {
+        // If it's not JSON, create an object with the text
+        data = { text };
+      }
+    }
+
     if (!response.ok) {
-      throw new Error(data.message || 'Something went wrong');
+      // Get a more detailed error message from the response if possible
+      const errorMessage =
+        data.error ||
+        data.message ||
+        data.text ||
+        `Server returned ${response.status}: ${response.statusText}`;
+
+      throw new CustomApiError(
+        errorMessage,
+        response.status,
+        data
+      );
     }
 
     return data;
@@ -47,7 +74,17 @@ async function fetchApi<T>(
     dispatchApiCallEvent(false);
 
     console.error('API Error:', error);
-    throw new Error(`API Error: ${error.message}`);
+
+    // If it's already our custom API error, just rethrow
+    if (error instanceof CustomApiError) {
+      throw error;
+    }
+
+    // Otherwise, wrap in our custom error
+    throw new CustomApiError(
+      `API Error: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
@@ -62,7 +99,7 @@ export const AnimationApi = {
     prompt: string,
     provider: 'openai' | 'claude' = 'openai'
   ): Promise<{ svg: string; message: string }> => {
-    console.log('Generating animation with prompt:', prompt);
+    console.log('Generating animation with prompt:', prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''));
     console.log('Using AI provider:', provider);
 
     try {
@@ -78,23 +115,46 @@ export const AnimationApi = {
 
       // Handle both new SVG-based responses and legacy element-based responses
       if (data.svg) {
+        if (typeof data.svg !== 'string' || !data.svg.includes('<svg')) {
+          console.error('Invalid SVG content received:', typeof data.svg);
+          console.error('SVG preview:', data.svg?.substring(0, 100));
+          throw new CustomApiError('Invalid SVG content received from server');
+        }
+
         return {
           svg: data.svg,
           message: data.message || 'Animation created successfully!'
         };
       } else if (data.elements && Array.isArray(data.elements)) {
-        console.warn('Received legacy element-based response. Using fallback error SVG.');
-        return {
-          svg: createFallbackSvg('Legacy element response received. Please update backend.'),
-          message: data.message || 'Animation created successfully (legacy format).'
-        };
+        console.error('Received legacy element-based response that will not work with the new version');
+        throw new CustomApiError('Received legacy element-based response that is not compatible with the current version');
       } else {
-        console.error('Invalid response format:', data);
-        throw new Error('Invalid response format: missing SVG and elements');
+        console.error('Invalid response format from animation API:', data);
+        throw new CustomApiError('Invalid response format: missing SVG content', 500, data);
       }
     } catch (error) {
       console.error('Error generating animation:', error);
-      throw error;
+
+      // Create a fallback error SVG to show the error message to the user
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+        <rect width="800" height="600" fill="#1a1a2e" />
+        <circle cx="400" cy="200" r="50" fill="#e63946" />
+        <text x="400" y="320" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+          Error Generating Animation
+        </text>
+        <text x="400" y="360" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
+          ${errorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+        </text>
+        <text x="400" y="400" font-family="Arial" font-size="14" fill="#999999" text-anchor="middle">
+          Please try again with a different prompt
+        </text>
+      </svg>`;
+
+      return {
+        svg: errorSvg,
+        message: `Error: ${errorMessage}`
+      };
     }
   },
 

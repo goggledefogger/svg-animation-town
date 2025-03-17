@@ -147,3 +147,71 @@ exports.generateAnimation = async (prompt) => {
 exports.updateAnimation = async (prompt, currentSvg = '') => {
   return processSvgWithOpenAI(prompt, currentSvg, true);
 };
+
+/**
+ * Generate a raw text response from OpenAI without JSON formatting
+ * Used specifically for storyboard generation and other JSON responses
+ *
+ * @param {string} prompt - The prompt to send to OpenAI
+ * @returns {string} - Raw text response from OpenAI
+ */
+exports.generateRawResponse = async (prompt) => {
+  if (!config.openai.apiKey) {
+    throw new ServiceUnavailableError('OpenAI API key is not configured');
+  }
+
+  try {
+    console.log('Sending raw text request to OpenAI with JSON formatting hint');
+
+    // Call OpenAI API requesting a JSON response but without structured output
+    const completion = await openai.chat.completions.create({
+      model: config.openai.model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.1, // Lower temperature for more deterministic JSON responses
+      response_format: { type: "json_object" } // Request JSON formatted response
+    });
+
+    if (!completion.choices || !completion.choices.length) {
+      console.error('Empty response from OpenAI API');
+      throw new ServiceUnavailableError('Received empty response from OpenAI API');
+    }
+
+    const responseContent = completion.choices[0].message.content;
+    console.log(`OpenAI raw response received, length: ${responseContent.length}`);
+
+    // Make sure we don't have surrounding markdown code blocks
+    const cleanedResponse = responseContent.replace(/```json|```/g, '').trim();
+
+    // Validate that we have something that at least starts with a JSON object
+    if (!cleanedResponse.startsWith('{')) {
+      console.error('OpenAI response does not start with a JSON object');
+      console.error('Response starts with:', cleanedResponse.substring(0, 100));
+      throw new ServiceUnavailableError('Invalid JSON response from OpenAI: does not start with {');
+    }
+
+    return cleanedResponse;
+  } catch (error) {
+    console.error('OpenAI API Error in generateRawResponse:', error);
+
+    // Handle specific OpenAI error codes
+    if (error.code === 'insufficient_quota') {
+      throw new ServiceUnavailableError('OpenAI API quota exceeded. Please check your billing information.');
+    }
+
+    if (error.code === 'rate_limit_exceeded') {
+      throw new ServiceUnavailableError('OpenAI API rate limit exceeded. Please try again later.');
+    }
+
+    if (error.code === 'invalid_api_key') {
+      throw new ServiceUnavailableError('Invalid OpenAI API key. Please check your configuration.');
+    }
+
+    throw new ServiceUnavailableError(`OpenAI API Error: ${error.message}`);
+  }
+};

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { useAnimation } from '../contexts/AnimationContext';
 import ConfirmationModal from './ConfirmationModal';
 import ExportModal from './ExportModal';
@@ -12,6 +13,7 @@ const Header: React.FC = () => {
   const [savedAnimations, setSavedAnimations] = useState<string[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
   // Load the list of saved animations when the component mounts or when a new animation is saved
   useEffect(() => {
@@ -67,31 +69,116 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="bg-gotham-blue p-2 md:p-4 border-b border-gray-700">
-      <div className="container mx-auto flex flex-row justify-between items-center">
-        <div className="flex items-center">
-          <svg
-            className="w-8 h-8 md:w-10 md:h-10 mr-2 md:mr-3"
-            viewBox="0 0 100 100"
-            xmlns="http://www.w3.org/2000/svg"
+    <header className="bg-gotham-black p-4 shadow-lg border-b border-gray-700 flex justify-between items-center">
+      <div className="flex items-center">
+        <h1 className="text-lg md:text-xl font-bold mr-4 text-bat-yellow">
+          SVG Animator
+        </h1>
+        <nav className="hidden md:flex space-x-4">
+          <Link
+            to="/"
+            className={`transition-colors ${
+              location.pathname === '/'
+                ? 'text-bat-yellow'
+                : 'text-gray-400 hover:text-white'
+            }`}
           >
-            <circle cx="50" cy="50" r="45" fill="#1a222c" />
-            <path
-              d="M50 10 C40 25 20 40 15 60 C25 55 35 55 50 70 C65 55 75 55 85 60 C80 40 60 25 50 10"
-              fill="#ffdf00"
-              className="animate-pulse-glow"
-            />
-          </svg>
-          <h1 className="hidden md:block text-lg md:text-xl font-bold text-white truncate">
-            Gotham Animation
-          </h1>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="flex space-x-1 md:space-x-2">
+            Animation Editor
+          </Link>
+          <Link
+            to="/movie-editor"
+            className={`transition-colors ${
+              location.pathname === '/movie-editor'
+                ? 'text-bat-yellow'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Movie Editor
+          </Link>
+        </nav>
+      </div>
+
+      {/* Only show these controls on the main animation page */}
+      {location.pathname === '/' && (
+        <div className="flex space-x-2">
+          {/* Reset Button */}
+          <button
+            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+            onClick={() => setShowResetModal(true)}
+            aria-label="Reset"
+          >
+            <svg
+              className="w-4 h-4 md:mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span className="hidden md:inline">Reset</span>
+          </button>
+
+          {/* Export Button */}
+          <button
+            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+            onClick={() => setShowExportModal(true)}
+            disabled={!svgContent}
+            aria-label="Export"
+          >
+            <svg
+              className="w-4 h-4 md:mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            <span className="hidden md:inline">Export</span>
+          </button>
+
+          {/* Save Button */}
+          <button
+            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
+            onClick={() => setShowSaveModal(true)}
+            disabled={!svgContent}
+            aria-label="Save"
+          >
+            <svg
+              className="w-4 h-4 md:mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+              />
+            </svg>
+            <span className="hidden md:inline">Save</span>
+          </button>
+
+          {/* Load Dropdown */}
+          <div className="relative" ref={dropdownRef}>
             <button
               className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
-              onClick={() => setShowResetModal(true)}
-              aria-label="Reset"
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              disabled={savedAnimations.length === 0}
+              aria-label="Load"
             >
               <svg
                 className="w-4 h-4 md:mr-1"
@@ -104,132 +191,38 @@ const Header: React.FC = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0l-4-4m4 4V4"
                 />
               </svg>
-              <span className="hidden md:inline">Reset</span>
-            </button>
-            <button
-              className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
-              onClick={() => loadPreset('batSignal')}
-              aria-label="Bat Signal"
-            >
-              <svg
-                className="w-4 h-4 md:mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span className="hidden md:inline">Bat Signal</span>
+              <span className="hidden md:inline">Load</span>
             </button>
 
-            {/* Save Button */}
-            <button
-              className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
-              onClick={() => setShowSaveModal(true)}
-              disabled={!svgContent}
-              aria-label="Save"
-            >
-              <svg
-                className="w-4 h-4 md:mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-                />
-              </svg>
-              <span className="hidden md:inline">Save</span>
-            </button>
-
-            {/* Load Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                disabled={savedAnimations.length === 0}
-                aria-label="Load"
-              >
-                <svg
-                  className="w-4 h-4 md:mr-1"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                <span className="hidden md:inline">Load</span>
-              </button>
-
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10">
-                  <ul className="py-1">
-                    {savedAnimations.length > 0 ? (
-                      savedAnimations.map((name) => (
-                        <li key={name}>
-                          <button
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
-                            onClick={() => {
-                              loadAnimation(name);
-                              setDropdownOpen(false);
-                            }}
-                          >
-                            {name}
-                          </button>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="px-4 py-2 text-sm text-gray-400">No saved animations</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            <button
-              className="btn btn-primary flex items-center justify-center p-2 md:py-1 md:px-2 md:px-4"
-              onClick={handleExportClick}
-              disabled={!svgContent}
-              aria-label="Export"
-            >
-              <svg
-                className="w-4 h-4 md:mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                />
-              </svg>
-              <span className="hidden md:inline">Export</span>
-            </button>
+            {dropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10">
+                <ul className="py-1">
+                  {savedAnimations.length > 0 ? (
+                    savedAnimations.map((name) => (
+                      <li key={name}>
+                        <button
+                          className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
+                          onClick={() => {
+                            loadAnimation(name);
+                            setDropdownOpen(false);
+                          }}
+                        >
+                          {name}
+                        </button>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="px-4 py-2 text-sm text-gray-400">No saved animations</li>
+                  )}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
       {/* Reset Confirmation Modal */}
       <ConfirmationModal

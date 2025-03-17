@@ -8,6 +8,8 @@ interface ConfirmationModalProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  confirmDisabled?: boolean;
+  showSpinner?: boolean;
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -17,7 +19,9 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   onConfirm,
-  onCancel
+  onCancel,
+  confirmDisabled = false,
+  showSpinner = false
 }) => {
   if (!isOpen) return null;
 
@@ -40,8 +44,16 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           <button
             className="btn btn-primary"
             onClick={onConfirm}
+            disabled={confirmDisabled}
           >
-            {confirmText}
+            {showSpinner ? (
+              <div className="flex items-center">
+                <div className="w-4 h-4 border-2 border-transparent border-t-current border-l-current rounded-full animate-spin mr-2"></div>
+                {confirmText}
+              </div>
+            ) : (
+              confirmText
+            )}
           </button>
         </div>
       </div>
