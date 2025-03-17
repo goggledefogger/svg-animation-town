@@ -10,6 +10,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { AnimationApi } from '../services/api';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import { Message } from '../contexts/AnimationContext';
+import ClipEditor from '../components/ClipEditor';
 
 const MovieEditorPage: React.FC = () => {
   const {
@@ -39,7 +40,7 @@ const MovieEditorPage: React.FC = () => {
     }
   }, [currentStoryboard]);
 
-  // Playback timer for clips
+  // Playback timer for clips - refined for better performance and sync
   useEffect(() => {
     if (!isPlaying || !activeClipId) return;
 
@@ -59,13 +60,16 @@ const MovieEditorPage: React.FC = () => {
       const elapsed = (timestamp - lastTimestamp) / 1000; // convert to seconds
       lastTimestamp = timestamp;
 
-      // Update playback position
+      // Get current position from state
       const newPosition = currentPlaybackPosition + elapsed;
+      const clipDuration = activeClip.duration || 5;
 
       // If we've reached the end of the clip, loop back to start
-      if (newPosition >= (activeClip.duration || 5)) {
+      if (newPosition >= clipDuration) {
+        // Loop back to the beginning
         setCurrentPlaybackPosition(0);
       } else {
+        // Update position
         setCurrentPlaybackPosition(newPosition);
       }
 
@@ -429,59 +433,15 @@ const MovieEditorPage: React.FC = () => {
             <AnimationCanvas />
             <AnimationControls />
           </div>
-
-          {/* Timeline controls */}
-          <div className="h-16 border-t border-gray-700 bg-gotham-black p-2 flex items-center">
-            <button
-              className="btn btn-circle mr-2"
-              onClick={() => setIsPlaying(!isPlaying)}
-              aria-label={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                </svg>
-              )}
-            </button>
-            <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
-              {/* Playback progress bar */}
-              <div
-                className="h-full bg-bat-yellow rounded-full transition-all duration-200"
-                style={{
-                  width: activeClipId ?
-                    `${(currentPlaybackPosition / (getActiveClip()?.duration || 5)) * 100}%` :
-                    '0%'
-                }}
-              ></div>
-            </div>
-
-            {/* Display current time and duration */}
-            {activeClipId && (
-              <div className="ml-2 text-xs text-gray-300">
-                {Math.floor(currentPlaybackPosition)}s / {getActiveClip()?.duration || 5}s
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Right panel - Clip Editor */}
         <div className="w-1/4 border-l border-gray-700 bg-gotham-black p-4 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4">Clip Editor</h2>
-          {/* Clip properties editor */}
-          {activeClipId ? (
-            <div>
-              <p>Edit clip properties</p>
-              {/* Form fields for clip properties will go here */}
-            </div>
-          ) : (
-            <div className="text-gray-400">
-              Select a clip to edit or create a new one
-            </div>
-          )}
+          <ClipEditor onClipUpdate={() => {
+            // This will be called when a clip is updated
+            console.log('Clip updated successfully');
+          }} />
         </div>
       </div>
 

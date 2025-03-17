@@ -207,7 +207,6 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
     });
 
     console.log('Claude response received');
-    console.log('Response structure:', JSON.stringify(completion, null, 2));
 
     // Extract the content from the response
     if (completion.content && completion.content.length > 0) {

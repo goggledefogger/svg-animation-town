@@ -60,7 +60,7 @@ interface MovieContextType {
   // Clip management
   addClip: (clip: Omit<MovieClip, 'id' | 'order'>) => string;
   saveCurrentAnimationAsClip: (name: string) => string | null;
-  updateClip: (clipId: string, updates: Partial<Omit<MovieClip, 'id' | 'order'>>) => void;
+  updateClip: (clipId: string, updates: Partial<Omit<MovieClip, 'id'>> & { order?: number }) => void;
   removeClip: (clipId: string) => void;
   reorderClips: (clipIds: string[]) => void;
 
@@ -288,7 +288,7 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, [addClip, chatHistory, svgContent]);
 
   // Update a clip
-  const updateClip = useCallback((clipId: string, updates: Partial<Omit<MovieClip, 'id' | 'order'>>) => {
+  const updateClip = useCallback((clipId: string, updates: Partial<Omit<MovieClip, 'id'>> & { order?: number }) => {
     setCurrentStoryboard(prev => {
       const clipIndex = prev.clips.findIndex(clip => clip.id === clipId);
       if (clipIndex === -1) return prev;
