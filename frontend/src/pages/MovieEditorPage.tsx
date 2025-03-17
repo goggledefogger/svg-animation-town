@@ -30,7 +30,8 @@ const MovieEditorPage: React.FC = () => {
     loadStoryboard,
     currentPlaybackPosition,
     getActiveClip,
-    setCurrentPlaybackPosition
+    setCurrentPlaybackPosition,
+    deleteStoryboard
   } = useMovie();
 
   // Add useEffect to track changes to currentStoryboard
@@ -134,6 +135,8 @@ const MovieEditorPage: React.FC = () => {
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [showMobileClipEditor, setShowMobileClipEditor] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [storyboardToDelete, setStoryboardToDelete] = useState<string | null>(null);
 
   const handleClipSelect = (clipId: string) => {
     setActiveClipId(clipId);
@@ -473,7 +476,7 @@ const MovieEditorPage: React.FC = () => {
           </div>
         }
         confirmText="Close"
-        cancelText=""
+        cancelText={undefined}
         onConfirm={() => setShowMobileClipEditor(false)}
         onCancel={() => setShowMobileClipEditor(false)}
       />
@@ -594,7 +597,7 @@ const MovieEditorPage: React.FC = () => {
           </div>
         }
         confirmText="OK"
-        cancelText=""
+        cancelText={undefined}
         onConfirm={() => setShowErrorModal(false)}
         onCancel={() => setShowErrorModal(false)}
       />
@@ -637,18 +640,34 @@ const MovieEditorPage: React.FC = () => {
                   return storyboardsList.map((storyboard: any) => (
                     <div
                       key={storyboard.id}
-                      className="border border-gray-700 hover:border-bat-yellow rounded-md p-3 mb-2 cursor-pointer"
-                      onClick={() => {
-                        loadStoryboard(storyboard.id);
-                        setShowLoadModal(false);
-                      }}
+                      className="border border-gray-700 hover:border-bat-yellow rounded-md p-3 mb-2"
                     >
-                      <div className="font-medium text-bat-yellow">{storyboard.name}</div>
-                      <div className="text-sm text-gray-400 mt-1">
-                        {storyboard.clips?.length || 0} clips
+                      <div
+                        className="cursor-pointer"
+                        onClick={() => {
+                          loadStoryboard(storyboard.id);
+                          setShowLoadModal(false);
+                        }}
+                      >
+                        <div className="font-medium text-bat-yellow">{storyboard.name}</div>
+                        <div className="text-sm text-gray-400 mt-1">
+                          {storyboard.clips?.length || 0} clips
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Updated: {new Date(storyboard.updatedAt).toLocaleString()}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Updated: {new Date(storyboard.updatedAt).toLocaleString()}
+                      <div className="mt-2 pt-2 border-t border-gray-700">
+                        <button
+                          className="text-xs text-red-400 hover:text-red-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setStoryboardToDelete(storyboard.id);
+                            setShowDeleteConfirmation(true);
+                          }}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ));
@@ -660,10 +679,30 @@ const MovieEditorPage: React.FC = () => {
             </div>
           </div>
         }
-        confirmText="Cancel"
-        cancelText=""
+        confirmText="Close"
+        cancelText={undefined}
         onConfirm={() => setShowLoadModal(false)}
-        onCancel={() => setShowLoadModal(false)}
+        onCancel={() => {}}
+      />
+
+      {/* Delete Storyboard Confirmation */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirmation}
+        title="Delete Storyboard"
+        message="Are you sure you want to delete this storyboard? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={() => {
+          if (storyboardToDelete) {
+            deleteStoryboard(storyboardToDelete);
+            setStoryboardToDelete(null);
+            setShowDeleteConfirmation(false);
+          }
+        }}
+        onCancel={() => {
+          setStoryboardToDelete(null);
+          setShowDeleteConfirmation(false);
+        }}
       />
     </div>
   );

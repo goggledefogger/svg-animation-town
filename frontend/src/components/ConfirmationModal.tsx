@@ -17,13 +17,16 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   title,
   message,
   confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  cancelText,
   onConfirm,
   onCancel,
   confirmDisabled = false,
   showSpinner = false
 }) => {
   if (!isOpen) return null;
+
+  // Determine if we should show the cancel button
+  const showCancelButton = cancelText !== undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -35,12 +38,14 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           {typeof message === 'string' ? <p className="text-gray-300">{message}</p> : message}
         </div>
         <div className="p-4 border-t border-gray-700 flex justify-end space-x-3">
-          <button
-            className="btn btn-outline"
-            onClick={onCancel}
-          >
-            {cancelText}
-          </button>
+          {showCancelButton && (
+            <button
+              className="btn btn-outline"
+              onClick={onCancel}
+            >
+              {cancelText}
+            </button>
+          )}
           <button
             className="btn btn-primary"
             onClick={onConfirm}
