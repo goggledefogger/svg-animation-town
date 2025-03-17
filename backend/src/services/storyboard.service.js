@@ -8,29 +8,22 @@ const openai = new OpenAI({
 });
 
 /**
- * Generate a storyboard using OpenAI
- * Completely separate from SVG generation flow
- *
- * @param {string} prompt - Movie concept prompt
- * @returns {Object} Storyboard object with title, description, and scenes
+ * Create system prompt for storyboard generation
+ * @returns {string} System prompt
  */
-exports.generateStoryboardWithOpenAI = async (prompt) => {
-  if (!prompt) {
-    throw new BadRequestError('Prompt is required');
-  }
-
-  if (!config.openai.apiKey) {
-    throw new ServiceUnavailableError('OpenAI API key is not configured');
-  }
-
-  try {
-    // Create a dedicated system prompt just for storyboard generation
-    const systemPrompt = `You are a storyboard generator for movies.
+const createSystemPrompt = () => {
+  return `You are a storyboard generator for movies.
 Your only job is to create a JSON storyboard based on a movie concept.
 NEVER generate SVG content or code. Only generate a JSON structure.`;
+};
 
-    // Create a specific user prompt for storyboard generation
-    const userPrompt = `Create a storyboard for this movie concept: "${prompt}"
+/**
+ * Create user prompt for storyboard generation
+ * @param {string} prompt - Movie concept prompt
+ * @returns {string} User prompt
+ */
+const createUserPrompt = (prompt) => {
+  return `Create a storyboard for this movie concept: "${prompt}"
 
 IMPORTANT INSTRUCTIONS:
 1. ONLY return valid JSON with this EXACT structure (no other text):
@@ -51,6 +44,73 @@ IMPORTANT INSTRUCTIONS:
 3. Include 3-7 scenes that tell a cohesive story.
 4. For each scene's "svgPrompt", write a detailed prompt that describes what should be in that scene's animation.
 5. DO NOT include any SVG code or XML tags.`;
+};
+
+/**
+ * Validate common requirements for storyboard generation
+ * @param {string} prompt - Movie concept prompt
+ * @param {string} apiKey - API key for the provider
+ * @param {string} provider - Provider name for error messages
+ */
+const validateStoryboardRequest = (prompt, apiKey, provider) => {
+  if (!prompt) {
+    throw new BadRequestError('Prompt is required');
+  }
+
+  if (!apiKey) {
+    throw new ServiceUnavailableError(`${provider} API key is not configured`);
+  }
+};
+
+/**
+ * Process and validate storyboard response
+ * @param {Object} storyboard - Storyboard object
+ * @returns {Object} Validated and processed storyboard
+ */
+const processStoryboard = (storyboard) => {
+  // Validate storyboard structure
+  if (!storyboard.title || !storyboard.description || !Array.isArray(storyboard.scenes)) {
+    const missing = [];
+    if (!storyboard.title) missing.push('title');
+    if (!storyboard.description) missing.push('description');
+    if (!Array.isArray(storyboard.scenes)) missing.push('scenes array');
+
+    console.error('Invalid storyboard structure:', missing.join(', '));
+    throw new ServiceUnavailableError(`Invalid storyboard format: missing ${missing.join(', ')}`);
+  }
+
+  // Validate scenes
+  if (storyboard.scenes.length === 0) {
+    throw new ServiceUnavailableError('Storyboard contains no scenes');
+  }
+
+  // Process each scene to ensure it has required properties
+  storyboard.scenes = storyboard.scenes.map((scene, index) => {
+    // Create a sanitized scene object
+    return {
+      id: scene.id || `scene${index + 1}`,
+      description: scene.description || `Scene ${index + 1}`,
+      svgPrompt: scene.svgPrompt || `Create an animation for scene ${index + 1}`,
+      duration: typeof scene.duration === 'number' ? scene.duration : 5
+    };
+  });
+
+  return storyboard;
+};
+
+/**
+ * Generate a storyboard using OpenAI
+ * Completely separate from SVG generation flow
+ *
+ * @param {string} prompt - Movie concept prompt
+ * @returns {Object} Storyboard object with title, description, and scenes
+ */
+exports.generateStoryboardWithOpenAI = async (prompt) => {
+  validateStoryboardRequest(prompt, config.openai.apiKey, 'OpenAI');
+
+  try {
+    const systemPrompt = createSystemPrompt();
+    const userPrompt = createUserPrompt(prompt);
 
     console.log('Sending storyboard generation request to OpenAI');
     console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
@@ -84,32 +144,7 @@ IMPORTANT INSTRUCTIONS:
       throw new ServiceUnavailableError('Failed to parse storyboard JSON response');
     }
 
-    // Validate storyboard structure
-    if (!storyboard.title || !storyboard.description || !Array.isArray(storyboard.scenes)) {
-      const missing = [];
-      if (!storyboard.title) missing.push('title');
-      if (!storyboard.description) missing.push('description');
-      if (!Array.isArray(storyboard.scenes)) missing.push('scenes array');
-
-      console.error('Invalid storyboard structure:', missing.join(', '));
-      throw new ServiceUnavailableError(`Invalid storyboard format: missing ${missing.join(', ')}`);
-    }
-
-    // Validate scenes
-    if (storyboard.scenes.length === 0) {
-      throw new ServiceUnavailableError('Storyboard contains no scenes');
-    }
-
-    // Process each scene to ensure it has required properties
-    storyboard.scenes = storyboard.scenes.map((scene, index) => {
-      // Create a sanitized scene object
-      return {
-        id: scene.id || `scene${index + 1}`,
-        description: scene.description || `Scene ${index + 1}`,
-        svgPrompt: scene.svgPrompt || `Create an animation for scene ${index + 1}`,
-        duration: typeof scene.duration === 'number' ? scene.duration : 5
-      };
-    });
+    storyboard = processStoryboard(storyboard);
 
     console.log(`Successfully generated storyboard with ${storyboard.scenes.length} scenes`);
     return storyboard;
@@ -146,13 +181,7 @@ IMPORTANT INSTRUCTIONS:
  * @returns {Object} Storyboard object with title, description and scenes
  */
 exports.generateStoryboardWithClaude = async (prompt) => {
-  if (!prompt) {
-    throw new BadRequestError('Prompt is required');
-  }
-
-  if (!config.claude.apiKey) {
-    throw new ServiceUnavailableError('Claude API key is not configured');
-  }
+  validateStoryboardRequest(prompt, config.claude.apiKey, 'Claude');
 
   try {
     // Initialize Anthropic client
@@ -161,33 +190,8 @@ exports.generateStoryboardWithClaude = async (prompt) => {
       apiKey: config.claude.apiKey
     });
 
-    // Create a dedicated system prompt for storyboard generation
-    const systemPrompt = `You are a storyboard generator for movies.
-Your only job is to create a JSON storyboard based on a movie concept.
-NEVER generate SVG content or code directly. Only generate a JSON structure.`;
-
-    // Create a specific user prompt for storyboard generation
-    const userPrompt = `Create a storyboard for this movie concept: "${prompt}"
-
-IMPORTANT INSTRUCTIONS:
-1. ONLY return valid JSON with this EXACT structure (no other text):
-{
-  "title": "Movie title",
-  "description": "Overall description of the movie",
-  "scenes": [
-    {
-      "id": "scene1",
-      "description": "Description of the scene",
-      "svgPrompt": "Prompt to generate an animation for this scene",
-      "duration": 5
-    }
-  ]
-}
-
-2. Each scene needs those exact fields.
-3. Include 3-7 scenes that tell a cohesive story.
-4. For each scene's "svgPrompt", write a detailed prompt that describes what should be in that scene's animation.
-5. DO NOT include any SVG code or XML tags.`;
+    const systemPrompt = createSystemPrompt();
+    const userPrompt = createUserPrompt(prompt);
 
     console.log('Sending storyboard generation request to Claude');
     console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
@@ -274,34 +278,8 @@ IMPORTANT INSTRUCTIONS:
       }
     }
 
-    // Validate storyboard structure
-    if (!storyboard.title || !storyboard.description || !Array.isArray(storyboard.scenes)) {
-      const missing = [];
-      if (!storyboard.title) missing.push('title');
-      if (!storyboard.description) missing.push('description');
-      if (!Array.isArray(storyboard.scenes)) missing.push('scenes array');
+    storyboard = processStoryboard(storyboard);
 
-      console.error('Invalid storyboard structure:', missing.join(', '));
-      throw new ServiceUnavailableError(`Invalid storyboard format: missing ${missing.join(', ')}`);
-    }
-
-    // Validate scenes
-    if (storyboard.scenes.length === 0) {
-      throw new ServiceUnavailableError('Storyboard contains no scenes');
-    }
-
-    // Process each scene to ensure it has required properties
-    storyboard.scenes = storyboard.scenes.map((scene, index) => {
-      // Create a sanitized scene object
-      return {
-        id: scene.id || `scene${index + 1}`,
-        description: scene.description || `Scene ${index + 1}`,
-        svgPrompt: scene.svgPrompt || `Create an animation for scene ${index + 1}`,
-        duration: typeof scene.duration === 'number' ? scene.duration : 5
-      };
-    });
-
-    console.log(`Successfully generated storyboard with ${storyboard.scenes.length} scenes using Claude`);
     return storyboard;
 
   } catch (error) {

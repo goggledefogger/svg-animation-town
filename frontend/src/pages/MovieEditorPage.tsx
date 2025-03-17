@@ -12,6 +12,7 @@ import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import { Message } from '../contexts/AnimationContext';
 import ClipEditor from '../components/ClipEditor';
 import Header from '../components/Header';
+import SvgThumbnail from '../components/SvgThumbnail';
 
 const MovieEditorPage: React.FC = () => {
   const {
@@ -132,6 +133,7 @@ const MovieEditorPage: React.FC = () => {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showMobileClipEditor, setShowMobileClipEditor] = useState(false);
 
   const handleClipSelect = (clipId: string) => {
     setActiveClipId(clipId);
@@ -344,15 +346,13 @@ const MovieEditorPage: React.FC = () => {
       />
 
       {/* Main content area */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left panel - Storyboard */}
-        <div className="w-1/4 border-r border-gray-700 bg-gotham-black p-4 overflow-y-auto">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Left panel - Storyboard (hidden on mobile, will appear below) */}
+        <div className="hidden md:block md:w-1/4 border-r border-gray-700 bg-gotham-black p-4 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4">Storyboard</h2>
-          {/* Add debugging info about clips */}
           <div className="text-xs text-gray-500 mb-2">
             {currentStoryboard.clips.length} clips available
           </div>
-          {/* Storyboard panel component will be implemented separately */}
           <StoryboardPanel
             clips={currentStoryboard.clips}
             activeClipId={activeClipId}
@@ -361,16 +361,78 @@ const MovieEditorPage: React.FC = () => {
           />
         </div>
 
-        {/* Center panel - Animation Preview */}
-        <div className="flex-1 flex flex-col">
+        {/* Center content - Animation Preview and Mobile Panels */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Center panel - Animation Preview */}
           <div className="flex-grow p-4 flex flex-col">
             <AnimationCanvas />
             <AnimationControls />
           </div>
+
+          {/* Mobile Only - Horizontally scrolling StoryboardPanel */}
+          <div className="md:hidden bg-gotham-black border-t border-gray-700 p-4">
+            <h2 className="text-lg font-semibold mb-2">Storyboard</h2>
+            <div className="overflow-x-auto pb-4">
+              <div className="inline-flex space-x-3 min-w-full">
+                {currentStoryboard.clips.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 min-w-full border border-dashed border-gray-600 rounded-lg p-4">
+                    <p className="text-gray-400 text-center mb-2">No clips in storyboard</p>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={handleAddClip}
+                    >
+                      Add Clip
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {currentStoryboard.clips
+                      .sort((a, b) => a.order - b.order)
+                      .map((clip) => (
+                        <div
+                          key={clip.id}
+                          className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all w-40 flex-shrink-0 ${
+                            clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'
+                          }`}
+                          onClick={() => handleClipSelect(clip.id)}
+                        >
+                          {/* Clip thumbnail preview */}
+                          <div className="aspect-video overflow-hidden">
+                            {clip.svgContent ? (
+                              <SvgThumbnail svgContent={clip.svgContent} />
+                            ) : (
+                              <div className="text-gray-500 text-xs flex items-center justify-center h-full">No preview</div>
+                            )}
+                          </div>
+
+                          {/* Clip info */}
+                          <div className="p-2 bg-gotham-black">
+                            <div className="text-sm font-medium truncate">{clip.name}</div>
+                            <div className="flex justify-between text-xs text-gray-400 mt-1">
+                              <span>{clip.duration}s</span>
+                              <span>#{clip.order + 1}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    <button
+                      className="btn btn-outline flex items-center justify-center h-full self-stretch my-auto flex-shrink-0 px-4"
+                      onClick={handleAddClip}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span className="ml-2">Add Clip</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right panel - Clip Editor */}
-        <div className="w-1/4 border-l border-gray-700 bg-gotham-black p-4 overflow-y-auto">
+        <div className="hidden md:block md:w-1/4 border-l border-gray-700 bg-gotham-black p-4 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4">Clip Editor</h2>
           <ClipEditor onClipUpdate={() => {
             // This will be called when a clip is updated
@@ -378,6 +440,43 @@ const MovieEditorPage: React.FC = () => {
           }} />
         </div>
       </div>
+
+      {/* Mobile - Floating Clip Editor Button */}
+      <div className="md:hidden fixed bottom-16 right-4 z-50">
+        <button
+          className="bg-bat-yellow text-black rounded-full p-3 shadow-lg"
+          onClick={() => setShowMobileClipEditor(true)}
+          aria-label="Edit Clip"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Mobile - Clip Editor Modal */}
+      <ConfirmationModal
+        isOpen={showMobileClipEditor}
+        title="Edit Clip"
+        message={
+          <div className="mt-2">
+            {activeClipId ? (
+              <ClipEditor onClipUpdate={() => {
+                console.log('Clip updated successfully');
+                setShowMobileClipEditor(false);
+              }} />
+            ) : (
+              <div className="text-gray-400 text-center p-4">
+                Select a clip to edit its properties
+              </div>
+            )}
+          </div>
+        }
+        confirmText="Close"
+        cancelText=""
+        onConfirm={() => setShowMobileClipEditor(false)}
+        onCancel={() => setShowMobileClipEditor(false)}
+      />
 
       {/* Save Modal */}
       <ConfirmationModal

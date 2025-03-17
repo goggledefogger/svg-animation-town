@@ -1,5 +1,6 @@
 import React from 'react';
 import { MovieClip } from '../contexts/MovieContext';
+import SvgThumbnail from './SvgThumbnail';
 
 interface StoryboardPanelProps {
   clips: MovieClip[];
@@ -41,14 +42,11 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
             onClick={() => onClipSelect(clip.id)}
           >
             {/* Clip thumbnail preview */}
-            <div className="aspect-video bg-gotham-gray flex items-center justify-center">
+            <div className="aspect-video overflow-hidden">
               {clip.svgContent ? (
-                <div
-                  className="w-full h-full flex items-center justify-center"
-                  dangerouslySetInnerHTML={{ __html: clip.svgContent.replace('<svg', '<svg preserveAspectRatio="xMidYMid meet" width="100%" height="100%"') }}
-                />
+                <SvgThumbnail svgContent={clip.svgContent} />
               ) : (
-                <div className="text-gray-500 text-xs">No preview</div>
+                <div className="text-gray-500 text-xs flex items-center justify-center h-full">No preview</div>
               )}
             </div>
 
