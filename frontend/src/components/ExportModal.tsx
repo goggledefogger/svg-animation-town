@@ -52,7 +52,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
           <input
             type="text"
             id="filename"
-            className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500"
+            className="input"
             placeholder="Enter a filename (without extension)"
             value={filename}
             onChange={(e) => setFilename(e.target.value)}

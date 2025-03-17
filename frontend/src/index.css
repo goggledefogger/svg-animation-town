@@ -43,7 +43,7 @@
   }
 
   .input {
-    @apply bg-gotham-blue border border-gray-700 rounded-md px-3 py-2 w-full focus:outline-none focus:ring-1 focus:ring-bat-yellow text-sm md:text-base;
+    @apply bg-gotham-blue border border-gray-700 rounded-md px-4 py-2 w-full focus:outline-none focus:ring-1 focus:ring-bat-yellow text-sm md:text-base;
   }
 }
 

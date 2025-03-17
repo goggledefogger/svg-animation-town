@@ -254,7 +254,7 @@ const Header: React.FC = () => {
             <input
               type="text"
               id="animationName"
-              className="mt-1 block w-full rounded-md bg-gray-700 border-gray-600 text-white focus:border-blue-500 focus:ring-blue-500"
+              className="input"
               placeholder="Enter a name for your animation"
               value={animationName}
               onChange={(e) => setAnimationName(e.target.value)}
