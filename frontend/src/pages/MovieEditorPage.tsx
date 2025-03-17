@@ -130,6 +130,7 @@ const MovieEditorPage: React.FC = () => {
   const [showAddClipModal, setShowAddClipModal] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
 
   const handleClipSelect = (clipId: string) => {
     setActiveClipId(clipId);
@@ -387,6 +388,28 @@ const MovieEditorPage: React.FC = () => {
 
           <button
             className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+            onClick={() => setShowLoadModal(true)}
+            aria-label="Load"
+          >
+            <svg
+              className="w-4 h-4 md:mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              />
+            </svg>
+            <span className="hidden md:inline">Load</span>
+          </button>
+
+          <button
+            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
             onClick={() => setShowExportModal(true)}
             aria-label="Export"
           >
@@ -564,6 +587,73 @@ const MovieEditorPage: React.FC = () => {
         cancelText=""
         onConfirm={() => setShowErrorModal(false)}
         onCancel={() => setShowErrorModal(false)}
+      />
+
+      {/* Load Storyboard Modal */}
+      <ConfirmationModal
+        isOpen={showLoadModal}
+        title="Load Storyboard"
+        message={
+          <div className="mt-2">
+            <p className="text-sm text-gray-300 mb-4">
+              Select a storyboard to load:
+            </p>
+            <div className="max-h-96 overflow-y-auto">
+              {(() => {
+                // Get the storyboards from local storage
+                const storyboardsString = localStorage.getItem('svg-animator-storyboards');
+                if (!storyboardsString) {
+                  return <p className="text-gray-400">No saved storyboards found.</p>;
+                }
+
+                try {
+                  const storyboards = JSON.parse(storyboardsString);
+                  const storyboardsList = Object.values(storyboards) as Storyboard[];
+
+                  // Convert stored dates back to Date objects for comparison
+                  storyboardsList.forEach((sb: any) => {
+                    sb.updatedAt = new Date(sb.updatedAt);
+                  });
+
+                  // Sort by updated date (newest first)
+                  storyboardsList.sort((a: any, b: any) =>
+                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                  );
+
+                  if (storyboardsList.length === 0) {
+                    return <p className="text-gray-400">No saved storyboards found.</p>;
+                  }
+
+                  return storyboardsList.map((storyboard: any) => (
+                    <div
+                      key={storyboard.id}
+                      className="border border-gray-700 hover:border-bat-yellow rounded-md p-3 mb-2 cursor-pointer"
+                      onClick={() => {
+                        loadStoryboard(storyboard.id);
+                        setShowLoadModal(false);
+                      }}
+                    >
+                      <div className="font-medium text-bat-yellow">{storyboard.name}</div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        {storyboard.clips?.length || 0} clips
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Updated: {new Date(storyboard.updatedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  ));
+                } catch (error) {
+                  console.error('Error parsing storyboards:', error);
+                  return <p className="text-red-400">Error loading storyboards.</p>;
+                }
+              })()}
+            </div>
+          </div>
+        }
+        confirmText="Cancel"
+        cancelText=""
+        onConfirm={() => setShowLoadModal(false)}
+        onCancel={() => setShowLoadModal(false)}
       />
     </div>
   );
