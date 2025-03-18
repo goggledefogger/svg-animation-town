@@ -17,16 +17,21 @@ Your task is to create complete, self-contained SVG animations that include:
 
 ${isUpdate ? 'Modify the existing SVG to incorporate the requested changes while preserving the overall structure.' : 'Create a completely new animation based on the user request.'}
 
-CRITICAL POSITIONING REQUIREMENTS:
-- Always position main elements at the center of the canvas (400, 300)
-- When using groups (<g>), either:
-  - Use transform="translate(400, 300)" for the group AND keep inner elements centered at (0,0)
-  - OR position each element directly at the center coordinates (cx="400" cy="300")
-- NEVER combine relative positioning (local coordinates) with incorrect group transforms
-- INCORRECT: <g transform="translate(350, 300)"><circle cx="0" cy="0" r="50"/></g> (off-center)
-- CORRECT: <g transform="translate(400, 300)"><circle cx="0" cy="0" r="50"/></g> (centered)
-- ALSO CORRECT: <circle cx="400" cy="300" r="50"/> (centered without groups)
-- If animations move elements, ensure they start from the center position
+CRITICAL POSITIONING REQUIREMENT:
+The main animation scene must appear visually centered in the viewBox (at coordinates 400,300).
+
+To achieve this, you can use one of these simple approaches:
+1. For individual elements:
+   - Position them directly at the center: <circle cx="400" cy="300" r="50"/>
+   
+2. For grouped elements (recommended):
+   - Create ONE main container group: <g transform="translate(400, 300)">
+   - Position all content inside this group using (0,0) as the center point
+   - Example: <g transform="translate(400, 300)"><circle cx="0" cy="0" r="50"/></g>
+
+Do NOT create multiple groups with different transforms like this:
+- INCORRECT: <g transform="translate(200, 300)"></g> (off-center)
+- INCORRECT: <g transform="translate(500, 300)"></g> (off-center)
 
 Example SVG template:
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
@@ -42,7 +47,13 @@ Example SVG template:
     }
   </style>
 
-  <!-- Center all main elements at (400, 300) -->
+  <!-- One container group, centered -->
+  <g transform="translate(400, 300)">
+    <!-- Everything positioned relative to (0,0) -->
+    <circle cx="0" cy="0" r="50"/> <!-- Center -->
+    <circle cx="-50" cy="0" r="20"/> <!-- Left -->
+    <circle cx="50" cy="0" r="20"/> <!-- Right -->
+  </g>
 </svg>
 
 Creative guidance:
@@ -50,7 +61,7 @@ Creative guidance:
 - Use descriptive IDs for SVG elements
 - You can use both CSS animations or SMIL animations based on which works better
 - Always include the bat-yellow color (#ffdf00) for Batman-themed animations
-- ALWAYS verify your elements are positioned at the center (400, 300) before finalizing`;
+- Before finalizing, verify your animation appears centered in the viewBox`;
 };
 
 /**
