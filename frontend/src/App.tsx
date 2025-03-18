@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import AnimationCanvas from './components/AnimationCanvas';
 import ChatInterface from './components/ChatInterface';
 import Header from './components/Header';
 import { AnimationProvider, useAnimation } from './contexts/AnimationContext';
-import { MovieProvider } from './contexts/MovieContext';
+import { MovieProvider, useMovie } from './contexts/MovieContext';
 import AnimationControls from './components/AnimationControls';
 import MovieEditorPage from './pages/MovieEditorPage';
 
@@ -33,6 +33,21 @@ const MovieContextConnector: React.FC<{ children: React.ReactNode }> = ({ childr
 // Main animation editor component
 const AnimationEditor = () => {
   const [showChat, setShowChat] = useState(true);
+  const [pendingClipName, setPendingClipName] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Check for pending clip name when component mounts
+  useEffect(() => {
+    const storedClipName = localStorage.getItem('pending_clip_name');
+    if (storedClipName) {
+      // Set to state and clear from storage
+      setPendingClipName(storedClipName);
+      localStorage.removeItem('pending_clip_name');
+
+      // Show the user a notification or instruction
+      alert(`Create your animation for clip "${storedClipName}". When you're done, click "Save to Movie" in the chat panel.`);
+    }
+  }, []);
 
   return (
     <div className="flex flex-col h-screen h-mobile-screen overflow-hidden">
@@ -48,7 +63,10 @@ const AnimationEditor = () => {
 
           {/* Chat section - conditionally shown on mobile, fixed position on mobile */}
           <div className={`${showChat ? 'flex' : 'hidden'} md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[calc(100vh-45vh-64px)] h-mobile-content md:h-auto md:max-h-[calc(100vh-64px)] md:max-h-mobile-screen-minus-header z-10 md:z-0 md:relative bg-gotham-dark md:bg-transparent overflow-hidden`}>
-            <ChatInterface onClose={() => setShowChat(false)} />
+            <ChatInterface
+              onClose={() => setShowChat(false)}
+              pendingClipName={pendingClipName}
+            />
           </div>
         </div>
 
@@ -93,13 +111,25 @@ function App() {
   return (
     <Router>
       <AnimationProvider>
-        <MovieContextConnector>
-          <Routes>
-            <Route path="/" element={<AnimationEditor />} />
-            <Route path="/movie-editor" element={<MovieEditorPage />} />
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </MovieContextConnector>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <MovieContextConnector>
+                <AnimationEditor />
+              </MovieContextConnector>
+            }
+          />
+          <Route
+            path="/movie-editor"
+            element={
+              <MovieContextConnector>
+                <MovieEditorPage />
+              </MovieContextConnector>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
       </AnimationProvider>
     </Router>
   );

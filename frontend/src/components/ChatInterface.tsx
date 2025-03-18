@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 
 interface ChatInterfaceProps {
   onClose?: () => void;
+  pendingClipName?: string | null;
 }
 
 const DEFAULT_WELCOME_MESSAGE: Message = {
@@ -19,7 +20,7 @@ const DEFAULT_WELCOME_MESSAGE: Message = {
   timestamp: new Date()
 };
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -36,8 +37,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     chatHistory,
     setChatHistory
   } = useAnimation();
-  
+
   const { saveCurrentAnimationAsClip } = useMovie();
+
+  // Initialize with pending clip name if provided
+  useEffect(() => {
+    if (pendingClipName) {
+      setClipName(pendingClipName);
+    }
+  }, [pendingClipName]);
 
   // Initialize chat with welcome message if empty
   useEffect(() => {
@@ -55,6 +63,69 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
       sessionStorage.removeItem('pending_prompt');
     }
   }, []);
+
+  // Auto-submit the pending prompt
+  useEffect(() => {
+    // Only auto-submit if we have a pending prompt and we're not already processing
+    if (pendingPrompt && !isProcessing) {
+      // Define auto-submit logic directly in the effect
+      const autoSubmitPendingPrompt = () => {
+        if (!pendingPrompt.trim() || isProcessing) return;
+
+        const userMessage: Message = {
+          id: generateId(),
+          sender: 'user',
+          text: pendingPrompt,
+          timestamp: new Date()
+        };
+
+        setChatHistory(prevHistory => [...prevHistory, userMessage]);
+        setIsProcessing(true);
+
+        // Determine if this is a new animation or an update
+        const isUpdate = !!svgContent;
+
+        // Generate or update animation based on whether there is existing content
+        const apiPromise = isUpdate
+          ? updateAnimationFromPrompt(pendingPrompt)
+          : generateAnimationFromPrompt(pendingPrompt);
+
+        apiPromise.then(responseMessage => {
+          // Process response similar to handleSubmit
+          const userFriendlyMessage = responseMessage.split(/Here's the (updated )?SVG:|\n\n###|\n###|You can directly insert/)[0].trim();
+
+          const aiMessage: Message = {
+            id: generateId(),
+            sender: 'ai',
+            text: userFriendlyMessage,
+            timestamp: new Date()
+          };
+
+          setChatHistory(prevHistory => [...prevHistory, aiMessage]);
+          setIsProcessing(false);
+        }).catch(error => {
+          // Handle error
+          const errorMessage: Message = {
+            id: generateId(),
+            sender: 'ai',
+            text: 'Sorry, I encountered an error while processing your request. Please try again.',
+            timestamp: new Date()
+          };
+
+          setChatHistory(prevHistory => [...prevHistory, errorMessage]);
+          setIsProcessing(false);
+          console.error('Error processing animation:', error);
+        });
+
+        // Clear the pending prompt after starting the request
+        setPendingPrompt(null);
+      };
+
+      // Use a small timeout to ensure proper rendering cycle
+      const timeoutId = setTimeout(autoSubmitPendingPrompt, 50);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [pendingPrompt, isProcessing, svgContent, generateAnimationFromPrompt, updateAnimationFromPrompt, setChatHistory]);
 
   // Reset chat to initial state
   const resetChat = () => {
@@ -158,9 +229,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
     }
   };
 
-  // Save animation as clip and navigate to movie editor
+  // Handle saving to Movie Editor
   const handleSaveToMovieEditor = () => {
-    setShowSaveModal(true);
+    // If we have a pending clip name from the movie editor, use that
+    if (pendingClipName) {
+      const clipId = saveCurrentAnimationAsClip(pendingClipName);
+      if (clipId) {
+        // Navigate back to movie editor with the new clip
+        navigate('/movie-editor');
+      }
+    } else {
+      // Otherwise show the save modal to enter a name
+      setClipName('');
+      setShowSaveModal(true);
+    }
   };
 
   // Handle save confirmation
@@ -189,7 +271,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
             <button
               onClick={handleSaveToMovieEditor}
               className="p-1.5 mr-2 rounded-md text-white bg-green-600 hover:bg-green-500"
-              title="Save to Movie Editor"
+              title={pendingClipName ? `Save as "${pendingClipName}" to Movie Editor` : "Save to Movie Editor"}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
@@ -211,10 +293,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose }) => {
         </div>
       </div>
 
+      {/* Pending clip notification */}
+      {pendingClipName && (
+        <div className="bg-bat-yellow text-black px-4 py-2 text-sm">
+          <p>Creating animation for clip: <strong>{pendingClipName}</strong></p>
+          <p>When done, click "Save to Movie Editor" above to return to the movie editor.</p>
+        </div>
+      )}
+
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto p-4 bg-gotham-dark">
-        <MessageList 
-          messages={chatHistory} 
+        <MessageList
+          messages={chatHistory}
           isTyping={isProcessing}
           messagesEndRef={messagesEndRef}
         />

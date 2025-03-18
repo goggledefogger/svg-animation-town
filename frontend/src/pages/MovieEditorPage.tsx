@@ -38,6 +38,8 @@ const MovieEditorPage: React.FC = () => {
     createNewStoryboard
   } = useMovie();
 
+  const navigate = useNavigate();
+
   // Add useEffect to track changes to currentStoryboard
   useEffect(() => {
     console.log('Current storyboard updated:', currentStoryboard.id);
@@ -221,10 +223,16 @@ const MovieEditorPage: React.FC = () => {
 
   const handleSaveClip = () => {
     if (clipName.trim()) {
-      const clipId = saveCurrentAnimationAsClip(clipName.trim());
-      if (clipId) {
-        setActiveClipId(clipId);
-      }
+      // Instead of immediately saving an animation (which might not exist),
+      // we'll redirect to the animation editor with a pending task
+
+      // Store the clip name to create after animation is done
+      localStorage.setItem('pending_clip_name', clipName.trim());
+
+      // Navigate to the animation editor
+      navigate('/');
+
+      // Close the modal
       setShowAddClipModal(false);
     }
   };

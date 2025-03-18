@@ -76,6 +76,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Cache expiration in milliseconds (5 seconds)
   const CACHE_EXPIRATION = 5000;
 
+  // Create refs to track in-progress API requests to avoid duplicates
+  const animationRequestsInProgress = useRef<Map<string, Promise<any>>>(new Map());
+
   // Try to restore state from session storage on initial load
   useEffect(() => {
     const isMobile = isMobileDevice();
@@ -245,116 +248,138 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Load an animation by name - first try server, then fall back to localStorage
   const loadAnimation = useCallback(async (nameOrId: string): Promise<ChatData | null> => {
-    try {
-      console.log(`Attempting to load animation: ${nameOrId}`);
+    // Create a request ID to track this specific animation load
+    const requestId = `load-animation-${nameOrId}`;
 
-      // Check if this looks like a UUID (direct animation ID)
-      const isUUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(nameOrId);
-
-      if (isUUID) {
-        // If it's a UUID, try loading directly from the server by ID
-        try {
-          console.log(`Loading animation directly by ID: ${nameOrId}`);
-          const animation = await AnimationStorageApi.getAnimation(nameOrId);
-
-          if (animation && animation.svg) {
-            console.log(`Animation loaded from server by ID: ${nameOrId}`);
-            setSvgContent(animation.svg);
-
-            // Update chat history if available
-            if (animation.chatHistory) {
-              setChatHistory(animation.chatHistory);
-            } else {
-              // Reset chat history if none is available
-              setChatHistory([]);
-            }
-
-            // Dispatch a custom event to notify components about animation load
-            const loadEvent = new CustomEvent('animation-loaded', {
-              detail: { chatHistory: animation.chatHistory }
-            });
-            window.dispatchEvent(loadEvent);
-
-            return {
-              svg: animation.svg,
-              chatHistory: animation.chatHistory,
-              timestamp: animation.timestamp || new Date().toISOString()
-            };
-          }
-        } catch (idError) {
-          console.warn(`Failed to load animation directly by ID ${nameOrId}:`, idError);
-          // Continue to regular name-based loading below
-        }
-      }
-
-      // First check local cache to get the ID
-      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
-      const savedAnimations = JSON.parse(savedAnimationsStr);
-      const localData = savedAnimations[nameOrId];
-
-      // If we have a cached entry with server ID, load from server
-      if (localData && localData.id) {
-        try {
-          const serverAnimation = await AnimationStorageApi.getAnimation(localData.id);
-
-          if (serverAnimation && serverAnimation.svg) {
-            setSvgContent(serverAnimation.svg);
-            console.log(`Animation loaded from server: ${nameOrId} (${localData.id})`);
-
-            // Update chat history if available
-            if (serverAnimation.chatHistory) {
-              setChatHistory(serverAnimation.chatHistory);
-            } else {
-              // Reset chat history if none is available
-              setChatHistory([]);
-            }
-
-            // Dispatch a custom event to notify components about animation load
-            const loadEvent = new CustomEvent('animation-loaded', {
-              detail: { chatHistory: serverAnimation.chatHistory }
-            });
-            window.dispatchEvent(loadEvent);
-
-            return {
-              svg: serverAnimation.svg,
-              chatHistory: serverAnimation.chatHistory,
-              timestamp: serverAnimation.timestamp
-            };
-          }
-        } catch (serverError) {
-          console.warn(`Server load failed, falling back to local cache: ${serverError}`);
-          // Continue to use local cache as fallback below
-        }
-      }
-
-      // If server load fails or there's no server ID, use local cache
-      if (localData) {
-        setSvgContent(localData.svg);
-        console.log(`Animation loaded from local cache: ${nameOrId}`);
-
-        // Update chat history if available
-        if (localData.chatHistory) {
-          setChatHistory(localData.chatHistory);
-        } else {
-          // Reset chat history if none is available
-          setChatHistory([]);
-        }
-
-        // Dispatch a custom event to notify components about animation load
-        const loadEvent = new CustomEvent('animation-loaded', {
-          detail: { chatHistory: localData.chatHistory }
-        });
-        window.dispatchEvent(loadEvent);
-
-        return localData as ChatData;
-      } else {
-        console.warn(`Animation not found with name/ID: ${nameOrId}`);
-        return null;
-      }
-    } catch (error) {
-      console.error(`Error loading animation: ${error}`);
-      return null;
+    // Check if this exact request is already in progress
+    if (animationRequestsInProgress.current.has(requestId)) {
+      console.log('Duplicate animation load detected, reusing in-progress request');
+      // Return the promise from the request already in progress
+      return animationRequestsInProgress.current.get(requestId)!;
     }
+
+    // Create a promise for this request
+    const requestPromise = (async () => {
+      try {
+        console.log(`Attempting to load animation: ${nameOrId}`);
+
+        // Check if this looks like a UUID (direct animation ID)
+        const isUUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(nameOrId);
+
+        if (isUUID) {
+          // If it's a UUID, try loading directly from the server by ID
+          try {
+            console.log(`Loading animation directly by ID: ${nameOrId}`);
+            const animation = await AnimationStorageApi.getAnimation(nameOrId);
+
+            if (animation && animation.svg) {
+              console.log(`Animation loaded from server by ID: ${nameOrId}`);
+              setSvgContent(animation.svg);
+
+              // Update chat history if available
+              if (animation.chatHistory) {
+                setChatHistory(animation.chatHistory);
+              } else {
+                // Reset chat history if none is available
+                setChatHistory([]);
+              }
+
+              // Dispatch a custom event to notify components about animation load
+              const loadEvent = new CustomEvent('animation-loaded', {
+                detail: { chatHistory: animation.chatHistory }
+              });
+              window.dispatchEvent(loadEvent);
+
+              return {
+                svg: animation.svg,
+                chatHistory: animation.chatHistory,
+                timestamp: animation.timestamp || new Date().toISOString()
+              };
+            }
+          } catch (idError) {
+            console.warn(`Failed to load animation directly by ID ${nameOrId}:`, idError);
+            // Continue to regular name-based loading below
+          }
+        }
+
+        // First check local cache to get the ID
+        const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+        const savedAnimations = JSON.parse(savedAnimationsStr);
+        const localData = savedAnimations[nameOrId];
+
+        // If we have a cached entry with server ID, load from server
+        if (localData && localData.id) {
+          try {
+            const serverAnimation = await AnimationStorageApi.getAnimation(localData.id);
+
+            if (serverAnimation && serverAnimation.svg) {
+              setSvgContent(serverAnimation.svg);
+              console.log(`Animation loaded from server: ${nameOrId} (${localData.id})`);
+
+              // Update chat history if available
+              if (serverAnimation.chatHistory) {
+                setChatHistory(serverAnimation.chatHistory);
+              } else {
+                // Reset chat history if none is available
+                setChatHistory([]);
+              }
+
+              // Dispatch a custom event to notify components about animation load
+              const loadEvent = new CustomEvent('animation-loaded', {
+                detail: { chatHistory: serverAnimation.chatHistory }
+              });
+              window.dispatchEvent(loadEvent);
+
+              return {
+                svg: serverAnimation.svg,
+                chatHistory: serverAnimation.chatHistory,
+                timestamp: serverAnimation.timestamp
+              };
+            }
+          } catch (serverError) {
+            console.warn(`Server load failed, falling back to local cache: ${serverError}`);
+            // Continue to use local cache as fallback below
+          }
+        }
+
+        // If server load fails or there's no server ID, use local cache
+        if (localData) {
+          setSvgContent(localData.svg);
+          console.log(`Animation loaded from local cache: ${nameOrId}`);
+
+          // Update chat history if available
+          if (localData.chatHistory) {
+            setChatHistory(localData.chatHistory);
+          } else {
+            // Reset chat history if none is available
+            setChatHistory([]);
+          }
+
+          // Dispatch a custom event to notify components about animation load
+          const loadEvent = new CustomEvent('animation-loaded', {
+            detail: { chatHistory: localData.chatHistory }
+          });
+          window.dispatchEvent(loadEvent);
+
+          return localData as ChatData;
+        } else {
+          console.warn(`Animation not found with name/ID: ${nameOrId}`);
+          return null;
+        }
+      } catch (error) {
+        console.error(`Error loading animation: ${error}`);
+        return null;
+      } finally {
+        // Remove this request from the in-progress map once completed
+        animationRequestsInProgress.current.delete(requestId);
+      }
+    })();
+
+    // Store the promise in the map
+    animationRequestsInProgress.current.set(requestId, requestPromise);
+
+    // Return the promise
+    return requestPromise;
   }, [setSvgContent, setChatHistory]);
 
   // Get saved animations from storage and API
@@ -450,22 +475,45 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Generate a new animation from a prompt
   const generateAnimationFromPrompt = async (prompt: string): Promise<string> => {
-    console.log('Generating animation from prompt:', prompt);
-    try {
-      const result = await AnimationApi.generate(prompt, aiProvider);
-      console.log('Generated animation result');
-      setSvgContent(result.svg);
+    // Create a request ID to track this specific request
+    const requestId = `generate-${prompt.substring(0, 20)}`;
 
-      // If animation has an ID from backend, store it in chat history for reference
-      if (result.animationId) {
-        console.log(`Animation saved on server with ID: ${result.animationId}`);
-      }
-
-      return result.message;
-    } catch (error: any) {
-      console.error('Error generating animation:', error);
-      throw error;
+    // Check if this exact request is already in progress
+    if (animationRequestsInProgress.current.has(requestId)) {
+      console.log('Duplicate animation request detected, reusing in-progress request');
+      // Return the promise from the request already in progress
+      return animationRequestsInProgress.current.get(requestId)!;
     }
+
+    console.log('Generating animation from prompt:', prompt);
+
+    // Create a promise for this request
+    const requestPromise = (async () => {
+      try {
+        const result = await AnimationApi.generate(prompt, aiProvider);
+        console.log('Generated animation result');
+        setSvgContent(result.svg);
+
+        // If animation has an ID from backend, store it in chat history for reference
+        if (result.animationId) {
+          console.log(`Animation saved on server with ID: ${result.animationId}`);
+        }
+
+        return result.message;
+      } catch (error: any) {
+        console.error('Error generating animation:', error);
+        throw error;
+      } finally {
+        // Remove this request from the in-progress map
+        animationRequestsInProgress.current.delete(requestId);
+      }
+    })();
+
+    // Store the promise in the map
+    animationRequestsInProgress.current.set(requestId, requestPromise);
+
+    // Return the promise
+    return requestPromise;
   };
 
   // Update the current animation from a prompt
@@ -474,16 +522,39 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       return generateAnimationFromPrompt(prompt);
     }
 
-    console.log('Updating animation with prompt:', prompt);
-    try {
-      const result = await AnimationApi.update(prompt, svgContent, aiProvider);
-      console.log('Updated animation result');
-      setSvgContent(result.svg);
-      return result.message;
-    } catch (error: any) {
-      console.error('Error updating animation:', error);
-      throw error;
+    // Create a request ID to track this specific request
+    const requestId = `update-${prompt.substring(0, 20)}`;
+
+    // Check if this exact request is already in progress
+    if (animationRequestsInProgress.current.has(requestId)) {
+      console.log('Duplicate update request detected, reusing in-progress request');
+      // Return the promise from the request already in progress
+      return animationRequestsInProgress.current.get(requestId)!;
     }
+
+    console.log('Updating animation with prompt:', prompt);
+
+    // Create a promise for this request
+    const requestPromise = (async () => {
+      try {
+        const result = await AnimationApi.update(prompt, svgContent, aiProvider);
+        console.log('Updated animation result');
+        setSvgContent(result.svg);
+        return result.message;
+      } catch (error: any) {
+        console.error('Error updating animation:', error);
+        throw error;
+      } finally {
+        // Remove this request from the in-progress map
+        animationRequestsInProgress.current.delete(requestId);
+      }
+    })();
+
+    // Store the promise in the map
+    animationRequestsInProgress.current.set(requestId, requestPromise);
+
+    // Return the promise
+    return requestPromise;
   };
 
   // Update helper function to control CSS animations to handle reverse playback

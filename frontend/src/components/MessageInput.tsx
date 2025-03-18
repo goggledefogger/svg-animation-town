@@ -16,7 +16,8 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing, pen
   useEffect(() => {
     if (pendingPrompt) {
       setInputValue(pendingPrompt);
-      // Focus the input if possible
+      // Focus the input if possible but don't auto-submit
+      // The parent component (ChatInterface) will handle auto-submission
       inputRef.current?.focus();
     }
   }, [pendingPrompt]);
