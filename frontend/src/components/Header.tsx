@@ -135,6 +135,31 @@ const Header: React.FC<HeaderProps> = ({
     setShowExportModal(false);
   };
 
+  // Create a function to handle dropdown toggle and refresh the list when opening
+  const handleDropdownToggle = async () => {
+    // If we're opening the dropdown, refresh the animation list
+    if (!dropdownOpen) {
+      try {
+        isLoadingRef.current = true; // Set loading flag
+        
+        // Don't update the UI while fetching
+        const animationsList = await getSavedAnimations();
+        
+        // Only update if we're still interested in the result
+        // This prevents updating after the dropdown has been closed
+        if (!dropdownRef.current?.contains(document.activeElement)) {
+          setSavedAnimations(animationsList);
+        }
+      } catch (error) {
+        console.error('Error fetching saved animations:', error);
+      } finally {
+        isLoadingRef.current = false; // Clear loading flag
+      }
+    }
+    // Toggle the dropdown state
+    setDropdownOpen(!dropdownOpen);
+  };
+
   return (
     <header className="bg-gotham-black p-4 shadow-lg border-b border-gray-700 flex justify-between items-center">
       <div className="flex items-center">
@@ -344,7 +369,7 @@ const Header: React.FC<HeaderProps> = ({
           <div className="relative" ref={dropdownRef}>
             <button
               className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-              onClick={() => setDropdownOpen(!dropdownOpen)}
+              onClick={() => handleDropdownToggle()}
               disabled={savedAnimations.length === 0}
               aria-label="Load"
             >
@@ -400,9 +425,13 @@ const Header: React.FC<HeaderProps> = ({
                                 e.stopPropagation();
                                 if (window.confirm(`Delete animation "${name}"?`)) {
                                   try {
-                                    const success = await deleteAnimation(name);
+                                    // Try to delete by ID if available, otherwise by name
+                                    const deleteTarget = id || name;
+                                    console.log(`Attempting to delete animation: ${name} (${deleteTarget})`);
+                                    
+                                    const success = await deleteAnimation(deleteTarget);
                                     if (success) {
-                                      // Refresh the list
+                                      // Refresh the list after successful deletion
                                       const animationsList = await getSavedAnimations();
                                       setSavedAnimations(animationsList);
                                     } else {

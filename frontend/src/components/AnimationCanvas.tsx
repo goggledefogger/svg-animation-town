@@ -132,21 +132,24 @@ const AnimationCanvas: React.FC = () => {
   useEffect(() => {
     // Check if we have SVG content to display
     if (displaySvgContent && svgContainerRef.current) {
-      console.log('Updating SVG display with content length:', displaySvgContent.length);
+      // Skip updating if the content hasn't actually changed
+      if (svgContainerRef.current.innerHTML !== displaySvgContent) {
+        console.log('Updating SVG display with content length:', displaySvgContent.length);
 
-      // Clear previous content and set the new SVG content
-      svgContainerRef.current.innerHTML = displaySvgContent;
+        // Clear previous content and set the new SVG content
+        svgContainerRef.current.innerHTML = displaySvgContent;
 
-      // Find the SVG element in the container
-      const svgElement = svgContainerRef.current.querySelector('svg');
-      if (svgElement) {
-        setupSvgElement(svgElement as SVGSVGElement);
-        // SVG was found and setup, hide the empty state
-        setShowEmptyState(false);
-      } else {
-        console.warn('No SVG element found in container after setting content');
-        // No SVG element found, show the empty state if no message has been sent
-        setShowEmptyState(!hasMessageBeenSent);
+        // Find the SVG element in the container
+        const svgElement = svgContainerRef.current.querySelector('svg');
+        if (svgElement) {
+          setupSvgElement(svgElement as SVGSVGElement);
+          // SVG was found and setup, hide the empty state
+          setShowEmptyState(false);
+        } else {
+          console.warn('No SVG element found in container after setting content');
+          // No SVG element found, show the empty state if no message has been sent
+          setShowEmptyState(!hasMessageBeenSent);
+        }
       }
     } else {
       // No SVG content, show the empty state only if no message has been sent

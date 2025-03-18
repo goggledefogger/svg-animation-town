@@ -70,7 +70,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Cache for animation listings to prevent redundant API calls
   const animationListCache = useRef<{
     timestamp: number;
-    animations: string[];
+    animations: any[];
   } | null>(null);
 
   // Cache expiration in milliseconds (5 seconds)
@@ -204,15 +204,18 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       console.log(`Animation saved to server with ID: ${result.id}`);
 
-      // For client-side cache, also save locally
+      // Set a flag to force UI refresh from server data after saving
+      sessionStorage.setItem('force_server_refresh', 'true');
+
+      // For client-side cache, also save locally with the server ID
       try {
         // Get existing saved animations
         const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
         const savedAnimations = JSON.parse(savedAnimationsStr);
 
-        // Add/update the current animation with chat history
+        // Add/update the current animation with chat history and server ID
         savedAnimations[name] = {
-          id: result.id, // Store the server ID for future reference
+          id: result.id, // Always store the server ID for reference
           svg: svgContent,
           chatHistory,
           timestamp: new Date().toISOString()
@@ -384,6 +387,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Get saved animations from storage and API
   const getSavedAnimations = useCallback(async (): Promise<any[]> => {
+    // Check if we have a valid cache and it's not expired
+    const now = Date.now();
+    if (animationListCache.current && 
+        now - animationListCache.current.timestamp < CACHE_EXPIRATION) {
+      return animationListCache.current.animations;
+    }
+
     try {
       // Always try to get animations from server first
       const serverAnimations = await AnimationStorageApi.listAnimations();
@@ -392,6 +402,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
       if (forceRefresh) {
         sessionStorage.removeItem('force_server_refresh');
+        
+        // Cache the result
+        animationListCache.current = {
+          timestamp: now,
+          animations: serverAnimations
+        };
+        
         return serverAnimations;
       }
 
@@ -407,24 +424,46 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           timestamp: savedAnimations[name].timestamp || new Date().toISOString()
         }));
 
-        // Combine lists, removing duplicates based on name
-        const nameSet = new Set();
-        const allAnimations = [...serverAnimations];
+        // Create a map of server animations by ID for deduplication
+        const serverAnimationsById = new Map();
+        const serverAnimationsByName = new Map();
+        
+        serverAnimations.forEach(anim => {
+          serverAnimationsById.set(anim.id, anim);
+          serverAnimationsByName.set(anim.name, anim);
+        });
 
-        // Add local animations that aren't already in the server list
-        for (const localAnim of localAnimations) {
-          const existsInServer = serverAnimations.some(serverAnim =>
-            serverAnim.name === localAnim.name
-          );
-
-          if (!existsInServer && !nameSet.has(localAnim.name)) {
-            nameSet.add(localAnim.name);
-            allAnimations.push(localAnim);
+        // Filter out local animations that already exist on the server (by ID or name)
+        const uniqueLocalAnimations = localAnimations.filter(localAnim => {
+          // If this animation has a server ID and that ID exists in server animations, it's a duplicate
+          if (localAnim.id && !localAnim.id.startsWith('local-') && serverAnimationsById.has(localAnim.id)) {
+            return false;
           }
-        }
+          
+          // If an animation with this name already exists on the server, it's also a duplicate
+          if (serverAnimationsByName.has(localAnim.name)) {
+            return false;
+          }
+          
+          return true;
+        });
 
-        return allAnimations;
+        const combinedResults = [...serverAnimations, ...uniqueLocalAnimations];
+        
+        // Cache the result
+        animationListCache.current = {
+          timestamp: now,
+          animations: combinedResults
+        };
+        
+        return combinedResults;
       } catch (localError) {
+        // Cache the server results
+        animationListCache.current = {
+          timestamp: now,
+          animations: serverAnimations
+        };
+        
         return serverAnimations;
       }
     } catch (error) {
@@ -434,11 +473,19 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         const savedAnimations = JSON.parse(savedAnimationsStr);
 
         // Convert local animations to objects to match server format
-        return Object.keys(savedAnimations).map(name => ({
+        const localResults = Object.keys(savedAnimations).map(name => ({
           id: savedAnimations[name].id || `local-${name}`,
           name: name,
           timestamp: savedAnimations[name].timestamp || new Date().toISOString()
         }));
+        
+        // Cache the result
+        animationListCache.current = {
+          timestamp: now,
+          animations: localResults
+        };
+        
+        return localResults;
       } catch (localError) {
         return [];
       }
@@ -914,25 +961,37 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       const localData = savedAnimations[name];
 
       let success = false;
+      let animationId = null;
 
-      // If we have a server ID, delete from server
-      if (localData && localData.id) {
+      // Check if this is a direct ID rather than a name (for server-only animations)
+      const isUUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(name);
+      
+      if (isUUID) {
+        // If the name is actually a UUID, use it directly as the ID
+        animationId = name;
+      } else if (localData && localData.id) {
+        // If we have a cached entry with an ID, use that
+        animationId = localData.id;
+      }
+
+      // If we have an ID, try to delete from server
+      if (animationId) {
         try {
-          success = await AnimationStorageApi.deleteAnimation(localData.id);
-          console.log(`Animation deleted from server: ${name} (${localData.id})`);
+          success = await AnimationStorageApi.deleteAnimation(animationId);
+          console.log(`Animation deleted from server with ID: ${animationId}`);
         } catch (serverError) {
           console.warn(`Error deleting from server: ${serverError}`);
         }
       }
 
-      // Also delete from local storage
+      // Also delete from local storage if it exists there
       try {
         // Remove from local storage
         if (savedAnimations[name]) {
           delete savedAnimations[name];
           localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
-          success = true;
           console.log(`Animation deleted from local storage: ${name}`);
+          success = true;
         }
       } catch (localError) {
         console.error(`Error deleting from local storage: ${localError}`);
@@ -940,7 +999,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Invalidate the cache if deletion was successful
       if (success) {
+        // Force refresh from server on next list request
         animationListCache.current = null;
+        sessionStorage.setItem('force_server_refresh', 'true');
       }
 
       return success;
