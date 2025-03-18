@@ -67,6 +67,18 @@ const Header: React.FC<HeaderProps> = ({
     resetPage();
   };
 
+  // Sort animations by timestamp (most recent first)
+  const sortAnimationsByTimestamp = useCallback((animations: (string | AnimationItem)[]) => {
+    return [...animations].sort((a, b) => {
+      // Extract timestamps, defaulting to empty string if undefined
+      const timestampA = typeof a === 'string' ? '' : (a.timestamp || '');
+      const timestampB = typeof b === 'string' ? '' : (b.timestamp || '');
+      
+      // Sort in descending order (newest first)
+      return timestampB.localeCompare(timestampA);
+    });
+  }, []);
+
   // Load the list of saved animations when the component mounts or when a new animation is saved
   useEffect(() => {
     // Skip if already loading to prevent duplicate API calls
@@ -76,7 +88,7 @@ const Header: React.FC<HeaderProps> = ({
       try {
         isLoadingRef.current = true; // Set loading flag
         const animationsList = await getSavedAnimations();
-        setSavedAnimations(animationsList);
+        setSavedAnimations(sortAnimationsByTimestamp(animationsList));
       } catch (error) {
         console.error('Error fetching saved animations:', error);
         setSavedAnimations([]); // Set to empty array if there's an error
@@ -86,7 +98,7 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     fetchAnimations();
-  }, [getSavedAnimations]);
+  }, [getSavedAnimations, sortAnimationsByTimestamp]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -117,7 +129,7 @@ const Header: React.FC<HeaderProps> = ({
       // Update the list of saved animations
       try {
         const animationsList = await getSavedAnimations();
-        setSavedAnimations(animationsList);
+        setSavedAnimations(sortAnimationsByTimestamp(animationsList));
       } catch (error) {
         console.error('Error updating saved animations list:', error);
       }
@@ -141,15 +153,8 @@ const Header: React.FC<HeaderProps> = ({
     if (!dropdownOpen) {
       try {
         isLoadingRef.current = true; // Set loading flag
-        
-        // Don't update the UI while fetching
         const animationsList = await getSavedAnimations();
-        
-        // Only update if we're still interested in the result
-        // This prevents updating after the dropdown has been closed
-        if (!dropdownRef.current?.contains(document.activeElement)) {
-          setSavedAnimations(animationsList);
-        }
+        setSavedAnimations(sortAnimationsByTimestamp(animationsList));
       } catch (error) {
         console.error('Error fetching saved animations:', error);
       } finally {
@@ -433,7 +438,7 @@ const Header: React.FC<HeaderProps> = ({
                                     if (success) {
                                       // Refresh the list after successful deletion
                                       const animationsList = await getSavedAnimations();
-                                      setSavedAnimations(animationsList);
+                                      setSavedAnimations(sortAnimationsByTimestamp(animationsList));
                                     } else {
                                       alert(`Failed to delete animation "${name}".`);
                                     }
