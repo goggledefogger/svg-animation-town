@@ -893,22 +893,45 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [svgRef, controlCssAnimations]);
 
-  // Resets animations by re-inserting the SVG content
+  // Resets animations by cloning and replacing the SVG element
   const resetAnimations = useCallback(() => {
-    setSvgContent(prevContent => {
-      // Force a re-render by adding and immediately removing a comment
-      return prevContent ? prevContent + '<!-- reset -->' : prevContent;
-    });
-
-    // Remove the comment after a short delay
-    setTimeout(() => {
+    if (svgRef) {
+      try {
+        // Get the parent element
+        const parent = svgRef.parentNode;
+        if (parent) {
+          // Create a deep clone of the SVG element
+          const clone = svgRef.cloneNode(true) as SVGSVGElement;
+          
+          // Replace the original with the clone
+          parent.replaceChild(clone, svgRef);
+          
+          // Update the ref to the new element
+          setSvgRef(clone);
+          
+          // Ensure playing state is true
+          setPlaying(true);
+        }
+      } catch (error) {
+        console.error('Error resetting animations:', error);
+      }
+    } else {
+      // Force a re-render by adding a unique comment and removing it
       setSvgContent(prevContent => {
-        return prevContent ? prevContent.replace('<!-- reset -->', '') : prevContent;
+        if (!prevContent) return prevContent;
+        return prevContent + `<!-- reset-${Date.now()} -->`;
       });
-    }, 50);
-
-    setPlaying(true);
-  }, []);
+      
+      setTimeout(() => {
+        setSvgContent(prevContent => {
+          if (!prevContent) return prevContent;
+          return prevContent.replace(/<!-- reset-\d+ -->/g, '');
+        });
+      }, 50);
+      
+      setPlaying(true);
+    }
+  }, [svgRef, setPlaying, setSvgContent, setSvgRef]);
 
   // Completely reset everything to initial state
   const resetEverything = useCallback(() => {
