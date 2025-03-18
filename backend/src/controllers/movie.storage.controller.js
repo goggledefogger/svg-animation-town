@@ -19,19 +19,6 @@ const movieStorageController = {
         throw new BadRequestError('Storyboard data is required');
       }
 
-      console.log(`CONTROLLER: Received storyboard with ID ${storyboard.id} and name '${storyboard.name}'`);
-      console.log(`CONTROLLER: Storyboard has ${storyboard.clips?.length || 0} clips`);
-
-      // Log clip information if available
-      if (storyboard.clips && Array.isArray(storyboard.clips)) {
-        const clipsWithAnimationIds = storyboard.clips.filter(clip => clip.animationId);
-        console.log(`CONTROLLER: Found ${clipsWithAnimationIds.length} clips with animation IDs`);
-
-        if (clipsWithAnimationIds.length > 0) {
-          console.log(`CONTROLLER: Animation IDs:`, clipsWithAnimationIds.map(clip => clip.animationId));
-        }
-      }
-
       const movieId = await storageService.saveMovie(storyboard);
 
       res.status(200).json({
@@ -135,8 +122,6 @@ const movieStorageController = {
       if (!animationId) {
         throw new BadRequestError('Animation ID is required');
       }
-
-      console.log(`CONTROLLER: Fetching animation data for clip with animation ID: ${animationId}`);
 
       const animation = await storageService.getAnimationForClip(animationId);
 

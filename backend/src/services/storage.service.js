@@ -80,30 +80,22 @@ class StorageService {
    */
   async listAnimations() {
     try {
-      console.log('Storage: Listing all animation files from directory:', ANIMATIONS_DIR);
-
       // Check if directory exists
       try {
         await fs.access(ANIMATIONS_DIR);
       } catch (err) {
         console.error('Storage: Animations directory does not exist or is not accessible:', err);
         await this._ensureDirectoryExists(ANIMATIONS_DIR);
-        console.log('Storage: Created animations directory');
         return []; // Return empty array if directory was just created
       }
 
       const files = await fs.readdir(ANIMATIONS_DIR);
-      console.log(`Storage: Found ${files.length} files in animations directory`);
-
       const jsonFiles = files.filter(file => file.endsWith('.json'));
-      console.log(`Storage: Found ${jsonFiles.length} JSON files in animations directory`);
 
       const animations = await Promise.all(
         jsonFiles.map(async file => {
           try {
             const filePath = path.join(ANIMATIONS_DIR, file);
-            console.log(`Storage: Reading animation file: ${file}`);
-
             const data = await fs.readFile(filePath, 'utf8');
             const animation = JSON.parse(data);
             // Return minimal metadata
@@ -120,10 +112,7 @@ class StorageService {
       );
 
       // Filter out any nulls from errors
-      const validAnimations = animations.filter(Boolean);
-      console.log(`Storage: Returning ${validAnimations.length} valid animations`);
-
-      return validAnimations;
+      return animations.filter(Boolean);
     } catch (error) {
       console.error('Storage: Error listing animations:', error);
       throw error;
@@ -153,9 +142,6 @@ class StorageService {
    */
   async saveMovie(storyboard) {
     try {
-      console.log(`STORAGE: saveMovie called with storyboard ID: ${storyboard.id}`);
-      console.log(`STORAGE: Storyboard has ${storyboard.clips?.length || 0} clips`);
-
       const id = storyboard.id || uuidv4();
       const filename = `${id}.json`;
       const filePath = path.join(MOVIES_DIR, filename);
@@ -175,11 +161,9 @@ class StorageService {
       let optimizedClips = [];
 
       if (storyboard.clips && Array.isArray(storyboard.clips)) {
-        console.log(`STORAGE: Processing ${storyboard.clips.length} clips`);
-
-        optimizedClips = storyboard.clips.map((clip, index) => {
+        optimizedClips = storyboard.clips.map((clip) => {
           // Create an optimized clip object that doesn't include the SVG content
-          const optimizedClip = {
+          return {
             id: clip.id,
             name: clip.name,
             duration: clip.duration,
@@ -187,20 +171,6 @@ class StorageService {
             prompt: clip.prompt || '',
             animationId: clip.animationId // The key reference to the animation
           };
-
-          // Log optimization
-          if (clip.svgContent) {
-            console.log(`STORAGE: Optimized clip ${index} by removing SVG content (${clip.svgContent.length} bytes)`);
-          }
-
-          // Log animation ID if present
-          if (clip.animationId) {
-            console.log(`STORAGE: Clip ${index} references animation ID: ${clip.animationId}`);
-          } else {
-            console.warn(`STORAGE: Clip ${index} has no animation ID reference`);
-          }
-
-          return optimizedClip;
         });
       }
 
@@ -216,15 +186,10 @@ class StorageService {
         generationStatus
       };
 
-      // Check final data before writing
-      const clipsWithAnimationIds = optimizedClips.filter(clip => clip.animationId);
-      console.log(`STORAGE: Optimized movie JSON with ${clipsWithAnimationIds.length} animation references`);
-
       // Write the file
       const storyboardJSON = JSON.stringify(optimizedStoryboard, null, 2);
       await fs.writeFile(filePath, storyboardJSON);
 
-      console.log(`STORAGE: Saved optimized storyboard to ${filename}`);
       return id;
     } catch (error) {
       console.error('Error saving movie:', error);
@@ -239,29 +204,21 @@ class StorageService {
    */
   async getMovie(id) {
     try {
-      console.log(`STORAGE: Getting movie with ID: ${id}`);
       const filePath = path.join(MOVIES_DIR, `${id}.json`);
 
       // Check if file exists first
       try {
         await fs.access(filePath);
       } catch (err) {
-        console.log(`STORAGE: Movie with ID ${id} not found`);
         return null;
       }
 
-      // Read and parse the movie data
-      const movieData = await fs.readFile(filePath, 'utf8');
-      const movie = JSON.parse(movieData);
-
-      // Log the structure for debugging
-      console.log(`STORAGE: Loaded movie ${movie.name} with ${movie.clips?.length || 0} clips`);
-
-      // With optimized storage, clips don't contain SVG content by default
+      const data = await fs.readFile(filePath, 'utf8');
+      const movie = JSON.parse(data);
       return movie;
     } catch (error) {
-      console.error(`STORAGE: Error getting movie ${id}:`, error);
-      throw error;
+      console.error(`Error getting movie ${id}:`, error);
+      return null;
     }
   }
 

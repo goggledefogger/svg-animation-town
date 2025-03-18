@@ -9,8 +9,6 @@ const { v4: uuidv4 } = require('uuid');
  */
 exports.extractSvgAndText = (responseText) => {
   try {
-    console.log('Processing LLM response');
-
     // Early return for empty responses
     if (!responseText || responseText.trim() === '') {
       console.warn('Empty response received');
@@ -24,12 +22,10 @@ exports.extractSvgAndText = (responseText) => {
     try {
       // Check if the response is JSON
       if (responseText.trim().startsWith('{') && responseText.trim().endsWith('}')) {
-        console.log('Found potential JSON response, attempting to parse');
         const parsedResponse = JSON.parse(responseText);
 
         // Check if it has the expected structure
         if (parsedResponse.svg && typeof parsedResponse.svg === 'string') {
-          console.log('Successfully parsed structured JSON response');
           return {
             svg: parsedResponse.svg,
             text: parsedResponse.explanation || 'Animation created successfully!'
@@ -38,12 +34,9 @@ exports.extractSvgAndText = (responseText) => {
       }
     } catch (jsonError) {
       // Not a valid JSON or doesn't have the expected structure
-      console.log('Not a valid JSON response or missing SVG field:', jsonError.message);
     }
 
     // If not a valid JSON, try the direct SVG extraction
-    console.log('Falling back to direct SVG extraction');
-
     let svg = '';
     let text = responseText;
 
@@ -53,7 +46,6 @@ exports.extractSvgAndText = (responseText) => {
       svg = svgMatch[0];
       // Get the text content by removing the SVG
       text = responseText.replace(svg, '').trim();
-      console.log('Found SVG via direct extraction, length:', svg.length);
     } else {
       // If no direct match, check for code blocks
       const codeBlockMatch = responseText.match(/```(?:svg|html|xml)?\s*([\s\S]*?)```/);
@@ -64,7 +56,6 @@ exports.extractSvgAndText = (responseText) => {
         if (svgInBlock) {
           svg = svgInBlock[0];
           text = responseText.replace(codeBlockMatch[0], '').trim();
-          console.log('Found SVG in code block, length:', svg.length);
         }
       }
     }
@@ -75,8 +66,6 @@ exports.extractSvgAndText = (responseText) => {
 
     if (!svg) {
       console.warn('No SVG found in response');
-      console.log('Response preview:', responseText.substring(0, 200) + '...');
-
       return {
         svg: createErrorSvg('No SVG found in response'),
         text: 'Sorry, I had trouble creating that animation. Please try again with a different description.'
@@ -85,7 +74,6 @@ exports.extractSvgAndText = (responseText) => {
 
     // Check for essential attributes
     if (!svg.includes('viewBox') || !svg.includes('xmlns')) {
-      console.warn('SVG missing essential attributes, adding them');
       svg = addMissingAttributes(svg);
     }
 

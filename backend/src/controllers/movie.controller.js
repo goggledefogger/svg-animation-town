@@ -18,7 +18,7 @@ exports.generateStoryboard = asyncHandler(async (req, res) => {
     const storyboard = await StoryboardService.generateStoryboard(prompt, provider);
 
     // By this point storyboard should be fully validated and ready to return
-    console.log(`Successfully generated storyboard with ${storyboard.scenes.length} scenes`);
+    console.log(`Successfully generated storyboard outline with ${storyboard.scenes.length} scenes`);
 
     return res.status(200).json({
       success: true,

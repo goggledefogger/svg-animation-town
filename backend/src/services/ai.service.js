@@ -70,12 +70,10 @@ exports.updateAnimation = async (prompt, currentSvg = '') => {
  */
 exports.generateRawResponse = async (prompt) => {
   const service = getAIService();
-  console.log(`Using ${config.aiProvider} service for raw response generation`);
 
   try {
     // First check if the service has a dedicated raw response method
     if (service.generateRawResponse) {
-      console.log(`Calling ${config.aiProvider}'s generateRawResponse method`);
       const rawResponse = await service.generateRawResponse(prompt);
 
       if (!rawResponse || typeof rawResponse !== 'string') {
@@ -83,13 +81,9 @@ exports.generateRawResponse = async (prompt) => {
         throw new ServiceUnavailableError('AI service returned an invalid response format');
       }
 
-      console.log(`Received response from ${config.aiProvider}, length: ${rawResponse.length}`);
-
       // Check for common error indicators
       if (rawResponse.includes('<svg') || rawResponse.includes('</svg>')) {
         console.error(`Error: ${config.aiProvider} returned SVG content when JSON was expected`);
-        const excerpt = rawResponse.substring(0, 100) + '...';
-        console.error(`Response excerpt: ${excerpt}`);
         throw new ServiceUnavailableError('Received SVG content instead of JSON. Please try again.');
       }
 
@@ -97,29 +91,24 @@ exports.generateRawResponse = async (prompt) => {
     }
 
     // Fall back to using the generateAnimation method and extracting just the text
-    console.log(`${config.aiProvider} has no generateRawResponse method, falling back to generateAnimation`);
     const response = await service.generateAnimation(prompt);
 
     // If it's a string, return as is
     if (typeof response === 'string') {
-      console.log(`Response is a string of length ${response.length}`);
       return response;
     }
 
     // If it's an object with an explanation property, return that
     if (response && response.explanation) {
-      console.log(`Response has an explanation property of length ${response.explanation.length}`);
       return response.explanation;
     }
 
     // If it has a message property, return that
     if (response && response.message) {
-      console.log(`Response has a message property of length ${response.message.length}`);
       return response.message;
     }
 
     // Otherwise stringify the whole object
-    console.log(`Converting response object to JSON string`);
     return JSON.stringify(response);
   } catch (error) {
     console.error(`Error generating raw response with ${config.aiProvider}:`, error);

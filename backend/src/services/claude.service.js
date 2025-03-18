@@ -213,7 +213,6 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
       const textBlock = completion.content.find(block => block.type === 'text');
 
       if (textBlock && textBlock.text) {
-        console.log('Raw text response:', textBlock.text);
 
         try {
           // If the text is empty or just whitespace, generate an error

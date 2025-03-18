@@ -146,7 +146,6 @@ exports.generateStoryboardWithOpenAI = async (prompt) => {
 
     storyboard = processStoryboard(storyboard);
 
-    console.log(`Successfully generated storyboard with ${storyboard.scenes.length} scenes`);
     return storyboard;
 
   } catch (error) {

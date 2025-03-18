@@ -74,17 +74,13 @@ const animationStorageController = {
    */
   async listAnimations(req, res, next) {
     try {
-      console.log('API: Fetching list of animations from storage service');
       const animations = await storageService.listAnimations();
-      console.log(`API: Found ${animations.length} animations to return:`,
-                 animations.map(a => ({ id: a.id, name: a.name })));
 
       res.status(200).json({
         success: true,
         animations
       });
     } catch (error) {
-      console.error('API: Error listing animations:', error);
       next(error);
     }
   },

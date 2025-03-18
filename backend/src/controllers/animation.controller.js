@@ -26,8 +26,6 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       const originalProvider = config.aiProvider;
       config.aiProvider = provider;
 
-      console.log(`Using provider: ${provider} for animation generation`);
-
       // Call the AI service to generate the animation
       llmResponse = await AIService.generateAnimation(prompt);
 
@@ -40,7 +38,6 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
 
     // Extract SVG and text from the response
     const { svg, text } = extractSvgAndText(llmResponse);
-    console.log(`Extracted SVG length: ${svg?.length || 0}, Text length: ${text?.length || 0}`);
 
     // Generate a name for the animation based on the prompt
     let animationName = prompt.trim();
@@ -72,8 +69,6 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       timestamp
     });
 
-    console.log(`Animation saved to storage with ID: ${animationId}`);
-
     // Return the SVG, message, and the animation ID
     return res.status(200).json({
       success: true,
@@ -104,8 +99,6 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
       const originalProvider = config.aiProvider;
       config.aiProvider = provider;
 
-      console.log(`Using provider: ${provider} for animation update`);
-
       // Call the AI service to update the animation
       const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
 
@@ -114,7 +107,6 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
 
       // Extract SVG and text from the response
       const { svg, text } = extractSvgAndText(llmResponse);
-      console.log(`Extracted SVG length: ${svg?.length || 0}, Text length: ${text?.length || 0}`);
 
       return res.status(200).json({
         success: true,
