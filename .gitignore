@@ -1,5 +1,5 @@
 # our backend
-backend/output
+backend/src/output
 
 # node
 node_modules
