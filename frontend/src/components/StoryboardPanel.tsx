@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import SvgThumbnail from './SvgThumbnail';
+import { MovieStorageApi } from '../services/api';
 
 interface StoryboardPanelProps {
   clips: MovieClip[];
@@ -16,6 +17,17 @@ const truncatePrompt = (prompt: string | undefined, maxLength = 100) => {
   return prompt.length > maxLength ? `${prompt.substring(0, maxLength)}...` : prompt;
 };
 
+// Helper function to create a placeholder SVG
+const createPlaceholderSvg = (message: string): string => {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+    <rect width="800" height="600" fill="#1a1a2e" />
+    <circle cx="400" cy="300" r="50" fill="#4a5568">
+      <animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite" />
+    </circle>
+    <text x="400" y="400" font-family="Arial" font-size="16" fill="white" text-anchor="middle">${message}</text>
+  </svg>`;
+};
+
 const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   clips,
   activeClipId,
@@ -28,6 +40,78 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const totalScenes = storyboard?.generationStatus?.totalScenes || 0;
   const completedScenes = storyboard?.generationStatus?.completedScenes || 0;
   const generationProgress = totalScenes > 0 ? Math.round((completedScenes / totalScenes) * 100) : 0;
+
+  // State to track clip thumbnails
+  const [clipThumbnails, setClipThumbnails] = useState<Record<string, string>>({});
+  const [loadingClips, setLoadingClips] = useState<Record<string, boolean>>({});
+
+  // Load animation content for clips that have animationId but no SVG content
+  useEffect(() => {
+    const loadMissingThumbnails = async () => {
+      // Identify clips that need content loading
+      const clipsToLoad = clips.filter(clip => !clip.svgContent && clip.animationId);
+
+      if (clipsToLoad.length === 0) return;
+
+      // Mark these clips as loading
+      const newLoadingState = { ...loadingClips };
+      clipsToLoad.forEach(clip => { newLoadingState[clip.id] = true; });
+      setLoadingClips(newLoadingState);
+
+      // Load each clip's content
+      for (const clip of clipsToLoad) {
+        try {
+          console.log(`Loading thumbnail for clip: ${clip.name} (ID: ${clip.animationId})`);
+          const animation = await MovieStorageApi.getClipAnimation(clip.animationId!);
+
+          if (animation && animation.svg) {
+            // Update our thumbnail cache
+            setClipThumbnails(prev => ({
+              ...prev,
+              [clip.id]: animation.svg
+            }));
+          } else {
+            // Set a placeholder for failed loads
+            setClipThumbnails(prev => ({
+              ...prev,
+              [clip.id]: createPlaceholderSvg("No content")
+            }));
+          }
+        } catch (error) {
+          console.error(`Error loading thumbnail for clip ${clip.id}:`, error);
+          setClipThumbnails(prev => ({
+            ...prev,
+            [clip.id]: createPlaceholderSvg("Load error")
+          }));
+        } finally {
+          // Mark this clip as done loading
+          setLoadingClips(prev => ({
+            ...prev,
+            [clip.id]: false
+          }));
+        }
+      }
+    };
+
+    loadMissingThumbnails();
+  }, [clips]);
+
+  // Helper to get SVG content for a clip (from content or cache)
+  const getClipSvgContent = (clip: MovieClip): string => {
+    if (clip.svgContent) {
+      return clip.svgContent;
+    }
+
+    if (clipThumbnails[clip.id]) {
+      return clipThumbnails[clip.id];
+    }
+
+    if (clip.animationId) {
+      return createPlaceholderSvg(loadingClips[clip.id] ? "Loading..." : "Click to load");
+    }
+
+    return createPlaceholderSvg("No Preview");
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -84,7 +168,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
           >
             <div className="flex items-center space-x-3">
               <div className="w-16 h-16 bg-gray-900 rounded overflow-hidden flex-shrink-0">
-                <SvgThumbnail svgContent={clip.svgContent} />
+                <SvgThumbnail svgContent={getClipSvgContent(clip)} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{clip.name}</p>

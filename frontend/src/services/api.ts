@@ -436,50 +436,47 @@ export const MovieStorageApi = {
       } else {
         throw new Error('Invalid response from server');
       }
-    } catch (error: any) {
-      // If it's a 404, provide a clearer message
-      if (error.status === 404 || (error.message && error.message.includes('not found'))) {
-        console.error(`Movie with ID ${id} not found`);
-      } else {
-        console.error(`Error getting storyboard ${id}:`, error);
-        throw error;
-      }
-    }
-  },
-
-  /**
-   * Delete a movie/storyboard by ID
-   */
-  deleteMovie: async (id: string): Promise<boolean> => {
-    try {
-      const data = await fetchApi<any>(
-        `/movie/${id}`,
-        { method: 'DELETE' }
-      );
-
-      return data.success === true;
     } catch (error) {
-      console.error(`Error deleting storyboard ${id}:`, error);
+      console.error(`Error fetching movie with ID ${id}:`, error);
       throw error;
     }
   },
 
   /**
-   * Get animation data for a clip by animation ID
-   * Used when the movie JSON has optimized storage without full SVG content
+   * Delete a movie/storyboard
+   */
+  deleteMovie: async (id: string): Promise<boolean> => {
+    try {
+      const data = await fetchApi<any>(
+        `/movie/${id}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+      return data.success === true;
+    } catch (error) {
+      console.error(`Error deleting movie with ID ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get animation content for a clip by animation ID
    */
   getClipAnimation: async (animationId: string): Promise<any> => {
     try {
-      console.log(`Fetching animation data for clip with animation ID: ${animationId}`);
-      const data = await fetchApi<any>(`/movie/clip-animation/${animationId}`);
+      console.log(`Fetching animation with ID: ${animationId}`);
+      const data = await fetchApi<any>(`/animation/${animationId}`);
 
       if (data.success && data.animation) {
+        console.log(`Successfully retrieved animation data with ID: ${animationId}`);
         return data.animation;
       } else {
         throw new Error('Invalid response from server');
       }
     } catch (error) {
-      console.error(`Error fetching animation data for clip with ID ${animationId}:`, error);
+      console.error(`Error fetching animation with ID ${animationId}:`, error);
       throw error;
     }
   }

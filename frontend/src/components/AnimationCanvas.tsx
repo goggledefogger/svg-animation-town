@@ -6,7 +6,7 @@ import { MovieStorageApi } from '../services/api';
 
 const AnimationCanvas: React.FC = () => {
   const { svgContent, setSvgContent } = useAnimation();
-  const { currentStoryboard, activeClipId, getActiveClip } = useMovie();
+  const { currentStoryboard, activeClipId, getActiveClip, updateClip } = useMovie();
   const setSvgRef = useSvgRef();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -22,63 +22,67 @@ const AnimationCanvas: React.FC = () => {
   // Get the current active clip's SVG content
   const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
 
-  // If clip only has animation ID but no SVG content, fetch the animation data
+  // Effect to handle active clip changes
   useEffect(() => {
-    const activeClip = activeClipId ? getActiveClip() : null;
+    const activeClip = getActiveClip();
+    console.log('Active clip changed:', activeClip?.name);
 
-    if (activeClip && !activeClip.svgContent && activeClip.animationId) {
-      console.log(`Clip has no SVG content, fetching from animation ID: ${activeClip.animationId}`);
+    if (activeClip) {
+      if (activeClip.svgContent) {
+        // If we have SVG content, update the display directly
+        console.log('Updating SVG display with content length:', activeClip.svgContent.length);
+        setSvgContent(activeClip.svgContent);
+      } else if (activeClip.animationId) {
+        // If no SVG content but we have an animation ID, fetch it from server
+        console.log('Fetching animation content for ID:', activeClip.animationId);
+        setIsLoading(true);
 
-      const fetchAnimationData = async () => {
-        try {
-          setIsLoading(true);
-          const animationData = await MovieStorageApi.getClipAnimation(activeClip.animationId!);
+        // Fetch the animation using the ID
+        MovieStorageApi.getClipAnimation(activeClip.animationId)
+          .then(animation => {
+            if (animation && animation.svg) {
+              console.log('Retrieved animation SVG from server');
+              setSvgContent(animation.svg);
 
-          if (animationData && animationData.svg) {
-            console.log(`Loaded SVG content for clip from animation ID: ${activeClip.animationId}`);
-
-            // Update the local state with the fetched SVG content
-            setSvgContent(animationData.svg);
-
-            // Also inform the user that we're using optimized storage
-            console.log(`Using optimized movie storage - SVG loaded from animation ${activeClip.animationId}`);
-          } else {
-            console.error(`No SVG content found for animation ID: ${activeClip.animationId}`);
-            setSvgContent(createPlaceholderSvg(`Animation with ID ${activeClip.animationId} could not be loaded`));
-          }
-        } catch (error) {
-          console.error(`Error loading animation data for clip: ${error}`);
-          setSvgContent(createPlaceholderSvg(`Error loading animation: ${error instanceof Error ? error.message : 'Unknown error'}`));
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      fetchAnimationData();
+              // Optionally update the clip in the storyboard with the SVG content
+              updateClip(activeClip.id, { svgContent: animation.svg });
+            } else {
+              console.error('No SVG content found in animation');
+              // Create a placeholder SVG
+              setSvgContent(createPlaceholderSvg('No animation content found'));
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching animation:', error);
+            // Create a placeholder SVG with error message
+            setSvgContent(createPlaceholderSvg(`Error loading animation: ${error.message}`));
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
+      } else {
+        // Neither SVG content nor animation ID available
+        console.warn('Clip has no SVG content or animation ID');
+        setSvgContent(createPlaceholderSvg('No animation content available'));
+      }
+    } else {
+      setSvgContent('');
     }
-  }, [activeClipId, getActiveClip, setSvgContent]);
+  }, [getActiveClip, setSvgContent, updateClip]);
 
-  // Helper to create a placeholder SVG when content can't be loaded
+  // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = (message: string): string => {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
       <rect width="800" height="600" fill="#1a1a2e" />
-      <circle cx="400" cy="250" r="60" fill="#ffdf00" />
-      <text x="400" y="400" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
-        Animation Not Available
+      <circle cx="400" cy="200" r="50" fill="#e63946">
+        <animate attributeName="r" values="50;55;50" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <text x="400" y="320" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+        Animation Loading Issue
       </text>
-      <text x="400" y="440" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="600">
-        ${message}
+      <text x="400" y="360" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
+        ${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
       </text>
-      <style>
-        @keyframes pulse {
-          0% { r: 60; }
-          50% { r: 70; }
-          100% { r: 60; }
-        }
-        circle {
-          animation: pulse 2s ease-in-out infinite;
-        }
-      </style>
     </svg>`;
   };
 
@@ -123,14 +127,6 @@ const AnimationCanvas: React.FC = () => {
       svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
     }
   }, [setSvgRef]);
-
-  // Log when active clip changes
-  useEffect(() => {
-    if (activeClipId) {
-      const activeClip = getActiveClip();
-      console.log('Active clip changed:', activeClip?.name);
-    }
-  }, [activeClipId, getActiveClip]);
 
   // Update SVG content and handle references
   useEffect(() => {

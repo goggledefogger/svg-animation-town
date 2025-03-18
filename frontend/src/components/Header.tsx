@@ -362,7 +362,10 @@ const Header: React.FC<HeaderProps> = ({
                               className="text-left text-sm text-gray-200 hover:text-bat-yellow flex-grow truncate pr-2"
                               onClick={async () => {
                                 try {
-                                  await loadAnimation(name);
+                                  // Prefer to load by ID for server-saved animations
+                                  const loadId = id || name;
+                                  console.log(`Loading animation: ${name} with ID: ${loadId}`);
+                                  await loadAnimation(loadId);
                                   setDropdownOpen(false);
                                 } catch (error) {
                                   console.error(`Error loading animation "${name}":`, error);

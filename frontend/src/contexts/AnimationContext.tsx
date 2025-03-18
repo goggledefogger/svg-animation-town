@@ -244,12 +244,53 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [svgContent]);
 
   // Load an animation by name - first try server, then fall back to localStorage
-  const loadAnimation = useCallback(async (name: string): Promise<ChatData | null> => {
+  const loadAnimation = useCallback(async (nameOrId: string): Promise<ChatData | null> => {
     try {
+      console.log(`Attempting to load animation: ${nameOrId}`);
+
+      // Check if this looks like a UUID (direct animation ID)
+      const isUUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(nameOrId);
+
+      if (isUUID) {
+        // If it's a UUID, try loading directly from the server by ID
+        try {
+          console.log(`Loading animation directly by ID: ${nameOrId}`);
+          const animation = await AnimationStorageApi.getAnimation(nameOrId);
+
+          if (animation && animation.svg) {
+            console.log(`Animation loaded from server by ID: ${nameOrId}`);
+            setSvgContent(animation.svg);
+
+            // Update chat history if available
+            if (animation.chatHistory) {
+              setChatHistory(animation.chatHistory);
+            } else {
+              // Reset chat history if none is available
+              setChatHistory([]);
+            }
+
+            // Dispatch a custom event to notify components about animation load
+            const loadEvent = new CustomEvent('animation-loaded', {
+              detail: { chatHistory: animation.chatHistory }
+            });
+            window.dispatchEvent(loadEvent);
+
+            return {
+              svg: animation.svg,
+              chatHistory: animation.chatHistory,
+              timestamp: animation.timestamp || new Date().toISOString()
+            };
+          }
+        } catch (idError) {
+          console.warn(`Failed to load animation directly by ID ${nameOrId}:`, idError);
+          // Continue to regular name-based loading below
+        }
+      }
+
       // First check local cache to get the ID
       const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
       const savedAnimations = JSON.parse(savedAnimationsStr);
-      const localData = savedAnimations[name];
+      const localData = savedAnimations[nameOrId];
 
       // If we have a cached entry with server ID, load from server
       if (localData && localData.id) {
@@ -258,7 +299,15 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
           if (serverAnimation && serverAnimation.svg) {
             setSvgContent(serverAnimation.svg);
-            console.log(`Animation loaded from server: ${name} (${localData.id})`);
+            console.log(`Animation loaded from server: ${nameOrId} (${localData.id})`);
+
+            // Update chat history if available
+            if (serverAnimation.chatHistory) {
+              setChatHistory(serverAnimation.chatHistory);
+            } else {
+              // Reset chat history if none is available
+              setChatHistory([]);
+            }
 
             // Dispatch a custom event to notify components about animation load
             const loadEvent = new CustomEvent('animation-loaded', {
@@ -281,7 +330,15 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       // If server load fails or there's no server ID, use local cache
       if (localData) {
         setSvgContent(localData.svg);
-        console.log(`Animation loaded from local cache: ${name}`);
+        console.log(`Animation loaded from local cache: ${nameOrId}`);
+
+        // Update chat history if available
+        if (localData.chatHistory) {
+          setChatHistory(localData.chatHistory);
+        } else {
+          // Reset chat history if none is available
+          setChatHistory([]);
+        }
 
         // Dispatch a custom event to notify components about animation load
         const loadEvent = new CustomEvent('animation-loaded', {
@@ -291,14 +348,14 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         return localData as ChatData;
       } else {
-        console.warn(`Animation not found: ${name}`);
+        console.warn(`Animation not found with name/ID: ${nameOrId}`);
         return null;
       }
     } catch (error) {
       console.error(`Error loading animation: ${error}`);
       return null;
     }
-  }, []);
+  }, [setSvgContent, setChatHistory]);
 
   // Get saved animations from storage and API
   const getSavedAnimations = useCallback(async (): Promise<any[]> => {
