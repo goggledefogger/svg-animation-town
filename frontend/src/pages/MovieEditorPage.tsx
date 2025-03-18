@@ -191,6 +191,11 @@ const MovieEditorPage: React.FC = () => {
   const resetApplication = useCallback(() => {
     // Clear localStorage
     localStorage.removeItem('svg-animator-storyboards');
+    
+    // Clear sessionStorage animation state (needed to reset the animation viewer)
+    sessionStorage.removeItem('current_animation_state');
+    sessionStorage.removeItem('page_just_loaded');
+    sessionStorage.setItem('force_server_refresh', 'true');
 
     // Create a new empty storyboard
     createNewStoryboard();
@@ -558,6 +563,7 @@ const MovieEditorPage: React.FC = () => {
         onSave={() => setShowSaveModal(true)}
         onLoad={() => setShowLoadModal(true)}
         onExport={() => setShowExportModal(true)}
+        onReset={resetApplication}
       />
 
       {/* Main content area */}

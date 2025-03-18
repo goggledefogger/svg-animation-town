@@ -141,7 +141,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
       )}
 
       {/* Clips List */}
-      <div className="flex-1 overflow-y-auto space-y-3">
+      <div className="flex-1 overflow-y-auto">
         {/* No clips message */}
         {clips.length === 0 && (
           <div className="flex flex-col items-center justify-center h-40 border border-dashed border-gray-600 rounded-lg p-4">
@@ -156,29 +156,51 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         )}
 
         {/* Clip items */}
-        {clips.map((clip) => (
-          <div
-            key={clip.id}
-            className={`relative p-2 rounded-md cursor-pointer transition-colors ${
-              clip.id === activeClipId
-                ? 'bg-blue-900 border border-blue-500'
-                : 'bg-gray-800 hover:bg-gray-700 border border-transparent'
-            }`}
-            onClick={() => onClipSelect(clip.id)}
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-16 h-16 bg-gray-900 rounded overflow-hidden flex-shrink-0">
-                <SvgThumbnail svgContent={getClipSvgContent(clip)} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{clip.name}</p>
-                <p className="text-xs text-gray-400 truncate">
-                  {clip.duration}s {clip.animationId ? '• Server Saved' : ''}
-                </p>
-              </div>
-            </div>
+        {clips.length > 0 && (
+          <div className="space-y-3 p-1">
+            {clips
+              .sort((a, b) => a.order - b.order)
+              .map((clip) => (
+                <div
+                  key={clip.id}
+                  className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all ${
+                    clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'
+                  }`}
+                  onClick={() => onClipSelect(clip.id)}
+                >
+                  {/* Clip thumbnail preview with overlaid info */}
+                  <div className="aspect-video overflow-hidden relative group">
+                    <SvgThumbnail svgContent={getClipSvgContent(clip)} />
+                    
+                    {/* Top overlay with clip name and number */}
+                    <div className="absolute top-0 left-0 right-0 px-2 py-1 flex justify-between bg-gradient-to-b from-black/70 to-transparent">
+                      <span className="text-xs text-white font-medium truncate max-w-[70%] drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                        {clip.name}
+                      </span>
+                      <span className="text-xs text-white bg-black/50 rounded-full h-5 w-5 flex items-center justify-center">
+                        {clip.order + 1}
+                      </span>
+                    </div>
+                    
+                    {/* Bottom overlay with duration and prompt */}
+                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-90 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs text-white font-medium">{clip.duration}s</span>
+                        {clip.animationId && (
+                          <span className="text-xs text-white bg-black/30 px-1 rounded">Server Saved</span>
+                        )}
+                      </div>
+                      {clip.prompt && (
+                        <p className="text-xs text-white italic truncate drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                          {truncatePrompt(clip.prompt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
           </div>
-        ))}
+        )}
       </div>
 
       {/* Add Clip Button */}
@@ -187,7 +209,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
           className="w-full btn btn-sm btn-primary"
           onClick={onAddClip}
         >
-          Add Clip
+          Add New Clip
         </button>
       </div>
     </div>

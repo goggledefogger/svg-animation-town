@@ -19,6 +19,7 @@ interface HeaderProps {
   onLoad?: () => void;
   onGenerate?: () => void;
   storyboardName?: string;
+  onReset?: () => void; // Add new reset prop for movie editor
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -26,7 +27,8 @@ const Header: React.FC<HeaderProps> = ({
   onSave,
   onLoad,
   onGenerate,
-  storyboardName
+  storyboardName,
+  onReset
 }) => {
   const { loadPreset, resetEverything, saveAnimation, loadAnimation, deleteAnimation, getSavedAnimations, exportAnimation, svgContent, chatHistory } = useAnimation();
   const navigate = useNavigate();
@@ -64,7 +66,13 @@ const Header: React.FC<HeaderProps> = ({
   // Handle confirmation for reset
   const handleResetConfirm = () => {
     setShowResetModal(false);
-    resetPage();
+    if (isMovieEditorPage && onReset) {
+      // Use the movie editor reset function if we're on that page
+      onReset();
+    } else {
+      // Use animation editor reset otherwise
+      resetPage();
+    }
   };
 
   // Sort animations by timestamp (most recent first)
@@ -304,6 +312,31 @@ const Header: React.FC<HeaderProps> = ({
             className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
             onClick={() => setShowResetModal(true)}
             aria-label="Reset"
+          >
+            <svg
+              className="w-4 h-4 md:mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span className="hidden md:inline">Reset</span>
+          </button>
+        )}
+
+        {/* Reset Button - Movie Editor */}
+        {isMovieEditorPage && (
+          <button
+            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
+            onClick={() => setShowResetModal(true)}
+            aria-label="Reset Movie Editor"
           >
             <svg
               className="w-4 h-4 md:mr-1"
