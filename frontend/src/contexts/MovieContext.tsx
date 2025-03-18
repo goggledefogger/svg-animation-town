@@ -276,11 +276,23 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const saveCurrentAnimationAsClip = useCallback((name: string) => {
     if (!svgContent) return null;
 
+    // Extract prompt from chat history - find the most recent user message
+    let prompt = '';
+    if (chatHistory && chatHistory.length > 0) {
+      // Find the most recent user message to use as prompt
+      for (let i = chatHistory.length - 1; i >= 0; i--) {
+        if (chatHistory[i].sender === 'user') {
+          prompt = chatHistory[i].text;
+          break;
+        }
+      }
+    }
+
     const newClipId = addClip({
       name,
       svgContent,
       duration: 5, // Default duration in seconds
-      prompt: '', // Could be derived from chat if needed
+      prompt,
       chatHistory
     });
 

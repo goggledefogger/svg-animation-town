@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMovie } from '../contexts/MovieContext';
+import { useNavigate } from 'react-router-dom';
 
 interface ClipEditorProps {
   onClipUpdate: () => void;
@@ -7,11 +8,13 @@ interface ClipEditorProps {
 
 const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
   const { activeClipId, getActiveClip, updateClip } = useMovie();
+  const navigate = useNavigate();
 
   // Form state
   const [name, setName] = useState('');
   const [duration, setDuration] = useState(5);
   const [order, setOrder] = useState(0);
+  const [prompt, setPrompt] = useState('');
 
   // Load clip data when active clip changes
   useEffect(() => {
@@ -21,6 +24,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
         setName(clip.name);
         setDuration(clip.duration || 5);
         setOrder(clip.order);
+        setPrompt(clip.prompt || '');
       }
     }
   }, [activeClipId, getActiveClip]);
@@ -32,10 +36,22 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     updateClip(activeClipId, {
       name,
       duration,
-      order
+      order,
+      prompt
     });
 
     onClipUpdate();
+  };
+
+  // Navigate to animation editor with the prompt
+  const navigateToAnimationEditor = () => {
+    if (!prompt) return;
+    
+    // Store the prompt in session storage for the animation editor to pick up
+    sessionStorage.setItem('pending_prompt', prompt);
+    
+    // Navigate to the animation editor page
+    navigate('/');
   };
 
   // If no clip is selected, show a placeholder
@@ -90,6 +106,29 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
           value={order}
           onChange={(e) => setOrder(parseInt(e.target.value, 10))}
         />
+      </div>
+
+      <div>
+        <label htmlFor="clip-prompt" className="block text-sm font-medium text-gray-300 mb-1">
+          Scene Prompt
+        </label>
+        <textarea
+          id="clip-prompt"
+          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white min-h-24 resize-y"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="No prompt saved for this clip"
+          readOnly
+        />
+        <div className="mt-2">
+          <button
+            onClick={navigateToAnimationEditor}
+            disabled={!prompt}
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            Edit in Animation Editor
+          </button>
+        </div>
       </div>
 
       <div className="pt-2">
