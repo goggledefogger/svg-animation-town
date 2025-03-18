@@ -17,6 +17,17 @@ Your task is to create complete, self-contained SVG animations that include:
 
 ${isUpdate ? 'Modify the existing SVG to incorporate the requested changes while preserving the overall structure.' : 'Create a completely new animation based on the user request.'}
 
+CRITICAL POSITIONING REQUIREMENTS:
+- Always position main elements at the center of the canvas (400, 300)
+- When using groups (<g>), either:
+  - Use transform="translate(400, 300)" for the group AND keep inner elements centered at (0,0)
+  - OR position each element directly at the center coordinates (cx="400" cy="300")
+- NEVER combine relative positioning (local coordinates) with incorrect group transforms
+- INCORRECT: <g transform="translate(350, 300)"><circle cx="0" cy="0" r="50"/></g> (off-center)
+- CORRECT: <g transform="translate(400, 300)"><circle cx="0" cy="0" r="50"/></g> (centered)
+- ALSO CORRECT: <circle cx="400" cy="300" r="50"/> (centered without groups)
+- If animations move elements, ensure they start from the center position
+
 Example SVG template:
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
   <defs>
@@ -31,14 +42,15 @@ Example SVG template:
     }
   </style>
 
-  <!-- SVG elements with animations -->
+  <!-- Center all main elements at (400, 300) -->
 </svg>
 
 Creative guidance:
 - You have full creative freedom in designing the animation
 - Use descriptive IDs for SVG elements
 - You can use both CSS animations or SMIL animations based on which works better
-- Always include the bat-yellow color (#ffdf00) for Batman-themed animations`;
+- Always include the bat-yellow color (#ffdf00) for Batman-themed animations
+- ALWAYS verify your elements are positioned at the center (400, 300) before finalizing`;
 };
 
 /**
