@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { useAnimation, Message } from './AnimationContext';
+import { Message } from './AnimationContext';
 import { StoryboardResponse, StoryboardScene } from '../services/movie.api';
-import { AnimationApi } from '../services/api';
+import { AnimationApi, MovieStorageApi } from '../services/api';
 
 // Define movie clip interface
 export interface MovieClip {
@@ -13,6 +13,7 @@ export interface MovieClip {
   order: number;
   prompt?: string;
   chatHistory?: Message[];
+  animationId?: string; // Reference to saved animation ID in backend storage
 }
 
 // Define storyboard interface
@@ -23,6 +24,13 @@ export interface Storyboard {
   clips: MovieClip[];
   createdAt: Date;
   updatedAt: Date;
+  generationStatus?: {
+    inProgress: boolean;
+    totalScenes?: number;
+    completedScenes?: number;
+    startedAt?: Date;
+    completedAt?: Date;
+  };
 }
 
 // Storage key for local storage
@@ -37,6 +45,13 @@ const defaultStoryboard: Storyboard = {
   createdAt: new Date(),
   updatedAt: new Date()
 };
+
+// Interface for animation data passed from parent
+export interface AnimationData {
+  svgContent: string;
+  chatHistory: Message[];
+  generateAnimation?: (prompt: string) => Promise<any>;
+}
 
 // MovieContext interface
 interface MovieContextType {
@@ -53,9 +68,9 @@ interface MovieContextType {
   renameStoryboard: (name: string) => void;
   updateStoryboardDescription: (description: string) => void;
   saveStoryboard: () => Promise<boolean>;
-  loadStoryboard: (storyboardId: string) => boolean;
-  getSavedStoryboards: () => string[];
-  deleteStoryboard: (storyboardId: string) => boolean;
+  loadStoryboard: (storyboardId: string) => Promise<boolean>;
+  getSavedStoryboards: () => Promise<string[]>;
+  deleteStoryboard: (storyboardId: string) => Promise<boolean>;
 
   // Clip management
   addClip: (clip: Omit<MovieClip, 'id' | 'order'>) => string;
@@ -85,14 +100,23 @@ interface MovieContextType {
 const MovieContext = createContext<MovieContextType | undefined>(undefined);
 
 // Context provider component
-export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Get animation context for interacting with current animation
-  const { svgContent, chatHistory } = useAnimation();
+interface MovieProviderProps {
+  children: ReactNode;
+  animationData: AnimationData;
+}
+
+export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animationData }) => {
+  // Use animation data passed from parent
+  const { svgContent, chatHistory } = animationData;
 
   // Storyboard state
   const [currentStoryboard, setCurrentStoryboard] = useState<Storyboard>(defaultStoryboard);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
   const [savedStoryboards, setSavedStoryboards] = useState<string[]>([]);
+
+  // Caching mechanism to avoid redundant API calls
+  const animationListCache = useRef<{timestamp: number, animations: string[]} | null>(null);
+  const notFoundMovieIds = useRef<Set<string>>(new Set());
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(true);
@@ -102,6 +126,11 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   useEffect(() => {
     const storedStoryboardIds = getSavedStoryboardsFromStorage();
     setSavedStoryboards(storedStoryboardIds);
+  }, []);
+
+  // Clear server not-found cache on component mount
+  useEffect(() => {
+    notFoundMovieIds.current = new Set();
   }, []);
 
   // Get all saved storyboard IDs from local storage
@@ -117,6 +146,113 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return [];
     }
   };
+
+  // Get list of saved storyboard IDs, combining server and local storage
+  const getSavedStoryboards = useCallback(async () => {
+    try {
+      // Get storyboards from server
+      let storyboardIds: string[] = [];
+      try {
+        console.log('Fetching storyboards from server...');
+        const serverStoryboards = await MovieStorageApi.listMovies();
+        storyboardIds = serverStoryboards.map(sb => sb.id);
+        console.log(`Found ${storyboardIds.length} storyboards on server`);
+
+        // Check for force refresh flag and clear it if present
+        const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
+        if (forceRefresh) {
+          sessionStorage.removeItem('force_server_refresh');
+          console.log('Forced server refresh requested - using server data only for movies');
+          setSavedStoryboards(storyboardIds);
+          return storyboardIds;
+        }
+      } catch (serverError) {
+        console.warn('Error getting storyboards from server:', serverError);
+      }
+
+      // Also include storyboards from local storage
+      try {
+        const localIds = getSavedStoryboardsFromStorage();
+        console.log(`Found ${localIds.length} storyboards in local storage`);
+
+        storyboardIds = [...new Set([...storyboardIds, ...localIds])];
+        console.log(`Combined total: ${storyboardIds.length} unique storyboards`);
+      } catch (localError) {
+        console.error('Error getting storyboards from local storage:', localError);
+      }
+
+      // Always update the state with the latest combined list
+      setSavedStoryboards(storyboardIds);
+      return storyboardIds;
+    } catch (error) {
+      console.error('Error getting saved storyboards:', error);
+      return [];
+    }
+  }, []);
+
+  // Save storyboard to server, with local cache as fallback
+  const saveStoryboard = useCallback(() => {
+    return new Promise<boolean>(async (resolve) => {
+      try {
+        // Update storyboard with current date
+        const updatedStoryboard = {
+          ...currentStoryboard,
+          updatedAt: new Date()
+        };
+
+        // Try to save to server first
+        try {
+          const result = await MovieStorageApi.saveMovie(updatedStoryboard);
+          console.log('Storyboard saved to server with ID:', result.id);
+
+          // Update the storyboard with the server ID if needed
+          if (updatedStoryboard.id !== result.id) {
+            setCurrentStoryboard(prev => ({
+              ...prev,
+              id: result.id
+            }));
+          }
+        } catch (serverError) {
+          console.error('Error saving storyboard to server:', serverError);
+          // Continue to local fallback
+        }
+
+        // Also update local cache
+        try {
+          // Get existing storyboards
+          const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
+          const storyboards: Record<string, Storyboard> = storyboardsString
+            ? JSON.parse(storyboardsString)
+            : {};
+
+          // Save updated storyboard
+          storyboards[updatedStoryboard.id] = updatedStoryboard;
+          localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
+
+          // Update saved storyboards list with IDs from local cache
+          const localIds = Object.keys(storyboards);
+          setSavedStoryboards(prevIds => [...new Set([...prevIds, ...localIds])]);
+        } catch (localError) {
+          console.error('Error saving storyboard to local cache:', localError);
+        }
+
+        // Also update current storyboard state
+        setCurrentStoryboard(updatedStoryboard);
+
+        console.log('Storyboard saved with', updatedStoryboard.clips.length, 'clips');
+
+        // Refresh the storyboard list to ensure we have the latest from both server and local
+        getSavedStoryboards().catch(err => {
+          console.error('Error refreshing storyboard list after save:', err);
+        });
+
+        resolve(true);
+      } catch (error) {
+        console.error('Error saving storyboard:', error);
+        resolve(false);
+      }
+    });
+  }, [currentStoryboard, getSavedStoryboards]);
 
   // Create a new storyboard
   const createNewStoryboard = useCallback((name?: string, description?: string) => {
@@ -151,47 +287,50 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }));
   }, []);
 
-  // Save storyboard to local storage
-  const saveStoryboard = useCallback(() => {
-    return new Promise<boolean>((resolve) => {
-      try {
-        // Get existing storyboards
-        const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
-        const storyboards: Record<string, Storyboard> = storyboardsString
-          ? JSON.parse(storyboardsString)
-          : {};
-
-        // Update storyboard with current date
-        const updatedStoryboard = {
-          ...currentStoryboard,
-          updatedAt: new Date()
-        };
-
-        // Save updated storyboard
-        storyboards[updatedStoryboard.id] = updatedStoryboard;
-        localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
-
-        // Update saved storyboards list
-        setSavedStoryboards(Object.keys(storyboards));
-
-        // Also update current storyboard state
-        setCurrentStoryboard(updatedStoryboard);
-
-        console.log('Storyboard saved successfully with', updatedStoryboard.clips.length, 'clips');
-        resolve(true);
-      } catch (error) {
-        console.error('Error saving storyboard:', error);
-        resolve(false);
-      }
-    });
-  }, [currentStoryboard]);
-
-  // Load storyboard from local storage
-  const loadStoryboard = useCallback((storyboardId: string) => {
+  // Load storyboard from server, falling back to local storage
+  const loadStoryboard = useCallback(async (storyboardId: string) => {
     try {
+      // Check if this ID was previously not found on the server to avoid redundant requests
+      const wasNotFound = notFoundMovieIds.current.has(storyboardId);
+
+      // Try loading from server first, unless we already know it doesn't exist
+      if (!wasNotFound) {
+        try {
+          console.log(`Attempting to load storyboard with ID: ${storyboardId} from server`);
+          const serverStoryboard = await MovieStorageApi.getMovie(storyboardId);
+
+          if (serverStoryboard) {
+            // Convert date strings back to Date objects if needed
+            const storyboard = {
+              ...serverStoryboard,
+              createdAt: new Date(serverStoryboard.createdAt),
+              updatedAt: new Date(serverStoryboard.updatedAt)
+            };
+
+            setCurrentStoryboard(storyboard);
+            setActiveClipId(storyboard.clips.length > 0 ? storyboard.clips[0].id : null);
+
+            console.log(`Loaded storyboard from server: ${storyboard.name}`);
+            return true;
+          }
+        } catch (serverError: any) {
+          // Check if it's a 404 Not Found error
+          if (serverError.status === 404 || (serverError.message && serverError.message.includes('not found'))) {
+            console.warn(`Storyboard with ID ${storyboardId} not found on server`);
+            // Add to not found cache to avoid future requests
+            notFoundMovieIds.current.add(storyboardId);
+          } else {
+            console.error('Failed to load from server, trying local storage:', serverError);
+          }
+        }
+      } else {
+        console.log(`Skipping server request for ID ${storyboardId} (previously not found)`);
+      }
+
+      // Fall back to local storage
       const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
       if (!storyboardsString) {
-        console.error('No storyboards found in storage');
+        console.error('No storyboards found in local storage');
         return false;
       }
 
@@ -199,7 +338,7 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const storyboard = storyboards[storyboardId];
 
       if (!storyboard) {
-        console.error(`Storyboard with ID ${storyboardId} not found`);
+        console.error(`Storyboard with ID ${storyboardId} not found in local storage`);
         return false;
       }
 
@@ -209,6 +348,7 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       setCurrentStoryboard(storyboard);
       setActiveClipId(storyboard.clips.length > 0 ? storyboard.clips[0].id : null);
+      console.log(`Loaded storyboard from local storage: ${storyboard.name}`);
       return true;
     } catch (error) {
       console.error('Error loading storyboard:', error);
@@ -216,34 +356,44 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, []);
 
-  // Get list of saved storyboard names
-  const getSavedStoryboards = useCallback(() => {
-    return getSavedStoryboardsFromStorage();
-  }, []);
-
-  // Delete a storyboard
-  const deleteStoryboard = useCallback((storyboardId: string) => {
+  // Delete a storyboard from server and local storage
+  const deleteStoryboard = useCallback(async (storyboardId: string) => {
     try {
-      const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
-      if (!storyboardsString) return false;
+      // Try to delete from server
+      let serverDeleteSuccess = false;
+      try {
+        serverDeleteSuccess = await MovieStorageApi.deleteMovie(storyboardId);
+      } catch (serverError) {
+        console.warn('Error deleting storyboard from server:', serverError);
+      }
 
-      const storyboards = JSON.parse(storyboardsString) as Record<string, Storyboard>;
+      // Also delete from local storage
+      let localDeleteSuccess = false;
+      try {
+        const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
+        if (storyboardsString) {
+          const storyboards = JSON.parse(storyboardsString) as Record<string, Storyboard>;
 
-      if (!storyboards[storyboardId]) return false;
+          if (storyboards[storyboardId]) {
+            // Delete the storyboard
+            delete storyboards[storyboardId];
+            localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
 
-      // Delete the storyboard
-      delete storyboards[storyboardId];
-      localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
-
-      // Update saved storyboards list
-      setSavedStoryboards(Object.keys(storyboards));
+            // Update saved storyboards list
+            setSavedStoryboards(Object.keys(storyboards));
+            localDeleteSuccess = true;
+          }
+        }
+      } catch (localError) {
+        console.error('Error deleting storyboard from local storage:', localError);
+      }
 
       // If current storyboard was deleted, create a new one
-      if (currentStoryboard.id === storyboardId) {
+      if ((serverDeleteSuccess || localDeleteSuccess) && currentStoryboard.id === storyboardId) {
         createNewStoryboard();
       }
 
-      return true;
+      return serverDeleteSuccess || localDeleteSuccess;
     } catch (error) {
       console.error('Error deleting storyboard:', error);
       return false;
@@ -297,7 +447,7 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
 
     return newClipId;
-  }, [addClip, chatHistory, svgContent]);
+  }, [addClip, svgContent, chatHistory]);
 
   // Update a clip
   const updateClip = useCallback((clipId: string, updates: Partial<Omit<MovieClip, 'id'>> & { order?: number }) => {
@@ -413,9 +563,10 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     // Generate clips for each scene in the storyboard
     const scenePromises = storyboardResponse.scenes.map(async (scene, index) => {
       try {
-        // Use the AnimationApi to generate an SVG for each scene
+        // Use the generate function from animationData if available, otherwise fall back to AnimationApi
         console.log(`Generating SVG for scene ${index + 1}: ${scene.id}`);
-        const generatedSvg = await AnimationApi.generate(scene.svgPrompt);
+        const generateFn = animationData.generateAnimation || AnimationApi.generate;
+        const generatedSvg = await generateFn(scene.svgPrompt);
 
         // Create a new clip with the generated SVG
         const newClip: MovieClip = {
@@ -435,8 +586,16 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             sender: 'ai',
             text: generatedSvg.message,
             timestamp: new Date()
-          }]
+          }],
+          animationId: generatedSvg.animationId
         };
+
+        // Log if an animation ID was returned from the backend
+        if (generatedSvg.animationId) {
+          console.log(`Scene ${index + 1} saved on server with animation ID: ${generatedSvg.animationId}`);
+        } else {
+          console.warn(`No animation ID for scene ${index + 1}, animation may not be saved on server`);
+        }
 
         return newClip;
       } catch (error) {
@@ -475,7 +634,7 @@ export const MovieProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       console.error('Error creating storyboard from response:', error);
       return newStoryboard;
     }
-  }, []);
+  }, [animationData.generateAnimation, saveStoryboard]);
 
   // Create an error SVG for failed clip generation
   const createErrorSvg = (description: string): string => {

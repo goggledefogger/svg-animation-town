@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
-import { AnimationApi } from '../services/api';
+import { AnimationApi, AnimationStorageApi } from '../services/api';
 import { exportAnimation as exportAnimationUtil, canExportAsSvg } from '../utils/exportUtils';
+import { v4 as uuidv4 } from 'uuid';
+import { isMobileDevice, isFreshPageLoad } from '../utils/deviceUtils';
 
 // Define the context interface
 interface AnimationContextType {
@@ -14,15 +16,17 @@ interface AnimationContextType {
   setSvgRef: (ref: SVGSVGElement | null) => void;
   generateAnimationFromPrompt: (prompt: string) => Promise<string>;
   updateAnimationFromPrompt: (prompt: string) => Promise<string>;
+  generateAnimation: (prompt: string) => Promise<any>;
   loadPreset: (presetName: string) => Promise<string>;
   pauseAnimations: () => void;
   resumeAnimations: () => void;
   resetAnimations: () => void;
   resetEverything: () => void;
   setPlaybackSpeed: (speed: number | 'groovy') => void;
-  saveAnimation: (name: string, chatHistory?: Message[]) => void;
-  loadAnimation: (name: string) => ChatData | null;
-  getSavedAnimations: () => string[];
+  saveAnimation: (name: string, chatHistory?: Message[]) => Promise<void>;
+  loadAnimation: (name: string) => Promise<ChatData | null>;
+  getSavedAnimations: () => Promise<any[]>;
+  deleteAnimation: (name: string) => Promise<boolean>;
   exportAnimation: (filename: string, format: 'svg' | 'json') => void;
   canExportAsSvg: () => boolean;
   chatHistory: Message[];
@@ -47,7 +51,7 @@ export interface ChatData {
 // Create the context
 const AnimationContext = createContext<AnimationContextType | undefined>(undefined);
 
-// Key for session storage
+// Session storage key for persisting state
 const SESSION_STORAGE_KEY = 'current_animation_state';
 
 // Create a provider component
@@ -63,28 +67,50 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Use a ref to track the current SVG element to avoid unnecessary state updates
   const svgElementRef = useRef<SVGSVGElement | null>(null);
 
+  // Cache for animation listings to prevent redundant API calls
+  const animationListCache = useRef<{
+    timestamp: number;
+    animations: string[];
+  } | null>(null);
+
+  // Cache expiration in milliseconds (5 seconds)
+  const CACHE_EXPIRATION = 5000;
+
   // Try to restore state from session storage on initial load
   useEffect(() => {
-    try {
-      const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (savedState) {
-        const parsedState = JSON.parse(savedState);
-        if (parsedState.svgContent) {
-          setSvgContent(parsedState.svgContent);
+    const isMobile = isMobileDevice();
+    const isFresh = isFreshPageLoad();
+
+    // Clear session storage on desktop page reloads
+    if (!isMobile && isFresh) {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      console.log('Desktop page reload detected - cleared animation state');
+      return;
+    }
+
+    // Only restore state for mobile or when returning to the app (not a page reload)
+    if (isMobile || !isFresh) {
+      try {
+        const savedState = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (savedState) {
+          const parsedState = JSON.parse(savedState);
+          if (parsedState.svgContent) {
+            setSvgContent(parsedState.svgContent);
+          }
+          if (parsedState.chatHistory) {
+            setChatHistory(parsedState.chatHistory);
+          }
+          if (parsedState.aiProvider) {
+            setAIProvider(parsedState.aiProvider);
+          }
+          if (parsedState.playbackSpeed !== undefined) {
+            setPlaybackSpeed(parsedState.playbackSpeed);
+          }
+          console.log('Restored animation state from session storage');
         }
-        if (parsedState.chatHistory) {
-          setChatHistory(parsedState.chatHistory);
-        }
-        if (parsedState.aiProvider) {
-          setAIProvider(parsedState.aiProvider);
-        }
-        if (parsedState.playbackSpeed !== undefined) {
-          setPlaybackSpeed(parsedState.playbackSpeed);
-        }
-        console.log('Restored animation state from session storage');
+      } catch (error) {
+        console.error('Error restoring animation state:', error);
       }
-    } catch (error) {
-      console.error('Error restoring animation state:', error);
     }
   }, []);
 
@@ -95,6 +121,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const saveCurrentState = () => {
       try {
+        // Only save state to sessionStorage for mobile devices or when browser is being closed
+        // (not on regular page refreshes for desktop)
         const stateToSave = {
           svgContent,
           chatHistory,
@@ -112,13 +140,26 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Handle visibility change (when minimizing browser or screen turns off)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        saveCurrentState();
+        // Only save on visibility change for mobile devices
+        if (isMobileDevice()) {
+          saveCurrentState();
+        }
       }
     };
 
     // Handle before unload (when refreshing or closing tab)
     const handleBeforeUnload = () => {
-      saveCurrentState();
+      // For mobile, always save
+      if (isMobileDevice()) {
+        saveCurrentState();
+      }
+      // For desktop, only save if user is closing browser (not refreshing)
+      // This is an approximate approach as beforeunload can't reliably
+      // distinguish between refresh and close
+      else if (navigator.userAgent.includes('Chrome')) {
+        // Chrome-specific behavior
+        saveCurrentState();
+      }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -139,51 +180,116 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
-  // Save the current animation to localStorage with a given name
-  const saveAnimation = useCallback((name: string, chatHistory?: Message[]) => {
+  // Save the current animation to the server with a given name
+  const saveAnimation = useCallback(async (name: string, chatHistory?: Message[]) => {
     if (!svgContent) {
       console.warn('No animation to save');
       return;
     }
 
     try {
-      // Get existing saved animations
-      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
-      const savedAnimations = JSON.parse(savedAnimationsStr);
+      // Invalidate the animation list cache before saving
+      // This ensures we don't get stale data after a successful save
+      animationListCache.current = null;
 
-      // Add/update the current animation with chat history
-      savedAnimations[name] = {
-        svg: svgContent,
-        chatHistory,
-        timestamp: new Date().toISOString()
-      };
+      // Save to server
+      const result = await AnimationStorageApi.saveAnimation(
+        name,
+        svgContent,
+        chatHistory
+      );
 
-      // Save back to localStorage
-      localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
-      console.log(`Animation saved: ${name}`);
+      console.log(`Animation saved to server with ID: ${result.id}`);
+
+      // For client-side cache, also save locally
+      try {
+        // Get existing saved animations
+        const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+        const savedAnimations = JSON.parse(savedAnimationsStr);
+
+        // Add/update the current animation with chat history
+        savedAnimations[name] = {
+          id: result.id, // Store the server ID for future reference
+          svg: svgContent,
+          chatHistory,
+          timestamp: new Date().toISOString()
+        };
+
+        // Save back to localStorage as cache
+        localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
+      } catch (error) {
+        console.error(`Error caching animation locally: ${error}`);
+        // Continue anyway since the server save succeeded
+      }
     } catch (error) {
-      console.error(`Error saving animation: ${error}`);
+      console.error(`Error saving animation to server: ${error}`);
+
+      // Fallback to local storage only if server save fails
+      try {
+        const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+        const savedAnimations = JSON.parse(savedAnimationsStr);
+
+        savedAnimations[name] = {
+          svg: svgContent,
+          chatHistory,
+          timestamp: new Date().toISOString()
+        };
+
+        localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
+        console.log(`Animation saved locally as fallback: ${name}`);
+      } catch (localError) {
+        console.error(`Error in local fallback save: ${localError}`);
+      }
     }
   }, [svgContent]);
 
-  // Load an animation from localStorage by name
-  const loadAnimation = useCallback((name: string): ChatData | null => {
+  // Load an animation by name - first try server, then fall back to localStorage
+  const loadAnimation = useCallback(async (name: string): Promise<ChatData | null> => {
     try {
+      // First check local cache to get the ID
       const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
       const savedAnimations = JSON.parse(savedAnimationsStr);
+      const localData = savedAnimations[name];
 
-      if (savedAnimations[name]) {
-        const animationData = savedAnimations[name] as ChatData;
-        setSvgContent(animationData.svg);
-        console.log(`Animation loaded: ${name}`);
+      // If we have a cached entry with server ID, load from server
+      if (localData && localData.id) {
+        try {
+          const serverAnimation = await AnimationStorageApi.getAnimation(localData.id);
+
+          if (serverAnimation && serverAnimation.svg) {
+            setSvgContent(serverAnimation.svg);
+            console.log(`Animation loaded from server: ${name} (${localData.id})`);
+
+            // Dispatch a custom event to notify components about animation load
+            const loadEvent = new CustomEvent('animation-loaded', {
+              detail: { chatHistory: serverAnimation.chatHistory }
+            });
+            window.dispatchEvent(loadEvent);
+
+            return {
+              svg: serverAnimation.svg,
+              chatHistory: serverAnimation.chatHistory,
+              timestamp: serverAnimation.timestamp
+            };
+          }
+        } catch (serverError) {
+          console.warn(`Server load failed, falling back to local cache: ${serverError}`);
+          // Continue to use local cache as fallback below
+        }
+      }
+
+      // If server load fails or there's no server ID, use local cache
+      if (localData) {
+        setSvgContent(localData.svg);
+        console.log(`Animation loaded from local cache: ${name}`);
 
         // Dispatch a custom event to notify components about animation load
         const loadEvent = new CustomEvent('animation-loaded', {
-          detail: { chatHistory: animationData.chatHistory }
+          detail: { chatHistory: localData.chatHistory }
         });
         window.dispatchEvent(loadEvent);
 
-        return animationData;
+        return localData as ChatData;
       } else {
         console.warn(`Animation not found: ${name}`);
         return null;
@@ -194,15 +300,66 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
-  // Get list of saved animation names
-  const getSavedAnimations = useCallback((): string[] => {
+  // Get saved animations from storage and API
+  const getSavedAnimations = useCallback(async (): Promise<any[]> => {
     try {
-      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
-      const savedAnimations = JSON.parse(savedAnimationsStr);
-      return Object.keys(savedAnimations);
+      // Always try to get animations from server first
+      const serverAnimations = await AnimationStorageApi.listAnimations();
+
+      // Check for force refresh flag and clear it if present
+      const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
+      if (forceRefresh) {
+        sessionStorage.removeItem('force_server_refresh');
+        return serverAnimations;
+      }
+
+      // Combine with local animations as a fallback
+      try {
+        const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+        const savedAnimations = JSON.parse(savedAnimationsStr);
+
+        // Convert local storage names to objects to match server format
+        const localAnimations = Object.keys(savedAnimations).map(name => ({
+          id: savedAnimations[name].id || `local-${name}`,
+          name: name,
+          timestamp: savedAnimations[name].timestamp || new Date().toISOString()
+        }));
+
+        // Combine lists, removing duplicates based on name
+        const nameSet = new Set();
+        const allAnimations = [...serverAnimations];
+
+        // Add local animations that aren't already in the server list
+        for (const localAnim of localAnimations) {
+          const existsInServer = serverAnimations.some(serverAnim =>
+            serverAnim.name === localAnim.name
+          );
+
+          if (!existsInServer && !nameSet.has(localAnim.name)) {
+            nameSet.add(localAnim.name);
+            allAnimations.push(localAnim);
+          }
+        }
+
+        return allAnimations;
+      } catch (localError) {
+        return serverAnimations;
+      }
     } catch (error) {
-      console.error(`Error getting saved animations: ${error}`);
-      return [];
+      // Fall back to localStorage if server request fails
+      try {
+        const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+        const savedAnimations = JSON.parse(savedAnimationsStr);
+
+        // Convert local animations to objects to match server format
+        return Object.keys(savedAnimations).map(name => ({
+          id: savedAnimations[name].id || `local-${name}`,
+          name: name,
+          timestamp: savedAnimations[name].timestamp || new Date().toISOString()
+        }));
+      } catch (localError) {
+        return [];
+      }
     }
   }, []);
 
@@ -221,6 +378,19 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
+  // Generate animation directly via API, returning raw API response
+  const generateAnimation = useCallback(async (prompt: string) => {
+    try {
+      console.log(`Generating animation via API with prompt: "${prompt}"`);
+      const result = await AnimationApi.generate(prompt, aiProvider);
+      // Return the full result including animation ID if available
+      return result;
+    } catch (error) {
+      console.error('Error generating animation via API:', error);
+      throw error;
+    }
+  }, [aiProvider]);
+
   // Generate a new animation from a prompt
   const generateAnimationFromPrompt = async (prompt: string): Promise<string> => {
     console.log('Generating animation from prompt:', prompt);
@@ -228,6 +398,12 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       const result = await AnimationApi.generate(prompt, aiProvider);
       console.log('Generated animation result');
       setSvgContent(result.svg);
+
+      // If animation has an ID from backend, store it in chat history for reference
+      if (result.animationId) {
+        console.log(`Animation saved on server with ID: ${result.animationId}`);
+      }
+
       return result.message;
     } catch (error: any) {
       console.error('Error generating animation:', error);
@@ -601,6 +777,51 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     return canExportAsSvg(svgContent);
   }, [svgContent]);
 
+  // Delete an animation by name
+  const deleteAnimation = useCallback(async (name: string): Promise<boolean> => {
+    try {
+      // First check local cache to get the ID
+      const savedAnimationsStr = localStorage.getItem('savedAnimations') || '{}';
+      const savedAnimations = JSON.parse(savedAnimationsStr);
+      const localData = savedAnimations[name];
+
+      let success = false;
+
+      // If we have a server ID, delete from server
+      if (localData && localData.id) {
+        try {
+          success = await AnimationStorageApi.deleteAnimation(localData.id);
+          console.log(`Animation deleted from server: ${name} (${localData.id})`);
+        } catch (serverError) {
+          console.warn(`Error deleting from server: ${serverError}`);
+        }
+      }
+
+      // Also delete from local storage
+      try {
+        // Remove from local storage
+        if (savedAnimations[name]) {
+          delete savedAnimations[name];
+          localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
+          success = true;
+          console.log(`Animation deleted from local storage: ${name}`);
+        }
+      } catch (localError) {
+        console.error(`Error deleting from local storage: ${localError}`);
+      }
+
+      // Invalidate the cache if deletion was successful
+      if (success) {
+        animationListCache.current = null;
+      }
+
+      return success;
+    } catch (error) {
+      console.error(`Error deleting animation: ${error}`);
+      return false;
+    }
+  }, []);
+
   return (
     <AnimationContext.Provider value={{
       svgContent,
@@ -613,6 +834,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       setSvgRef,
       generateAnimationFromPrompt,
       updateAnimationFromPrompt,
+      generateAnimation,
       loadPreset,
       pauseAnimations,
       resumeAnimations,
@@ -622,6 +844,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       saveAnimation,
       loadAnimation,
       getSavedAnimations,
+      deleteAnimation,
       exportAnimation: exportAnimationFn,
       canExportAsSvg: canExportAsSvgFn,
       chatHistory,

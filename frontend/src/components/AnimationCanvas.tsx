@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
+import { MovieStorageApi } from '../services/api';
 
 const AnimationCanvas: React.FC = () => {
-  const { svgContent } = useAnimation();
+  const { svgContent, setSvgContent } = useAnimation();
   const { currentStoryboard, activeClipId, getActiveClip } = useMovie();
   const setSvgRef = useSvgRef();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -20,6 +21,66 @@ const AnimationCanvas: React.FC = () => {
 
   // Get the current active clip's SVG content
   const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
+
+  // If clip only has animation ID but no SVG content, fetch the animation data
+  useEffect(() => {
+    const activeClip = activeClipId ? getActiveClip() : null;
+
+    if (activeClip && !activeClip.svgContent && activeClip.animationId) {
+      console.log(`Clip has no SVG content, fetching from animation ID: ${activeClip.animationId}`);
+
+      const fetchAnimationData = async () => {
+        try {
+          setIsLoading(true);
+          const animationData = await MovieStorageApi.getClipAnimation(activeClip.animationId!);
+
+          if (animationData && animationData.svg) {
+            console.log(`Loaded SVG content for clip from animation ID: ${activeClip.animationId}`);
+
+            // Update the local state with the fetched SVG content
+            setSvgContent(animationData.svg);
+
+            // Also inform the user that we're using optimized storage
+            console.log(`Using optimized movie storage - SVG loaded from animation ${activeClip.animationId}`);
+          } else {
+            console.error(`No SVG content found for animation ID: ${activeClip.animationId}`);
+            setSvgContent(createPlaceholderSvg(`Animation with ID ${activeClip.animationId} could not be loaded`));
+          }
+        } catch (error) {
+          console.error(`Error loading animation data for clip: ${error}`);
+          setSvgContent(createPlaceholderSvg(`Error loading animation: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchAnimationData();
+    }
+  }, [activeClipId, getActiveClip, setSvgContent]);
+
+  // Helper to create a placeholder SVG when content can't be loaded
+  const createPlaceholderSvg = (message: string): string => {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+      <rect width="800" height="600" fill="#1a1a2e" />
+      <circle cx="400" cy="250" r="60" fill="#ffdf00" />
+      <text x="400" y="400" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+        Animation Not Available
+      </text>
+      <text x="400" y="440" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="600">
+        ${message}
+      </text>
+      <style>
+        @keyframes pulse {
+          0% { r: 60; }
+          50% { r: 70; }
+          100% { r: 60; }
+        }
+        circle {
+          animation: pulse 2s ease-in-out infinite;
+        }
+      </style>
+    </svg>`;
+  };
 
   // Determine which SVG content to use - prefer active clip, fall back to animation context
   const displaySvgContent = activeClipSvgContent || svgContent;
@@ -112,7 +173,7 @@ const AnimationCanvas: React.FC = () => {
   useEffect(() => {
     // Function to listen for API calls starting
     const handleApiCallStart = () => {
-      console.log('API call started - showing loading animation');
+      // Remove excessive logging
       setIsLoading(true);
       setHasMessageBeenSent(true);
       setShowEmptyState(false);
@@ -120,7 +181,7 @@ const AnimationCanvas: React.FC = () => {
 
     // Function to listen for API calls completing
     const handleApiCallEnd = () => {
-      console.log('API call ended - hiding loading animation');
+      // Remove excessive logging
       setIsLoading(false);
     };
 

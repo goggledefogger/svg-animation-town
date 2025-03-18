@@ -1,9 +1,11 @@
 const OpenAIService = require('../services/openai.service');
 const presetService = require('../services/preset.service');
 const AIService = require('../services/ai.service');
+const storageService = require('../services/storage.service');
 const { extractSvgAndText } = require('../utils/parser');
 const { asyncHandler, BadRequestError, NotFoundError, ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Generate a new animation based on a text prompt
@@ -16,6 +18,8 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
   }
 
   try {
+    let llmResponse;
+
     // Override the default provider if one is specified in the request
     if (provider && (provider === 'openai' || provider === 'claude')) {
       // Temporarily override the configured provider
@@ -25,33 +29,58 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       console.log(`Using provider: ${provider} for animation generation`);
 
       // Call the AI service to generate the animation
-      const llmResponse = await AIService.generateAnimation(prompt);
+      llmResponse = await AIService.generateAnimation(prompt);
 
       // Restore the original provider
       config.aiProvider = originalProvider;
-
-      // Extract SVG and text from the response
-      const { svg, text } = extractSvgAndText(llmResponse);
-      console.log(`Extracted SVG length: ${svg?.length || 0}, Text length: ${text?.length || 0}`);
-
-      return res.status(200).json({
-        success: true,
-        svg,
-        message: text
-      });
     } else {
       // Use the default provider configured in the system
-      const llmResponse = await AIService.generateAnimation(prompt);
-
-      // Extract SVG and text from the response
-      const { svg, text } = extractSvgAndText(llmResponse);
-
-      return res.status(200).json({
-        success: true,
-        svg,
-        message: text
-      });
+      llmResponse = await AIService.generateAnimation(prompt);
     }
+
+    // Extract SVG and text from the response
+    const { svg, text } = extractSvgAndText(llmResponse);
+    console.log(`Extracted SVG length: ${svg?.length || 0}, Text length: ${text?.length || 0}`);
+
+    // Generate a name for the animation based on the prompt
+    let animationName = prompt.trim();
+    if (animationName.length > 40) {
+      animationName = animationName.substring(0, 40) + '...';
+    }
+
+    // Create a simple chat history for the animation
+    const chatHistory = [
+      {
+        id: uuidv4(),
+        sender: 'user',
+        text: prompt,
+        timestamp: new Date().toISOString()
+      },
+      {
+        id: uuidv4(),
+        sender: 'ai',
+        text: text || 'Animation generated successfully',
+        timestamp: new Date().toISOString()
+      }
+    ];
+
+    // Save the animation to storage
+    const timestamp = new Date().toISOString();
+    const animationId = await storageService.saveAnimation(animationName, {
+      svg,
+      chatHistory,
+      timestamp
+    });
+
+    console.log(`Animation saved to storage with ID: ${animationId}`);
+
+    // Return the SVG, message, and the animation ID
+    return res.status(200).json({
+      success: true,
+      svg,
+      message: text,
+      animationId
+    });
   } catch (error) {
     console.error('Error generating animation:', error);
     throw new ServiceUnavailableError(`Failed to generate animation: ${error.message}`);

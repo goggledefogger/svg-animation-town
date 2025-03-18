@@ -1,3 +1,6 @@
+# our backend
+backend/output
+
 # node
 node_modules
 

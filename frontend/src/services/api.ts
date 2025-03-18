@@ -19,8 +19,14 @@ export async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<T> {
   try {
-    console.log(`Making API request to: ${API_URL}${endpoint}`);
-    console.log('Request options:', options);
+    // Reduce logging - only log in development or for non-GET requests
+    const isGet = !options.method || options.method === 'GET';
+    const shouldLogRequest = !isGet || import.meta.env.DEV;
+
+    if (shouldLogRequest) {
+      console.log(`Making API request to: ${API_URL}${endpoint}`);
+      if (!isGet) console.log('Request options:', options);
+    }
 
     // Dispatch API call start event
     dispatchApiCallEvent(true);
@@ -40,10 +46,15 @@ export async function fetchApi<T>(
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
-      console.log('API response:', data);
+      // Only log detailed responses when helpful
+      if (shouldLogRequest && !endpoint.includes('/list')) {
+        console.log('API response:', data);
+      }
     } else {
       const text = await response.text();
-      console.log('API text response:', text.substring(0, 200) + (text.length > 200 ? '...' : ''));
+      if (shouldLogRequest) {
+        console.log('API text response:', text.substring(0, 200) + (text.length > 200 ? '...' : ''));
+      }
       try {
         // Try to parse it as JSON anyway
         data = JSON.parse(text);
@@ -59,13 +70,12 @@ export async function fetchApi<T>(
         data.error ||
         data.message ||
         data.text ||
-        `Server returned ${response.status}: ${response.statusText}`;
+        `API error: ${response.status} ${response.statusText}`;
 
-      throw new CustomApiError(
-        errorMessage,
-        response.status,
-        data
-      );
+      // Create a custom error object with status code
+      const error = new Error(errorMessage) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
 
     return data;
@@ -98,7 +108,7 @@ export const AnimationApi = {
   generate: async (
     prompt: string,
     provider: 'openai' | 'claude' = 'openai'
-  ): Promise<{ svg: string; message: string }> => {
+  ): Promise<{ svg: string; message: string; animationId?: string }> => {
     console.log('Generating animation with prompt:', prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''));
     console.log('Using AI provider:', provider);
 
@@ -121,9 +131,17 @@ export const AnimationApi = {
           throw new CustomApiError('Invalid SVG content received from server');
         }
 
+        // Log animation ID from response
+        if (data.animationId) {
+          console.log(`API generate endpoint returned animation ID: ${data.animationId}`);
+        } else {
+          console.warn('API generate endpoint did not return an animation ID');
+        }
+
         return {
           svg: data.svg,
-          message: data.message || 'Animation created successfully!'
+          message: data.message || 'Animation created successfully!',
+          animationId: data.animationId // Include the animation ID if provided by backend
         };
       } else if (data.elements && Array.isArray(data.elements)) {
         console.error('Received legacy element-based response that will not work with the new version');
@@ -263,3 +281,206 @@ function createFallbackSvg(message: string): string {
     </style>
   </svg>`;
 }
+
+/**
+ * Animation Storage API endpoints for working with saved animations
+ */
+export const AnimationStorageApi = {
+  /**
+   * Save an animation to the server
+   */
+  saveAnimation: async (
+    name: string,
+    svgContent: string,
+    chatHistory?: any[]
+  ): Promise<{ id: string }> => {
+    console.log(`Saving animation with name: ${name}`);
+
+    try {
+      const data = await fetchApi<any>(
+        '/animation/save',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            svg: svgContent,
+            chatHistory
+          }),
+        }
+      );
+
+      if (data.success && data.id) {
+        return { id: data.id };
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('Error saving animation:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * List all saved animations
+   */
+  listAnimations: async (): Promise<any[]> => {
+    try {
+      const data = await fetchApi<any>('/animation/list');
+
+      if (data.success && Array.isArray(data.animations)) {
+        return data.animations;
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('Error listing animations:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get an animation by ID
+   */
+  getAnimation: async (id: string): Promise<any> => {
+    try {
+      const data = await fetchApi<any>(`/animation/${id}`);
+
+      if (data.success && data.animation) {
+        return data.animation;
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error(`Error getting animation ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Delete an animation by ID
+   */
+  deleteAnimation: async (id: string): Promise<boolean> => {
+    try {
+      const data = await fetchApi<any>(
+        `/animation/${id}`,
+        { method: 'DELETE' }
+      );
+
+      return data.success === true;
+    } catch (error) {
+      console.error(`Error deleting animation ${id}:`, error);
+      throw error;
+    }
+  }
+};
+
+/**
+ * Movie Storage API endpoints for working with saved movies/storyboards
+ */
+export const MovieStorageApi = {
+  /**
+   * Save a movie/storyboard to the server
+   */
+  saveMovie: async (storyboard: any): Promise<{ id: string }> => {
+    console.log(`Saving storyboard with name: ${storyboard.name}`);
+
+    try {
+      const data = await fetchApi<any>(
+        '/movie/save',
+        {
+          method: 'POST',
+          body: JSON.stringify(storyboard),
+        }
+      );
+
+      if (data.success && data.id) {
+        return { id: data.id };
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('Error saving storyboard:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * List all saved movies/storyboards
+   */
+  listMovies: async (): Promise<any[]> => {
+    try {
+      const data = await fetchApi<any>('/movie/list');
+
+      if (data.success && Array.isArray(data.movies)) {
+        return data.movies;
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error('Error listing storyboards:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get a movie/storyboard by ID
+   */
+  getMovie: async (id: string): Promise<any> => {
+    try {
+      console.log(`Fetching movie with ID: ${id}`);
+      const data = await fetchApi<any>(`/movie/${id}`);
+
+      if (data.success && data.movie) {
+        console.log(`Successfully retrieved movie: ${data.movie.name}`);
+        return data.movie;
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error: any) {
+      // If it's a 404, provide a clearer message
+      if (error.status === 404 || (error.message && error.message.includes('not found'))) {
+        console.error(`Movie with ID ${id} not found`);
+      } else {
+        console.error(`Error getting storyboard ${id}:`, error);
+        throw error;
+      }
+    }
+  },
+
+  /**
+   * Delete a movie/storyboard by ID
+   */
+  deleteMovie: async (id: string): Promise<boolean> => {
+    try {
+      const data = await fetchApi<any>(
+        `/movie/${id}`,
+        { method: 'DELETE' }
+      );
+
+      return data.success === true;
+    } catch (error) {
+      console.error(`Error deleting storyboard ${id}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get animation data for a clip by animation ID
+   * Used when the movie JSON has optimized storage without full SVG content
+   */
+  getClipAnimation: async (animationId: string): Promise<any> => {
+    try {
+      console.log(`Fetching animation data for clip with animation ID: ${animationId}`);
+      const data = await fetchApi<any>(`/movie/clip-animation/${animationId}`);
+
+      if (data.success && data.animation) {
+        return data.animation;
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (error) {
+      console.error(`Error fetching animation data for clip with ID ${animationId}:`, error);
+      throw error;
+    }
+  }
+};

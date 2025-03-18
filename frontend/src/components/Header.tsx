@@ -1,9 +1,17 @@
-import React, { useState, useEffect, useRef, KeyboardEvent } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef, KeyboardEvent, useCallback } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAnimation } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
 import ConfirmationModal from './ConfirmationModal';
 import ExportModal from './ExportModal';
+
+// Define the animation object type
+interface AnimationItem {
+  id: string;
+  name: string;
+  timestamp?: string;
+  [key: string]: any; // Allow for other properties
+}
 
 interface HeaderProps {
   onExport?: () => void;
@@ -20,23 +28,64 @@ const Header: React.FC<HeaderProps> = ({
   onGenerate,
   storyboardName
 }) => {
-  const { loadPreset, resetEverything, saveAnimation, loadAnimation, getSavedAnimations, exportAnimation, svgContent, chatHistory } = useAnimation();
+  const { loadPreset, resetEverything, saveAnimation, loadAnimation, deleteAnimation, getSavedAnimations, exportAnimation, svgContent, chatHistory } = useAnimation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
-  const [savedAnimations, setSavedAnimations] = useState<string[]>([]);
+  const [savedAnimations, setSavedAnimations] = useState<(string | AnimationItem)[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
-  const location = useLocation();
-
+  const isLoadingRef = useRef(false); // Track loading state to prevent duplicate calls
   const isMovieEditorPage = location.pathname === '/movie-editor';
+
+  // Reset - refresh from server and clear session state
+  const resetPage = useCallback(() => {
+    // Clear all animation state from sessionStorage
+    sessionStorage.removeItem('current_animation_state');
+
+    // Also clear page_just_loaded flag so the state isn't restored
+    sessionStorage.removeItem('page_just_loaded');
+
+    // Set a flag in sessionStorage to indicate we want fresh data from server
+    sessionStorage.setItem('force_server_refresh', 'true');
+
+    // Call the resetEverything function to clear in-memory state
+    resetEverything();
+
+    // Refresh the page to load fresh data from server
+    window.location.reload();
+  }, [resetEverything]);
+
+  // Handle confirmation for reset
+  const handleResetConfirm = () => {
+    setShowResetModal(false);
+    resetPage();
+  };
 
   // Load the list of saved animations when the component mounts or when a new animation is saved
   useEffect(() => {
-    setSavedAnimations(getSavedAnimations());
+    // Skip if already loading to prevent duplicate API calls
+    if (isLoadingRef.current) return;
+
+    const fetchAnimations = async () => {
+      try {
+        isLoadingRef.current = true; // Set loading flag
+        const animationsList = await getSavedAnimations();
+        setSavedAnimations(animationsList);
+      } catch (error) {
+        console.error('Error fetching saved animations:', error);
+        setSavedAnimations([]); // Set to empty array if there's an error
+      } finally {
+        isLoadingRef.current = false; // Clear loading flag
+      }
+    };
+
+    fetchAnimations();
   }, [getSavedAnimations]);
 
   // Close dropdown when clicking outside
@@ -58,19 +107,20 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, [dropdownRef, mobileNavRef]);
 
-  const handleResetConfirm = () => {
-    resetEverything();
-    setShowResetModal(false);
-  };
-
-  const handleSave = () => {
+  const handleSave = async () => {
     if (animationName.trim()) {
       // Use chatHistory directly from AnimationContext
-      saveAnimation(animationName.trim(), chatHistory);
+      await saveAnimation(animationName.trim(), chatHistory);
       setShowSaveModal(false);
       setAnimationName('');
+
       // Update the list of saved animations
-      setSavedAnimations(getSavedAnimations());
+      try {
+        const animationsList = await getSavedAnimations();
+        setSavedAnimations(animationsList);
+      } catch (error) {
+        console.error('Error updating saved animations list:', error);
+      }
     }
   };
 
@@ -300,19 +350,55 @@ const Header: React.FC<HeaderProps> = ({
               <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10">
                 <ul className="py-1">
                   {savedAnimations.length > 0 ? (
-                    savedAnimations.map((name) => (
-                      <li key={name}>
-                        <button
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
-                          onClick={() => {
-                            loadAnimation(name);
-                            setDropdownOpen(false);
-                          }}
-                        >
-                          {name}
-                        </button>
-                      </li>
-                    ))
+                    savedAnimations.map((animation) => {
+                      // Handle both string names and object structures
+                      const name = typeof animation === 'string' ? animation : animation.name;
+                      const id = typeof animation === 'string' ? null : animation.id;
+
+                      return (
+                        <li key={id || name} className="border-b border-gray-700 last:border-b-0">
+                          <div className="flex justify-between items-center px-4 py-2">
+                            <button
+                              className="text-left text-sm text-gray-200 hover:text-bat-yellow flex-grow truncate pr-2"
+                              onClick={async () => {
+                                try {
+                                  await loadAnimation(name);
+                                  setDropdownOpen(false);
+                                } catch (error) {
+                                  console.error(`Error loading animation "${name}":`, error);
+                                  alert(`Failed to load animation "${name}". Check console for details.`);
+                                }
+                              }}
+                            >
+                              {name}
+                            </button>
+                            <button
+                              className="text-red-400 hover:text-red-300 text-xs"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete animation "${name}"?`)) {
+                                  try {
+                                    const success = await deleteAnimation(name);
+                                    if (success) {
+                                      // Refresh the list
+                                      const animationsList = await getSavedAnimations();
+                                      setSavedAnimations(animationsList);
+                                    } else {
+                                      alert(`Failed to delete animation "${name}".`);
+                                    }
+                                  } catch (error) {
+                                    console.error(`Error deleting animation "${name}":`, error);
+                                    alert(`Error deleting animation "${name}". Check console for details.`);
+                                  }
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })
                   ) : (
                     <li className="px-4 py-2 text-sm text-gray-400">No saved animations</li>
                   )}

@@ -3,10 +3,32 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import AnimationCanvas from './components/AnimationCanvas';
 import ChatInterface from './components/ChatInterface';
 import Header from './components/Header';
-import { AnimationProvider } from './contexts/AnimationContext';
+import { AnimationProvider, useAnimation } from './contexts/AnimationContext';
 import { MovieProvider } from './contexts/MovieContext';
 import AnimationControls from './components/AnimationControls';
 import MovieEditorPage from './pages/MovieEditorPage';
+
+// Connector component that gets data from AnimationContext and passes it to MovieProvider
+// This pattern properly addresses the context dependency without creating circular references
+// We're explicitly connecting the contexts through props rather than having MovieContext
+// try to consume AnimationContext directly
+const MovieContextConnector: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const animationContext = useAnimation();
+
+  // Pass relevant data from animation context to movie context
+  // This creates a clean separation and explicit data flow between contexts
+  const animationData = {
+    svgContent: animationContext.svgContent,
+    chatHistory: animationContext.chatHistory,
+    generateAnimation: animationContext.generateAnimation
+  };
+
+  return (
+    <MovieProvider animationData={animationData}>
+      {children}
+    </MovieProvider>
+  );
+};
 
 // Main animation editor component
 const AnimationEditor = () => {
@@ -71,13 +93,13 @@ function App() {
   return (
     <Router>
       <AnimationProvider>
-        <MovieProvider>
+        <MovieContextConnector>
           <Routes>
             <Route path="/" element={<AnimationEditor />} />
             <Route path="/movie-editor" element={<MovieEditorPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
-        </MovieProvider>
+        </MovieContextConnector>
       </AnimationProvider>
     </Router>
   );

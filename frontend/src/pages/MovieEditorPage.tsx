@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useMovie } from '../contexts/MovieContext';
 import StoryboardPanel from '../components/StoryboardPanel';
@@ -7,12 +7,14 @@ import AnimationControls from '../components/AnimationControls';
 import StoryboardGeneratorModal from '../components/StoryboardGeneratorModal';
 import { MovieApi, StoryboardResponse } from '../services/movie.api';
 import ConfirmationModal from '../components/ConfirmationModal';
-import { AnimationApi } from '../services/api';
+import { AnimationApi, AnimationStorageApi, MovieStorageApi } from '../services/api';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import { Message } from '../contexts/AnimationContext';
 import ClipEditor from '../components/ClipEditor';
 import Header from '../components/Header';
 import SvgThumbnail from '../components/SvgThumbnail';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useAnimation } from '../contexts/AnimationContext';
 
 const MovieEditorPage: React.FC = () => {
   const {
@@ -31,7 +33,9 @@ const MovieEditorPage: React.FC = () => {
     currentPlaybackPosition,
     getActiveClip,
     setCurrentPlaybackPosition,
-    deleteStoryboard
+    deleteStoryboard,
+    getSavedStoryboards,
+    createNewStoryboard
   } = useMovie();
 
   // Add useEffect to track changes to currentStoryboard
@@ -91,36 +95,79 @@ const MovieEditorPage: React.FC = () => {
 
   // Load the most recent storyboard on component mount if available
   useEffect(() => {
-    const savedStoryboardIds = savedStoryboards;
-    if (savedStoryboardIds.length > 0 && currentStoryboard.clips.length === 0) {
-      // Sort by last updated date and load the most recent one
-      const storyboardsString = localStorage.getItem('svg-animator-storyboards');
-      if (storyboardsString) {
+    const fetchStoryboards = async () => {
+      try {
+        await getSavedStoryboards();
+
+        // If no clips, try to load from localStorage
+        if (currentStoryboard.clips.length === 0) {
+          const storyboardsString = localStorage.getItem('svg-animator-storyboards');
+          if (storyboardsString) {
+            try {
+              const storyboards = JSON.parse(storyboardsString);
+              const storyboardsList = Object.values(storyboards) as Storyboard[];
+
+              // Convert stored dates back to Date objects for comparison
+              storyboardsList.forEach((sb) => {
+                sb.updatedAt = new Date(sb.updatedAt);
+              });
+
+              // Sort by updated date (newest first)
+              storyboardsList.sort((a, b) =>
+                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+              );
+
+              if (storyboardsList.length > 0) {
+                const newestStoryboard = storyboardsList[0];
+                console.log(`Loading most recent storyboard: ${newestStoryboard.name} with ${newestStoryboard.clips?.length || 0} clips`);
+                try {
+                  await loadStoryboard(newestStoryboard.id);
+                } catch (loadError) {
+                  console.error('Error loading most recent storyboard:', loadError);
+                  // Display an error toast or notification to the user
+                  alert(`Failed to load storyboard: ${loadError instanceof Error ? loadError.message : 'Unknown error'}`);
+                }
+              }
+            } catch (error) {
+              console.error('Error loading most recent storyboard:', error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching storyboards:', error);
+      }
+    };
+
+    fetchStoryboards();
+  }, [loadStoryboard]);
+
+  // Check for movie ID in URL
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const movieId = urlParams.get('id');
+
+    if (movieId) {
+      console.log(`Found movie ID in URL: ${movieId}`);
+      const loadMovieFromUrl = async () => {
         try {
-          const storyboards = JSON.parse(storyboardsString);
-          const storyboardsList = Object.values(storyboards) as Storyboard[];
-
-          // Convert stored dates back to Date objects for comparison
-          storyboardsList.forEach((sb) => {
-            sb.updatedAt = new Date(sb.updatedAt);
-          });
-
-          // Sort by updated date (newest first)
-          storyboardsList.sort((a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-          );
-
-          if (storyboardsList.length > 0) {
-            const newestStoryboard = storyboardsList[0];
-            console.log(`Loading most recent storyboard: ${newestStoryboard.name} with ${newestStoryboard.clips?.length || 0} clips`);
-            loadStoryboard(newestStoryboard.id);
+          const success = await loadStoryboard(movieId);
+          if (!success) {
+            console.error(`Failed to load movie with ID: ${movieId}`);
+            alert(`Movie with ID "${movieId}" not found. Creating a new storyboard instead.`);
+            // Create new storyboard
+            createNewStoryboard();
           }
         } catch (error) {
-          console.error('Error loading most recent storyboard:', error);
+          console.error(`Error loading movie with ID ${movieId}:`, error);
+          alert(`Error loading movie: ${error instanceof Error ? error.message : 'Unknown error'}. Creating a new storyboard instead.`);
+          // Create new storyboard
+          createNewStoryboard();
         }
-      }
+      };
+
+      loadMovieFromUrl();
     }
-  }, [savedStoryboards, currentStoryboard.clips.length, loadStoryboard]);
+  }, [loadStoryboard, createNewStoryboard]);
 
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -138,12 +185,27 @@ const MovieEditorPage: React.FC = () => {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [storyboardToDelete, setStoryboardToDelete] = useState<string | null>(null);
 
+  // Function to reset application state
+  const resetApplication = useCallback(() => {
+    // Clear localStorage
+    localStorage.removeItem('svg-animator-storyboards');
+
+    // Create a new empty storyboard
+    createNewStoryboard();
+
+    // Clear URL parameters
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    // Reload the page to ensure a clean state
+    window.location.reload();
+  }, [createNewStoryboard]);
+
   const handleClipSelect = (clipId: string) => {
     setActiveClipId(clipId);
   };
 
-  const handleSave = () => {
-    saveStoryboard();
+  const handleSave = async () => {
+    await saveStoryboard();
     setShowSaveModal(false);
   };
 
@@ -217,23 +279,52 @@ const MovieEditorPage: React.FC = () => {
 
   // Process a storyboard response into clips
   const processStoryboard = async (storyboard: StoryboardResponse, aiProvider: 'openai' | 'claude') => {
-    // Show the progress modal
-    setShowGeneratingClipsModal(true);
-    setGenerationProgress({ current: 0, total: storyboard.scenes.length });
+    console.log('Beginning storyboard generation...');
+
+    // Create a new storyboard
+    const storyboardId = uuidv4(); // Generate a stable ID for the storyboard
+    console.log(`Created new storyboard with ID: ${storyboardId}`);
+
+    const newStoryboard: Storyboard = {
+      id: storyboardId,
+      name: storyboard.title || 'New Movie',
+      description: storyboard.description || '',
+      clips: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      generationStatus: {
+        inProgress: true,
+        startedAt: new Date(),
+        totalScenes: storyboard.scenes.length,
+        completedScenes: 0
+      }
+    };
 
     try {
-      // Create a new storyboard object to fill with clips
-      const newStoryboard = {
-        id: uuidv4(),
-        name: storyboard.title || 'New Movie',
-        description: storyboard.description || '',
-        clips: [] as MovieClip[],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      // Set the initial storyboard and save it to the server right away
+      setCurrentStoryboard(newStoryboard);
+
+      // Save the initial storyboard to the server using direct API call
+      console.log('Saving initial storyboard to server...');
+      try {
+        // Use direct API call to avoid stale state issues
+        const result = await MovieStorageApi.saveMovie(newStoryboard);
+        console.log(`Initial storyboard saved to server with ID: ${result.id}`);
+
+        // CRITICAL: Store the server-assigned ID if different
+        if (result.id !== storyboardId) {
+          console.log(`Server assigned different ID: ${result.id} (original: ${storyboardId})`);
+          newStoryboard.id = result.id;
+        }
+      } catch (error) {
+        console.error('Error saving initial storyboard:', error);
+      }
 
       // Track any scene generation errors
       const errors: { sceneIndex: number, error: string }[] = [];
+
+      // Track successful clips locally to avoid state timing issues
+      let successfulClipsCount = 0;
 
       // Generate each scene manually to track progress
       for (let i = 0; i < storyboard.scenes.length; i++) {
@@ -252,28 +343,95 @@ const MovieEditorPage: React.FC = () => {
             throw new Error(`Invalid SVG generated for scene ${i+1}`);
           }
 
+          // Create chat history for this scene
+          const chatHistory = [{
+            id: uuidv4(),
+            sender: 'user' as 'user',
+            text: scene.svgPrompt,
+            timestamp: new Date()
+          }, {
+            id: uuidv4(),
+            sender: 'ai' as 'ai',
+            text: result.message,
+            timestamp: new Date()
+          }];
+
+          // Get the scene name
+          const sceneName = `Scene ${i + 1}: ${scene.id || 'Untitled'}`;
+          console.log(`Generated scene ${i+1} with name: ${sceneName}`);
+
+          // Use the animation ID returned from the API since the backend now saves animations automatically
+          // If no ID is returned, log a warning but continue with local data
+          if (!result.animationId) {
+            console.warn(`No animation ID returned for scene ${i+1}, this may indicate the backend didn't save it`);
+          } else {
+            console.log(`Scene ${i+1} saved with animation ID: ${result.animationId}`);
+          }
+
           // Add this scene to the storyboard
           const newClip: MovieClip = {
             id: uuidv4(),
-            name: `Scene ${i + 1}: ${scene.id || 'Untitled'}`,
+            name: sceneName,
             svgContent: result.svg,
             duration: scene.duration || 5,
             order: i,
             prompt: scene.svgPrompt,
-            chatHistory: [{
-              id: uuidv4(),
-              sender: 'user' as 'user',
-              text: scene.svgPrompt,
-              timestamp: new Date()
-            }, {
-              id: uuidv4(),
-              sender: 'ai' as 'ai',
-              text: result.message,
-              timestamp: new Date()
-            }]
+            chatHistory,
+            animationId: result.animationId // Use the animation ID from the generate API result
           };
 
-          newStoryboard.clips.push(newClip);
+          // Log the animation ID before updating state
+          console.log(`About to add clip with animation ID: ${result.animationId}`);
+
+          // Update the storyboard with the new clip and updated generation status
+          setCurrentStoryboard(prevStoryboard => {
+            // Create a deep copy of the existing clips to avoid reference issues
+            const existingClips = JSON.parse(JSON.stringify(prevStoryboard.clips || []));
+
+            // Important: Create a fresh newClip object to ensure all properties are correctly serialized
+            const clipToAdd = {
+              id: newClip.id,
+              name: newClip.name,
+              svgContent: newClip.svgContent,
+              duration: newClip.duration,
+              order: newClip.order,
+              prompt: newClip.prompt || "",
+              chatHistory: newClip.chatHistory || [],
+              animationId: result.animationId // Explicitly set again to ensure it's included
+            };
+
+            const updatedStoryboard = {
+              ...prevStoryboard,
+              clips: [...existingClips, clipToAdd],
+              updatedAt: new Date(),
+              generationStatus: {
+                ...prevStoryboard.generationStatus!,
+                completedScenes: (prevStoryboard.generationStatus?.completedScenes || 0) + 1
+              }
+            };
+
+            // Log the storyboard for debugging
+            console.log(`Updated storyboard now has ${updatedStoryboard.clips.length} clips`);
+            console.log(`Last clip has animation ID: ${updatedStoryboard.clips[updatedStoryboard.clips.length-1].animationId}`);
+
+            // CRITICAL FIX: Save the storyboard directly with the updated clips
+            // We need to save the storyboard directly using the updated object, not the React state
+            MovieStorageApi.saveMovie(updatedStoryboard).then(result => {
+              console.log(`Direct save successful with ID: ${result.id}`);
+            }).catch(err => {
+              console.error('Error in direct storyboard save:', err);
+            });
+
+            // Increment our local counter for successful clips
+            successfulClipsCount++;
+
+            return updatedStoryboard;
+          });
+
+          // Save storyboard after each clip to persist progress
+          // REMOVED: await saveStoryboard() - this would use stale state
+          console.log(`Storyboard updated with scene ${i+1} and saved to server`);
+
           console.log(`Successfully generated SVG for scene ${i+1}`);
 
           // Update progress
@@ -287,32 +445,50 @@ const MovieEditorPage: React.FC = () => {
         }
       }
 
-      // Check if we have any successful clips
-      if (newStoryboard.clips.length === 0) {
+      // Check if we have any successful clips - Using our local counter instead of state
+      if (successfulClipsCount === 0) {
         throw new Error(`Failed to generate any scenes for the storyboard. ${errors.length > 0 ?
           `Errors: ${errors.map(e => `Scene ${e.sceneIndex + 1}: ${e.error}`).join(', ')}` : ''}`);
+      } else {
+        console.log(`Successfully generated ${successfulClipsCount} scenes for the storyboard`);
+
+        // If there were some errors but not all
+        if (errors.length > 0) {
+          console.warn(`Generated ${successfulClipsCount} scenes but ${errors.length} failed`);
+        }
       }
 
-      // If there were some errors but not all
-      if (errors.length > 0) {
-        console.warn(`Generated ${newStoryboard.clips.length} scenes but ${errors.length} failed`);
-      }
+      // Update status to completed
+      setCurrentStoryboard(prevStoryboard => {
+        const finalStoryboard = {
+          ...prevStoryboard,
+          updatedAt: new Date(),
+          generationStatus: {
+            ...prevStoryboard.generationStatus!,
+            inProgress: false,
+            completedAt: new Date()
+          }
+        };
 
-      // Set the new storyboard with all clips
-      setCurrentStoryboard(newStoryboard);
+        // Do a direct save of the final storyboard with the same ID to avoid creating a new file
+        console.log(`Final save of storyboard with ID ${finalStoryboard.id}`);
+        MovieStorageApi.saveMovie(finalStoryboard).then(result => {
+          console.log(`Final storyboard saved successfully with ID: ${result.id}`);
+        }).catch(err => {
+          console.error('Error in final storyboard save:', err);
+        });
+
+        return finalStoryboard;
+      });
+
+      // Final save with completed status
+      // await saveStoryboard(); - This was creating a second file with a different ID
+      console.log(`Storyboard generation completed with ${newStoryboard.clips.length} clips`);
 
       // Set the first clip as active if available
       if (newStoryboard.clips.length > 0) {
         setActiveClipId(newStoryboard.clips[0].id);
       }
-
-      // Save the new storyboard
-      await saveStoryboard();
-      console.log(`Storyboard saved with ${newStoryboard.clips.length} clips`);
-
-      // Force refresh the state to make sure UI updates
-      const refreshedStoryboard = {...newStoryboard, updatedAt: new Date()};
-      setCurrentStoryboard(refreshedStoryboard);
 
       // Hide the progress modal
       setShowGeneratingClipsModal(false);
@@ -320,18 +496,46 @@ const MovieEditorPage: React.FC = () => {
 
       // Show warning if some scenes failed
       if (errors.length > 0) {
-        const errorMessage = `Generated ${newStoryboard.clips.length} out of ${storyboard.scenes.length} scenes.
-        ${errors.length} scenes failed to generate.`;
-        setGenerationError(errorMessage);
-        setShowErrorModal(true);
+        const warningMessage = `Generated ${successfulClipsCount} out of ${storyboard.scenes.length} scenes. ${errors.length} scenes failed to generate.`;
+        console.warn(warningMessage);
+        // Don't set error message or show error modal for partial successes
+        // Just log a warning in the console instead
       }
     } catch (error) {
       console.error('Error processing storyboard:', error);
 
-      // Set error and show error modal
-      setGenerationError(error instanceof Error ? error.message : 'Unknown error processing storyboard');
+      // Update status to indicate failure
+      setCurrentStoryboard(prevStoryboard => {
+        const errorStoryboard = {
+          ...prevStoryboard,
+          updatedAt: new Date(),
+          generationStatus: {
+            ...prevStoryboard.generationStatus!,
+            inProgress: false,
+            completedAt: new Date()
+          }
+        };
+
+        // Direct save of error state using the same ID to prevent creating a new file
+        console.log(`Saving error state for storyboard with ID ${errorStoryboard.id}`);
+        MovieStorageApi.saveMovie(errorStoryboard).then(result => {
+          console.log(`Error state saved with ID: ${result.id}`);
+        }).catch(err => {
+          console.error('Error saving storyboard error state:', err);
+        });
+
+        return errorStoryboard;
+      });
+
+      // Extract the error message
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error processing storyboard';
+      console.error(`Generation failed: ${errorMsg}`);
+
+      // Only set error and show modal for complete failures
+      setGenerationError(errorMsg);
       setShowErrorModal(true);
 
+      // Hide modals and reset state
       setShowGeneratingClipsModal(false);
       setIsGenerating(false);
     }
@@ -361,6 +565,7 @@ const MovieEditorPage: React.FC = () => {
             activeClipId={activeClipId}
             onClipSelect={handleClipSelect}
             onAddClip={handleAddClip}
+            storyboard={currentStoryboard}
           />
         </div>
 
@@ -388,52 +593,13 @@ const MovieEditorPage: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <>
-                    {currentStoryboard.clips
-                      .sort((a, b) => a.order - b.order)
-                      .map((clip) => (
-                        <div
-                          key={clip.id}
-                          className={`flex-shrink-0 w-40 ${
-                            clip.id === activeClipId ? 'p-0.5' : 'p-0'
-                          }`}
-                        >
-                          <div
-                            className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all h-full ${
-                              clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'
-                            }`}
-                            onClick={() => handleClipSelect(clip.id)}
-                          >
-                            {/* Clip thumbnail preview */}
-                            <div className="aspect-video overflow-hidden">
-                              {clip.svgContent ? (
-                                <SvgThumbnail svgContent={clip.svgContent} />
-                              ) : (
-                                <div className="text-gray-500 text-xs flex items-center justify-center h-full">No preview</div>
-                              )}
-                            </div>
-
-                            {/* Clip info */}
-                            <div className="p-2 bg-gotham-black">
-                              <div className="text-sm font-medium truncate">{clip.name}</div>
-                              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                                <span>{clip.duration}s</span>
-                                <span>#{clip.order + 1}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    <button
-                      className="btn btn-outline flex items-center justify-center h-full self-stretch my-auto flex-shrink-0 px-4"
-                      onClick={handleAddClip}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span className="ml-2">Add Clip</span>
-                    </button>
-                  </>
+                  <StoryboardPanel
+                    clips={currentStoryboard.clips}
+                    activeClipId={activeClipId}
+                    onClipSelect={handleClipSelect}
+                    onAddClip={handleAddClip}
+                    storyboard={currentStoryboard}
+                  />
                 )}
               </div>
             </div>
@@ -619,68 +785,104 @@ const MovieEditorPage: React.FC = () => {
             </p>
             <div className="max-h-96 overflow-y-auto">
               {(() => {
-                // Get the storyboards from local storage
-                const storyboardsString = localStorage.getItem('svg-animator-storyboards');
-                if (!storyboardsString) {
+                // Use state to store the fetched storyboards
+                const [loadedStoryboards, setLoadedStoryboards] = useState<Storyboard[]>([]);
+                const [isLoading, setIsLoading] = useState(false);
+                const [loadError, setLoadError] = useState<string | null>(null);
+
+                // When modal opens, fetch storyboards
+                useEffect(() => {
+                  if (showLoadModal) {
+                    setIsLoading(true);
+                    setLoadError(null);
+
+                    // Fetch storyboards
+                    const fetchStoryboards = async () => {
+                      try {
+                        // Get IDs from context
+                        const storyboardIds = await getSavedStoryboards();
+
+                        // Fetch full storyboard details
+                        const storyboardsData: Storyboard[] = [];
+                        for (const id of storyboardIds) {
+                          try {
+                            const storyboard = await MovieStorageApi.getMovie(id);
+                            if (storyboard) {
+                              storyboardsData.push(storyboard);
+                            }
+                          } catch (err) {
+                            console.error(`Error fetching storyboard ${id}:`, err);
+                          }
+                        }
+
+                        // Sort by updated date (newest first)
+                        storyboardsData.sort((a, b) =>
+                          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+                        );
+
+                        setLoadedStoryboards(storyboardsData);
+                      } catch (error) {
+                        console.error('Error fetching storyboards:', error);
+                        setLoadError('Failed to load storyboards');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    };
+
+                    fetchStoryboards();
+                  }
+                }, [showLoadModal]); // Remove savedStoryboards from dependencies
+
+                // Display loading state
+                if (isLoading) {
+                  return <p className="text-gray-400">Loading storyboards...</p>;
+                }
+
+                // Display error state
+                if (loadError) {
+                  return <p className="text-red-400">{loadError}</p>;
+                }
+
+                // Display empty state
+                if (loadedStoryboards.length === 0) {
                   return <p className="text-gray-400">No saved storyboards found.</p>;
                 }
 
-                try {
-                  const storyboards = JSON.parse(storyboardsString);
-                  const storyboardsList = Object.values(storyboards) as Storyboard[];
-
-                  // Convert stored dates back to Date objects for comparison
-                  storyboardsList.forEach((sb: any) => {
-                    sb.updatedAt = new Date(sb.updatedAt);
-                  });
-
-                  // Sort by updated date (newest first)
-                  storyboardsList.sort((a: any, b: any) =>
-                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-                  );
-
-                  if (storyboardsList.length === 0) {
-                    return <p className="text-gray-400">No saved storyboards found.</p>;
-                  }
-
-                  return storyboardsList.map((storyboard: any) => (
+                // Display storyboards list
+                return loadedStoryboards.map((storyboard) => (
+                  <div
+                    key={storyboard.id}
+                    className="border border-gray-700 hover:border-bat-yellow rounded-md p-3 mb-2"
+                  >
                     <div
-                      key={storyboard.id}
-                      className="border border-gray-700 hover:border-bat-yellow rounded-md p-3 mb-2"
+                      className="cursor-pointer"
+                      onClick={async () => {
+                        await loadStoryboard(storyboard.id);
+                        setShowLoadModal(false);
+                      }}
                     >
-                      <div
-                        className="cursor-pointer"
-                        onClick={() => {
-                          loadStoryboard(storyboard.id);
-                          setShowLoadModal(false);
-                        }}
-                      >
-                        <div className="font-medium text-bat-yellow">{storyboard.name}</div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          {storyboard.clips?.length || 0} clips
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Updated: {new Date(storyboard.updatedAt).toLocaleString()}
-                        </div>
+                      <div className="font-medium text-bat-yellow">{storyboard.name}</div>
+                      <div className="text-sm text-gray-400 mt-1">
+                        {storyboard.clips?.length || 0} clips
                       </div>
-                      <div className="mt-2 pt-2 border-t border-gray-700">
-                        <button
-                          className="text-xs text-red-400 hover:text-red-300"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setStoryboardToDelete(storyboard.id);
-                            setShowDeleteConfirmation(true);
-                          }}
-                        >
-                          Delete
-                        </button>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Updated: {new Date(storyboard.updatedAt).toLocaleString()}
                       </div>
                     </div>
-                  ));
-                } catch (error) {
-                  console.error('Error parsing storyboards:', error);
-                  return <p className="text-red-400">Error loading storyboards.</p>;
-                }
+                    <div className="mt-2 pt-2 border-t border-gray-700">
+                      <button
+                        className="text-xs text-red-400 hover:text-red-300"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStoryboardToDelete(storyboard.id);
+                          setShowDeleteConfirmation(true);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ));
               })()}
             </div>
           </div>
@@ -698,9 +900,9 @@ const MovieEditorPage: React.FC = () => {
         message="Are you sure you want to delete this storyboard? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (storyboardToDelete) {
-            deleteStoryboard(storyboardToDelete);
+            await deleteStoryboard(storyboardToDelete);
             setStoryboardToDelete(null);
             setShowDeleteConfirmation(false);
           }
