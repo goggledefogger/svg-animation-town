@@ -634,12 +634,9 @@ const MovieEditorPage: React.FC = () => {
 
       // Generate each scene manually to track progress
       // If we're resuming, we'll start at the specified index
-      for (let i = 0; i < storyboard.scenes.length; i++) {
+      const scenePromises = storyboard.scenes.map(async (scene, i) => {
         // Convert i to the absolute scene index (for the entire storyboard)
         const absoluteSceneIndex = i + startingSceneIndex;
-
-        // Get the scene from the restartable scenes array
-        const scene = storyboard.scenes[i];
 
         try {
           // Update the progress display
@@ -781,7 +778,9 @@ const MovieEditorPage: React.FC = () => {
           // On mobile, sleep a bit longer after an error to allow recovery
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
-      }
+      });
+
+      await Promise.all(scenePromises);
 
       // Check if we have any successful clips - Using our local counter instead of state
       if (successfulClipsCount === 0) {
