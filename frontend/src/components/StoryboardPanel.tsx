@@ -209,9 +209,6 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     return null; // Return null for regular items
   }, []);
 
-  // Calculate the content height (subtract button height from container)
-  const buttonHeight = "44px"; // btn-sm height + padding + border
-
   // If renderHeaderContent is true, just return the generation badge for the header
   if (renderHeaderContent && hasGenerationStatus) {
     return (
@@ -227,10 +224,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   }
 
   return (
-    // Main container - grid layout to ensure fixed areas
-    <div className="grid grid-rows-[auto_1fr_auto] h-full w-full">
-      {/* Top section - fixed at top */}
-      <div className="contents">
+    <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] h-full w-full overflow-hidden">
+      {/* Top section */}
+      <div>
         {/* Generation status - desktop only */}
         {hasGenerationStatus && (
           <div className="hidden md:block p-2 bg-gray-800 rounded-md mb-2">
@@ -273,8 +269,8 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         )}
       </div>
 
-      {/* Middle section - scrollable content */}
-      <div className="overflow-hidden min-h-0 w-full">
+      {/* Middle section - scrollable content with minmax and max-height to constrain even when parent changes */}
+      <div className="overflow-auto max-h-[calc(100vh-150px)]">
         {/* No clips message */}
         {clips.length === 0 && (
           <div className="flex flex-col items-center justify-center border border-dashed border-gray-600 rounded-lg p-4 h-32 mb-2">
@@ -285,7 +281,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
 
         {/* Clips list with responsive scrolling */}
         {clips.length > 0 && (
-          <div className="h-full w-full md:overflow-y-auto md:overflow-x-hidden overflow-x-auto overflow-y-hidden">
+          <div className="h-full w-full overflow-auto">
             {/* For mobile: horizontal layout, For desktop: vertical layout */}
             <div className="flex md:flex-col md:space-y-3 space-x-3 md:space-x-0 p-1 w-max md:w-full">
               {clips
@@ -334,8 +330,8 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         )}
       </div>
 
-      {/* Bottom section - fixed at bottom */}
-      <div className="pt-2 border-t border-gray-700 mt-2 w-full">
+      {/* Bottom section */}
+      <div className="pt-2 border-t border-gray-700 mt-auto w-full">
         <button
           className="w-full btn btn-sm btn-primary"
           onClick={() => setShowClipSelector(true)}
