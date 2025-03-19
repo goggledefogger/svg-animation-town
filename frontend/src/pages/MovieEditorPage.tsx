@@ -803,7 +803,8 @@ const MovieEditorPage: React.FC = () => {
           generationStatus: {
             ...prevStoryboard.generationStatus!,
             inProgress: false,
-            completedAt: new Date()
+            completedAt: new Date(),
+            completedScenes: prevStoryboard.generationStatus!.totalScenes // Set completedScenes to totalScenes
           }
         };
 
