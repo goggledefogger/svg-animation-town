@@ -113,42 +113,73 @@ export const AnimationApi = {
     console.log('Using AI provider:', provider);
 
     try {
-      const data = await fetchApi<any>(
-        '/animation/generate',
-        {
-          method: 'POST',
-          body: JSON.stringify({ prompt, provider }),
-        }
-      );
+      // Set a longer timeout for mobile devices that may have slow connections
+      const fetchOptions = {
+        method: 'POST',
+        body: JSON.stringify({ prompt, provider }),
+      };
 
-      console.log('Received animation data from generate endpoint');
+      // Use an AbortController to allow cancellation if it takes too long
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-      // Handle both new SVG-based responses and legacy element-based responses
-      if (data.svg) {
-        if (typeof data.svg !== 'string' || !data.svg.includes('<svg')) {
-          console.error('Invalid SVG content received:', typeof data.svg);
-          console.error('SVG preview:', data.svg?.substring(0, 100));
-          throw new CustomApiError('Invalid SVG content received from server');
-        }
+      // Add the signal to the options
+      const optionsWithSignal = {
+        ...fetchOptions,
+        signal: controller.signal
+      };
 
-        // Log animation ID from response
-        if (data.animationId) {
-          console.log(`API generate endpoint returned animation ID: ${data.animationId}`);
+      try {
+        // Call the API with timeout protection
+        const data = await fetchApi<any>(
+          '/animation/generate',
+          optionsWithSignal
+        );
+
+        // Clear the timeout if the request completed
+        clearTimeout(timeoutId);
+
+        console.log('Received animation data from generate endpoint');
+
+        // Handle both new SVG-based responses and legacy element-based responses
+        if (data.svg) {
+          if (typeof data.svg !== 'string' || !data.svg.includes('<svg')) {
+            console.error('Invalid SVG content received:', typeof data.svg);
+            console.error('SVG preview:', data.svg?.substring(0, 100));
+            throw new CustomApiError('Invalid SVG content received from server');
+          }
+
+          // Log animation ID from response
+          if (data.animationId) {
+            console.log(`API generate endpoint returned animation ID: ${data.animationId}`);
+          } else {
+            console.warn('API generate endpoint did not return an animation ID');
+          }
+
+          return {
+            svg: data.svg,
+            message: data.message || 'Animation created successfully!',
+            animationId: data.animationId // Include the animation ID if provided by backend
+          };
+        } else if (data.elements && Array.isArray(data.elements)) {
+          console.error('Received legacy element-based response that will not work with the new version');
+          throw new CustomApiError('Received legacy element-based response that is not compatible with the current version');
         } else {
-          console.warn('API generate endpoint did not return an animation ID');
+          console.error('Invalid response format from animation API:', data);
+          throw new CustomApiError('Invalid response format: missing SVG content', 500, data);
+        }
+      } catch (fetchError) {
+        // Clear the timeout if there was an error
+        clearTimeout(timeoutId);
+
+        // Handle AbortController errors specifically
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          console.error('Animation generation request timed out');
+          throw new CustomApiError('Animation generation timed out after 60 seconds', 408);
         }
 
-        return {
-          svg: data.svg,
-          message: data.message || 'Animation created successfully!',
-          animationId: data.animationId // Include the animation ID if provided by backend
-        };
-      } else if (data.elements && Array.isArray(data.elements)) {
-        console.error('Received legacy element-based response that will not work with the new version');
-        throw new CustomApiError('Received legacy element-based response that is not compatible with the current version');
-      } else {
-        console.error('Invalid response format from animation API:', data);
-        throw new CustomApiError('Invalid response format: missing SVG content', 500, data);
+        // Rethrow the original error
+        throw fetchError;
       }
     } catch (error) {
       console.error('Error generating animation:', error);
@@ -356,7 +387,7 @@ export const AnimationStorageApi = {
           hasChat: Array.isArray(data.animation.chatHistory),
           chatLength: Array.isArray(data.animation.chatHistory) ? data.animation.chatHistory.length : 0
         });
-        
+
         return data.animation;
       } else {
         throw new Error('Invalid response from server');

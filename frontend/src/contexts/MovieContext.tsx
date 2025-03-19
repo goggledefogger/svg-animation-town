@@ -34,6 +34,7 @@ export interface Storyboard {
     completedScenes?: number;
     startedAt?: Date;
     completedAt?: Date;
+    error?: string; // Add error field to track generation errors
   };
 }
 
