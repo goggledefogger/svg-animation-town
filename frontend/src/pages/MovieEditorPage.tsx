@@ -319,7 +319,19 @@ const MovieEditorPage: React.FC = () => {
   const [showStoryboardGeneratorModal, setShowStoryboardGeneratorModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGeneratingClipsModal, setShowGeneratingClipsModal] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
+
+  // Update with a properly defined interface for the progress state
+  interface GenerationProgressState {
+    current: number;
+    total: number;
+    resumedFrom?: number;
+  }
+
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgressState>({
+    current: 0,
+    total: 0
+  });
+
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
@@ -360,6 +372,61 @@ const MovieEditorPage: React.FC = () => {
     exportStoryboard(format);
     setShowExportModal(false);
   };
+
+  // Add a new effect to check for incomplete generations when the page loads
+  useEffect(() => {
+    const checkIncompleteGenerations = async () => {
+      try {
+        // Only run this if we're not already generating something
+        if (isGenerating) return;
+
+        // Check if there's a current storyboard that's incomplete
+        if (currentStoryboard?.generationStatus?.inProgress) {
+          console.log('Found incomplete storyboard generation:', currentStoryboard.id);
+
+          // Show a confirmation to the user
+          const shouldResume = window.confirm(
+            `It looks like you have an incomplete movie generation "${currentStoryboard.name}". Would you like to resume where you left off?`
+          );
+
+          if (shouldResume) {
+            console.log('Resuming generation for storyboard:', currentStoryboard.id);
+            // Show the generating clips modal
+            setShowGeneratingClipsModal(true);
+            setIsGenerating(true);
+
+            // Determine which AI provider was being used
+            const aiProvider = currentStoryboard.aiProvider || 'openai';
+
+            // Resume the generation process - simulating the storyboard response
+            // We need to create a faux storyboard response from the existing storyboard
+            const resumeStoryboardResponse: StoryboardResponse = {
+              title: currentStoryboard.name,
+              description: currentStoryboard.description || '',
+              scenes: [] // This will be populated with remaining scenes
+            };
+
+            // If we have the original scenes data stored, use it
+            if (currentStoryboard.originalScenes) {
+              resumeStoryboardResponse.scenes = currentStoryboard.originalScenes;
+            } else {
+              // Without original scenes, we can only infer from clips
+              // This is a fallback and may not work perfectly
+              console.warn('No original scenes data found, using limited resume capability');
+            }
+
+            // Resume from the last completed scene
+            await resumeStoryboardGeneration(currentStoryboard, resumeStoryboardResponse, aiProvider);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for incomplete generations:', error);
+      }
+    };
+
+    // Run the check when the component mounts
+    checkIncompleteGenerations();
+  }, [currentStoryboard, isGenerating]);
 
   const handleGenerateStoryboard = async (prompt: string, aiProvider: 'openai' | 'claude') => {
     try {
@@ -409,39 +476,132 @@ const MovieEditorPage: React.FC = () => {
     }
   };
 
+  // Add a new function to resume storyboard generation
+  const resumeStoryboardGeneration = async (
+    storyboard: Storyboard,
+    storyboardResponse: StoryboardResponse,
+    aiProvider: 'openai' | 'claude'
+  ) => {
+    console.log('Resuming storyboard generation from scene:', storyboard.generationStatus?.completedScenes || 0);
+
+    try {
+      // Start from where we left off
+      const startSceneIndex = storyboard.generationStatus?.completedScenes || 0;
+
+      // Skip already completed scenes
+      const remainingScenes = storyboardResponse.scenes.slice(startSceneIndex);
+
+      // If no scenes left, just mark as complete
+      if (remainingScenes.length === 0) {
+        console.log('No remaining scenes to generate, marking as complete');
+
+        // Update status to completed
+        setCurrentStoryboard(prevStoryboard => {
+          const finalStoryboard = {
+            ...prevStoryboard,
+            updatedAt: new Date(),
+            generationStatus: {
+              ...prevStoryboard.generationStatus!,
+              inProgress: false,
+              completedAt: new Date()
+            }
+          };
+
+          MovieStorageApi.saveMovie(finalStoryboard).catch(err => {
+            console.error('Error in final storyboard save:', err);
+          });
+
+          return finalStoryboard;
+        });
+
+        setIsGenerating(false);
+        setShowGeneratingClipsModal(false);
+        return;
+      }
+
+      // Create modified response with only remaining scenes
+      const resumedResponse = {
+        ...storyboardResponse,
+        scenes: remainingScenes
+      };
+
+      // Process the remaining scenes
+      await processStoryboard(resumedResponse, aiProvider, startSceneIndex);
+    } catch (error) {
+      console.error('Error resuming storyboard generation:', error);
+      setGenerationError(error instanceof Error ? error.message : 'Unknown error resuming generation');
+      setShowErrorModal(true);
+      setIsGenerating(false);
+      setShowGeneratingClipsModal(false);
+    }
+  };
+
   // Process a storyboard response into clips
-  const processStoryboard = async (storyboard: StoryboardResponse, aiProvider: 'openai' | 'claude') => {
+  const processStoryboard = async (
+    storyboard: StoryboardResponse,
+    aiProvider: 'openai' | 'claude',
+    startingSceneIndex = 0
+  ) => {
     console.log('Beginning storyboard generation...');
 
-    // Create a new storyboard
-    const storyboardId = uuidv4(); // Generate a stable ID for the storyboard
-    console.log(`Created new storyboard with ID: ${storyboardId}`);
+    // If we're starting from the beginning, create a new storyboard
+    let storyboardId: string;
+    let newStoryboard: Storyboard;
 
-    const newStoryboard: Storyboard = {
-      id: storyboardId,
-      name: storyboard.title || 'New Movie',
-      description: storyboard.description || '',
-      clips: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      generationStatus: {
-        inProgress: true,
-        startedAt: new Date(),
-        totalScenes: storyboard.scenes.length,
-        completedScenes: 0
+    if (startingSceneIndex === 0) {
+      // Create a new storyboard
+      storyboardId = uuidv4();
+      console.log(`Created new storyboard with ID: ${storyboardId}`);
+
+      newStoryboard = {
+        id: storyboardId,
+        name: storyboard.title || 'New Movie',
+        description: storyboard.description || '',
+        clips: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        // Store the aiProvider so we know which to use for resuming
+        aiProvider: aiProvider,
+        // Store the original scenes to use for resuming
+        originalScenes: storyboard.scenes,
+        generationStatus: {
+          inProgress: true,
+          startedAt: new Date(),
+          totalScenes: storyboard.scenes.length,
+          completedScenes: 0
+        }
+      };
+    } else {
+      // We're resuming an existing storyboard
+      storyboardId = currentStoryboard!.id;
+      console.log(`Resuming storyboard with ID: ${storyboardId}`);
+
+      // Use the current storyboard as starting point
+      newStoryboard = {
+        ...currentStoryboard!,
+        updatedAt: new Date(),
+        generationStatus: {
+          ...currentStoryboard!.generationStatus!,
+          inProgress: true
+        }
+      };
+
+      // If we don't have original scenes yet, store them
+      if (!newStoryboard.originalScenes) {
+        newStoryboard.originalScenes = storyboard.scenes;
       }
-    };
+    }
 
     try {
       // Set the initial storyboard and save it to the server right away
       setCurrentStoryboard(newStoryboard);
 
       // Save the initial storyboard to the server using direct API call
-      console.log('Saving initial storyboard to server...');
+      console.log('Saving initial/resumed storyboard to server...');
       try {
         // Use direct API call to avoid stale state issues
         const result = await MovieStorageApi.saveMovie(newStoryboard);
-        console.log(`Initial storyboard saved to server with ID: ${result.id}`);
+        console.log(`Initial/resumed storyboard saved to server with ID: ${result.id}`);
 
         // CRITICAL: Store the server-assigned ID if different
         if (result.id !== storyboardId) {
@@ -449,7 +609,7 @@ const MovieEditorPage: React.FC = () => {
           newStoryboard.id = result.id;
         }
       } catch (error) {
-        console.error('Error saving initial storyboard:', error);
+        console.error('Error saving initial/resumed storyboard:', error);
       }
 
       // Track any scene generation errors
@@ -459,10 +619,16 @@ const MovieEditorPage: React.FC = () => {
       let successfulClipsCount = 0;
 
       // Generate each scene manually to track progress
-      for (let i = 0; i < storyboard.scenes.length; i++) {
-        const scene = storyboard.scenes[i];
+      // If we're resuming, we'll start at the specified index
+      for (let i = startingSceneIndex; i < storyboard.scenes.length; i++) {
+        const scene = storyboard.scenes[i - startingSceneIndex]; // Adjust for resuming
         try {
-          setGenerationProgress({ current: i, total: storyboard.scenes.length });
+          // Update the progress display
+          setGenerationProgress({
+            current: i,
+            total: storyboard.scenes.length,
+            resumedFrom: startingSceneIndex > 0 ? startingSceneIndex : undefined
+          });
 
           console.log(`Generating SVG for scene ${i+1}/${storyboard.scenes.length}: ${scene.id || 'Untitled'}`);
           console.log(`Prompt: ${scene.svgPrompt.substring(0, 100)}${scene.svgPrompt.length > 100 ? '...' : ''}`);
@@ -817,7 +983,10 @@ const MovieEditorPage: React.FC = () => {
         message={
           <div className="mt-2">
             <p className="text-center mb-4">
-              Creating animations for each scene in your storyboard...
+              {generationProgress.resumedFrom ?
+                `Resuming animation generation from scene ${generationProgress.resumedFrom + 1}...` :
+                `Creating animations for each scene in your storyboard...`
+              }
             </p>
             <div className="w-full bg-gray-700 rounded-full h-2.5">
               <div
@@ -830,10 +999,19 @@ const MovieEditorPage: React.FC = () => {
             </div>
             <p className="text-center mt-2 text-sm text-gray-400">
               {generationProgress.current} of {generationProgress.total} scenes completed
+              {generationProgress.resumedFrom ?
+                ` (resumed from scene ${generationProgress.resumedFrom + 1})` :
+                ''
+              }
             </p>
             <p className="text-center mt-2 text-sm text-gray-400">
               This may take a few minutes. Please don't close this window.
             </p>
+            {generationProgress.resumedFrom && (
+              <p className="text-center mt-2 text-sm text-yellow-400">
+                Your previous progress was saved. Generation will continue where it left off.
+              </p>
+            )}
           </div>
         }
         confirmText="Please wait..."

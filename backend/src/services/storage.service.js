@@ -174,6 +174,18 @@ class StorageService {
         });
       }
 
+      // Store original scenes array for resumable generation
+      // Only include necessary data for generation resumption
+      let optimizedOriginalScenes = null;
+      if (storyboard.originalScenes && Array.isArray(storyboard.originalScenes)) {
+        optimizedOriginalScenes = storyboard.originalScenes.map(scene => ({
+          id: scene.id,
+          description: scene.description,
+          svgPrompt: scene.svgPrompt,
+          duration: scene.duration
+        }));
+      }
+
       // Ensure dates are stored as ISO strings
       const optimizedStoryboard = {
         ...storyboard,
@@ -183,7 +195,11 @@ class StorageService {
           ? storyboard.createdAt.toISOString()
           : storyboard.createdAt,
         updatedAt: new Date().toISOString(),
-        generationStatus
+        generationStatus,
+        // Store AI provider for resumable generation
+        aiProvider: storyboard.aiProvider,
+        // Store optimized original scenes
+        originalScenes: optimizedOriginalScenes
       };
 
       // Write the file

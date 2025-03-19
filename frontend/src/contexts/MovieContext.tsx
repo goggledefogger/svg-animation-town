@@ -24,6 +24,10 @@ export interface Storyboard {
   clips: MovieClip[];
   createdAt: Date;
   updatedAt: Date;
+  // AI provider used for generation, needed for resuming
+  aiProvider?: 'openai' | 'claude';
+  // Store original scenes from the storyboard response to support resuming
+  originalScenes?: any[];
   generationStatus?: {
     inProgress: boolean;
     totalScenes?: number;
