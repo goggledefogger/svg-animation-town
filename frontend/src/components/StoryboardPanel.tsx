@@ -45,7 +45,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   // State to track clip thumbnails
   const [clipThumbnails, setClipThumbnails] = useState<Record<string, string>>({});
   const [loadingClips, setLoadingClips] = useState<Record<string, boolean>>({});
-  
+
   // State for clip selector
   const [showClipSelector, setShowClipSelector] = useState(false);
 
@@ -127,21 +127,21 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         setShowClipSelector(false);
         return;
       }
-      
+
       // For existing animations, store details in sessionStorage
       sessionStorage.setItem('pending_animation_id', animation.id);
       sessionStorage.setItem('pending_animation_name', animation.name);
-      
+
       // Close the selector
       setShowClipSelector(false);
-      
+
       // Call onAddClip which will now detect and add the existing animation
       onAddClip();
     } catch (error) {
       console.error('Error handling animation selection:', error);
     }
   }, [onAddClip]);
-  
+
   // Get animation list with the "Create New" option added at the top
   const getAnimationsWithCreateOption = useCallback((animations: AnimationItem[]): AnimationItem[] => {
     // Check if the list already has a create-new option
@@ -149,14 +149,14 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     if (hasCreateNewOption) {
       return animations;
     }
-    
+
     // Add a special "Create New" option at the top
     const createNewOption: AnimationItem = {
       id: 'create-new',
       name: 'Create New Clip',
       timestamp: new Date().toISOString()
     };
-    
+
     return [createNewOption, ...animations];
   }, []);
 
@@ -182,9 +182,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Generation Status Indicator */}
+      {/* Top section with status */}
       {hasGenerationStatus && (
-        <div className="mb-4 p-2 bg-gray-800 rounded-md">
+        <div className="mb-4 p-2 bg-gray-800 rounded-md flex-shrink-0">
           {isGenerating ? (
             <div>
               <div className="text-sm font-medium mb-1">
@@ -207,25 +207,27 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         </div>
       )}
 
-      {/* Clip Selector */}
+      {/* Animation selector if shown */}
       {showClipSelector && (
-        <AnimationList
-          title="Add a Clip"
-          onSelectAnimation={handleSelectExistingAnimation}
-          onClose={() => setShowClipSelector(false)}
-          showThumbnails={true}
-          maxHeight="max-h-64"
-          containerClassName="mb-4 bg-gray-800 rounded-md p-3 border border-gray-700"
-          transformAnimations={getAnimationsWithCreateOption}
-          renderSpecialItem={renderSpecialItem}
-        />
+        <div className="flex-shrink-0">
+          <AnimationList
+            title="Add a Clip"
+            onSelectAnimation={handleSelectExistingAnimation}
+            onClose={() => setShowClipSelector(false)}
+            showThumbnails={true}
+            maxHeight="max-h-64"
+            containerClassName="mb-4 bg-gray-800 rounded-md p-3 border border-gray-700"
+            transformAnimations={getAnimationsWithCreateOption}
+            renderSpecialItem={renderSpecialItem}
+          />
+        </div>
       )}
 
-      {/* Clips List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Scrollable clips with fixed height */}
+      <div className="overflow-y-auto flex-1" style={{ minHeight: 0 }}>
         {/* No clips message */}
         {clips.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full border border-dashed border-gray-600 rounded-lg p-4">
+          <div className="flex flex-col items-center justify-center border border-dashed border-gray-600 rounded-lg p-4 mb-4 h-32">
             <p className="text-gray-400 text-center">No clips in storyboard</p>
             <p className="text-gray-400 text-center text-sm mt-1">Use the button below to add your first clip</p>
           </div>
@@ -233,7 +235,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
 
         {/* Clip items */}
         {clips.length > 0 && (
-          <div className="space-y-3 p-1">
+          <div className="space-y-3 p-1 mb-4">
             {clips
               .sort((a, b) => a.order - b.order)
               .map((clip) => (
@@ -247,7 +249,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
                   {/* Clip thumbnail preview with overlaid info */}
                   <div className="aspect-video overflow-hidden relative group">
                     <SvgThumbnail svgContent={getClipSvgContent(clip)} />
-                    
+
                     {/* Top overlay with clip name and number */}
                     <div className="absolute top-0 left-0 right-0 px-2 py-1 flex justify-between bg-gradient-to-b from-black/70 to-transparent">
                       <span className="text-xs text-white font-medium truncate max-w-[70%] drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
@@ -257,7 +259,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
                         {clip.order + 1}
                       </span>
                     </div>
-                    
+
                     {/* Bottom overlay with duration and prompt */}
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-90 group-hover:opacity-100 transition-opacity">
                       <div className="flex justify-between items-center mb-1">
@@ -279,8 +281,8 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         )}
       </div>
 
-      {/* Add Clip Button */}
-      <div className="mt-4">
+      {/* Button - fixed at bottom, not affected by scrolling */}
+      <div className="pt-2 mt-auto border-t border-gray-700 flex-shrink-0">
         <button
           className="w-full btn btn-sm btn-primary"
           onClick={() => setShowClipSelector(true)}

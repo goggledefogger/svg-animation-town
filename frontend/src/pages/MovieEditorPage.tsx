@@ -177,24 +177,24 @@ const MovieEditorPage: React.FC = () => {
     const checkForPendingAnimation = async () => {
       const pendingAnimationId = sessionStorage.getItem('pending_animation_id');
       const pendingAnimationName = sessionStorage.getItem('pending_animation_name');
-      
+
       if (pendingAnimationId && pendingAnimationName) {
         console.log(`Adding existing animation as clip: ${pendingAnimationName} (ID: ${pendingAnimationId})`);
-        
+
         try {
           // Get animation content
           const animation = await AnimationStorageApi.getAnimation(pendingAnimationId);
-          
+
           if (animation && animation.svg) {
             console.log('Animation retrieved:', {
               name: pendingAnimationName,
               prompt: animation.prompt,
               svg: animation.svg ? 'SVG content exists' : 'No SVG content'
             });
-            
+
             // Get the prompt from animation or try to extract from chat history
             let prompt = animation.prompt || '';
-            
+
             // If no prompt but chat history exists, try to extract prompt from latest user message
             if (!prompt && Array.isArray(animation.chatHistory) && animation.chatHistory.length > 0) {
               // Find the most recent user message to use as prompt
@@ -206,7 +206,7 @@ const MovieEditorPage: React.FC = () => {
                 }
               }
             }
-            
+
             // Add as a new clip with reference to existing animation
             const newClipId = addClip({
               name: pendingAnimationName, // Use the pending animation name for the clip name
@@ -216,7 +216,7 @@ const MovieEditorPage: React.FC = () => {
               prompt: prompt, // Use extracted or original prompt
               chatHistory: animation.chatHistory || []
             });
-            
+
             // Set as active clip
             if (newClipId) {
               setActiveClipId(newClipId);
@@ -231,28 +231,28 @@ const MovieEditorPage: React.FC = () => {
         }
       }
     };
-    
+
     checkForPendingAnimation();
   }, [addClip, setActiveClipId]);
 
   // Function to add an existing animation directly to the storyboard
   const addExistingAnimationAsClip = async (animationId: string, animationName: string) => {
     console.log(`Adding existing animation as clip: ${animationName} (ID: ${animationId})`);
-    
+
     try {
       // Get animation content
       const animation = await AnimationStorageApi.getAnimation(animationId);
-      
+
       if (animation && animation.svg) {
         console.log('Animation retrieved:', {
           name: animationName,
           prompt: animation.prompt,
           svg: animation.svg ? 'SVG content exists' : 'No SVG content'
         });
-        
+
         // Get the prompt from animation or try to extract from chat history
         let prompt = animation.prompt || '';
-        
+
         // If no prompt but chat history exists, try to extract prompt from latest user message
         if (!prompt && Array.isArray(animation.chatHistory) && animation.chatHistory.length > 0) {
           // Find the most recent user message to use as prompt
@@ -264,7 +264,7 @@ const MovieEditorPage: React.FC = () => {
             }
           }
         }
-        
+
         // Add as a new clip with reference to existing animation
         const newClipId = addClip({
           name: animationName, // Use the animation name for the clip name
@@ -274,19 +274,19 @@ const MovieEditorPage: React.FC = () => {
           prompt: prompt, // Use extracted or original prompt
           chatHistory: animation.chatHistory || []
         });
-        
+
         // Set as active clip
         if (newClipId) {
           setActiveClipId(newClipId);
         }
-        
+
         // Return success
         return true;
       }
     } catch (error) {
       console.error('Error adding existing animation as clip:', error);
     }
-    
+
     return false;
   };
 
@@ -294,7 +294,7 @@ const MovieEditorPage: React.FC = () => {
     // Check if we have a pending animation to add directly
     const pendingAnimationId = sessionStorage.getItem('pending_animation_id');
     const pendingAnimationName = sessionStorage.getItem('pending_animation_name');
-    
+
     if (pendingAnimationId && pendingAnimationName) {
       // Add the existing animation and clear the session storage
       addExistingAnimationAsClip(pendingAnimationId, pendingAnimationName).then(success => {
@@ -307,7 +307,7 @@ const MovieEditorPage: React.FC = () => {
     } else {
       // Set a default name that can be changed later
       localStorage.setItem('pending_clip_name', 'New Clip');
-      
+
       // Navigate to the animation editor
       navigate('/');
     }
@@ -331,7 +331,7 @@ const MovieEditorPage: React.FC = () => {
   const resetApplication = useCallback(() => {
     // Clear localStorage
     localStorage.removeItem('svg-animator-storyboards');
-    
+
     // Clear sessionStorage animation state (needed to reset the animation viewer)
     sessionStorage.removeItem('current_animation_state');
     sessionStorage.removeItem('page_just_loaded');
@@ -688,18 +688,20 @@ const MovieEditorPage: React.FC = () => {
       {/* Main content area */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left panel - Storyboard (hidden on mobile, will appear below) */}
-        <div className="hidden md:block md:w-1/4 border-r border-gray-700 bg-gotham-black p-4 overflow-y-auto">
-          <h2 className="text-lg font-semibold mb-4">Storyboard</h2>
-          <div className="text-xs text-gray-500 mb-2">
+        <div className="hidden md:block md:w-1/4 border-r border-gray-700 bg-gotham-black p-4 flex flex-col">
+          <h2 className="text-lg font-semibold mb-2">Storyboard</h2>
+          <div className="text-xs text-gray-500 mb-3">
             {currentStoryboard.clips.length} clips available
           </div>
-          <StoryboardPanel
-            clips={currentStoryboard.clips}
-            activeClipId={activeClipId}
-            onClipSelect={handleClipSelect}
-            onAddClip={handleAddClip}
-            storyboard={currentStoryboard}
-          />
+          <div className="h-[calc(100%-80px)]">
+            <StoryboardPanel
+              clips={currentStoryboard.clips}
+              activeClipId={activeClipId}
+              onClipSelect={handleClipSelect}
+              onAddClip={handleAddClip}
+              storyboard={currentStoryboard}
+            />
+          </div>
         </div>
 
         {/* Center content - Animation Preview and Mobile Panels */}
