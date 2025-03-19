@@ -215,14 +215,14 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
 
         {/* Animation selector */}
         {showClipSelector && (
-          <div className="mb-2">
+          <div className="mb-2 w-full overflow-hidden">
             <AnimationList
               title="Add a Clip"
               onSelectAnimation={handleSelectExistingAnimation}
               onClose={() => setShowClipSelector(false)}
               showThumbnails={true}
               maxHeight="max-h-64"
-              containerClassName="bg-gray-800 rounded-md p-3 border border-gray-700"
+              containerClassName="bg-gray-800 rounded-md p-3 border border-gray-700 w-full overflow-hidden"
               transformAnimations={getAnimationsWithCreateOption}
               renderSpecialItem={renderSpecialItem}
             />
@@ -244,7 +244,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         {clips.length > 0 && (
           <div className="h-full w-full md:overflow-y-auto md:overflow-x-hidden overflow-x-auto overflow-y-hidden">
             {/* For mobile: horizontal layout, For desktop: vertical layout */}
-            <div className="flex md:flex-col md:space-y-3 space-x-3 md:space-x-0 p-1 w-max md:w-auto">
+            <div className="flex md:flex-col md:space-y-3 space-x-3 md:space-x-0 p-1 w-max md:w-full">
               {clips
                 .sort((a, b) => a.order - b.order)
                 .map((clip) => (
@@ -292,7 +292,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
       </div>
 
       {/* Bottom section - fixed at bottom */}
-      <div className="pt-2 border-t border-gray-700 bg-gray-900 mt-2 w-full">
+      <div className="pt-2 border-t border-gray-700 mt-2 w-full">
         <button
           className="w-full btn btn-sm btn-primary"
           onClick={() => setShowClipSelector(true)}
