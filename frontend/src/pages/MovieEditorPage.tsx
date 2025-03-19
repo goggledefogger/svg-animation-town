@@ -35,7 +35,8 @@ const MovieEditorPage: React.FC = () => {
     setCurrentPlaybackPosition,
     deleteStoryboard,
     getSavedStoryboards,
-    createNewStoryboard
+    createNewStoryboard,
+    addClip
   } = useMovie();
 
   const navigate = useNavigate();
@@ -171,6 +172,147 @@ const MovieEditorPage: React.FC = () => {
     }
   }, [loadStoryboard, createNewStoryboard]);
 
+  // Check for pending animation ID from the StoryboardPanel
+  useEffect(() => {
+    const checkForPendingAnimation = async () => {
+      const pendingAnimationId = sessionStorage.getItem('pending_animation_id');
+      const pendingAnimationName = sessionStorage.getItem('pending_animation_name');
+      
+      if (pendingAnimationId && pendingAnimationName) {
+        console.log(`Adding existing animation as clip: ${pendingAnimationName} (ID: ${pendingAnimationId})`);
+        
+        try {
+          // Get animation content
+          const animation = await AnimationStorageApi.getAnimation(pendingAnimationId);
+          
+          if (animation && animation.svg) {
+            console.log('Animation retrieved:', {
+              name: pendingAnimationName,
+              prompt: animation.prompt,
+              svg: animation.svg ? 'SVG content exists' : 'No SVG content'
+            });
+            
+            // Get the prompt from animation or try to extract from chat history
+            let prompt = animation.prompt || '';
+            
+            // If no prompt but chat history exists, try to extract prompt from latest user message
+            if (!prompt && Array.isArray(animation.chatHistory) && animation.chatHistory.length > 0) {
+              // Find the most recent user message to use as prompt
+              for (let i = animation.chatHistory.length - 1; i >= 0; i--) {
+                if (animation.chatHistory[i].sender === 'user') {
+                  prompt = animation.chatHistory[i].text;
+                  console.log('Extracted prompt from chat history:', prompt);
+                  break;
+                }
+              }
+            }
+            
+            // Add as a new clip with reference to existing animation
+            const newClipId = addClip({
+              name: pendingAnimationName, // Use the pending animation name for the clip name
+              svgContent: animation.svg,
+              duration: 5, // Default duration
+              animationId: pendingAnimationId,
+              prompt: prompt, // Use extracted or original prompt
+              chatHistory: animation.chatHistory || []
+            });
+            
+            // Set as active clip
+            if (newClipId) {
+              setActiveClipId(newClipId);
+            }
+          }
+        } catch (error) {
+          console.error('Error adding existing animation as clip:', error);
+        } finally {
+          // Clear the pending animation data
+          sessionStorage.removeItem('pending_animation_id');
+          sessionStorage.removeItem('pending_animation_name');
+        }
+      }
+    };
+    
+    checkForPendingAnimation();
+  }, [addClip, setActiveClipId]);
+
+  // Function to add an existing animation directly to the storyboard
+  const addExistingAnimationAsClip = async (animationId: string, animationName: string) => {
+    console.log(`Adding existing animation as clip: ${animationName} (ID: ${animationId})`);
+    
+    try {
+      // Get animation content
+      const animation = await AnimationStorageApi.getAnimation(animationId);
+      
+      if (animation && animation.svg) {
+        console.log('Animation retrieved:', {
+          name: animationName,
+          prompt: animation.prompt,
+          svg: animation.svg ? 'SVG content exists' : 'No SVG content'
+        });
+        
+        // Get the prompt from animation or try to extract from chat history
+        let prompt = animation.prompt || '';
+        
+        // If no prompt but chat history exists, try to extract prompt from latest user message
+        if (!prompt && Array.isArray(animation.chatHistory) && animation.chatHistory.length > 0) {
+          // Find the most recent user message to use as prompt
+          for (let i = animation.chatHistory.length - 1; i >= 0; i--) {
+            if (animation.chatHistory[i].sender === 'user') {
+              prompt = animation.chatHistory[i].text;
+              console.log('Extracted prompt from chat history:', prompt);
+              break;
+            }
+          }
+        }
+        
+        // Add as a new clip with reference to existing animation
+        const newClipId = addClip({
+          name: animationName, // Use the animation name for the clip name
+          svgContent: animation.svg,
+          duration: 5, // Default duration
+          animationId: animationId,
+          prompt: prompt, // Use extracted or original prompt
+          chatHistory: animation.chatHistory || []
+        });
+        
+        // Set as active clip
+        if (newClipId) {
+          setActiveClipId(newClipId);
+        }
+        
+        // Return success
+        return true;
+      }
+    } catch (error) {
+      console.error('Error adding existing animation as clip:', error);
+    }
+    
+    return false;
+  };
+
+  const handleAddClip = () => {
+    // Check if we have a pending animation to add directly
+    const pendingAnimationId = sessionStorage.getItem('pending_animation_id');
+    const pendingAnimationName = sessionStorage.getItem('pending_animation_name');
+    
+    if (pendingAnimationId && pendingAnimationName) {
+      // Add the existing animation and clear the session storage
+      addExistingAnimationAsClip(pendingAnimationId, pendingAnimationName).then(success => {
+        if (success) {
+          // Clear the pending animation data
+          sessionStorage.removeItem('pending_animation_id');
+          sessionStorage.removeItem('pending_animation_name');
+        }
+      });
+    } else {
+      // Set a default name that can be changed later
+      localStorage.setItem('pending_clip_name', 'New Clip');
+      
+      // Navigate to the animation editor
+      navigate('/');
+    }
+  };
+
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [storyboardName, setStoryboardName] = useState(currentStoryboard.name);
@@ -178,8 +320,6 @@ const MovieEditorPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGeneratingClipsModal, setShowGeneratingClipsModal] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
-  const [clipName, setClipName] = useState('');
-  const [showAddClipModal, setShowAddClipModal] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
@@ -219,27 +359,6 @@ const MovieEditorPage: React.FC = () => {
   const handleExport = (format: 'json' | 'svg') => {
     exportStoryboard(format);
     setShowExportModal(false);
-  };
-
-  const handleAddClip = () => {
-    setClipName('');
-    setShowAddClipModal(true);
-  };
-
-  const handleSaveClip = () => {
-    if (clipName.trim()) {
-      // Instead of immediately saving an animation (which might not exist),
-      // we'll redirect to the animation editor with a pending task
-
-      // Store the clip name to create after animation is done
-      localStorage.setItem('pending_clip_name', clipName.trim());
-
-      // Navigate to the animation editor
-      navigate('/');
-
-      // Close the modal
-      setShowAddClipModal(false);
-    }
   };
 
   const handleGenerateStoryboard = async (prompt: string, aiProvider: 'openai' | 'claude') => {
@@ -596,25 +715,13 @@ const MovieEditorPage: React.FC = () => {
             <h2 className="text-lg font-semibold mb-2">Storyboard</h2>
             <div className="overflow-x-auto pb-4">
               <div className="inline-flex space-x-3 min-w-full">
-                {currentStoryboard.clips.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-40 min-w-full border border-dashed border-gray-600 rounded-lg p-4">
-                    <p className="text-gray-400 text-center mb-2">No clips in storyboard</p>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      onClick={handleAddClip}
-                    >
-                      Add Clip
-                    </button>
-                  </div>
-                ) : (
-                  <StoryboardPanel
-                    clips={currentStoryboard.clips}
-                    activeClipId={activeClipId}
-                    onClipSelect={handleClipSelect}
-                    onAddClip={handleAddClip}
-                    storyboard={currentStoryboard}
-                  />
-                )}
+                <StoryboardPanel
+                  clips={currentStoryboard.clips}
+                  activeClipId={activeClipId}
+                  onClipSelect={handleClipSelect}
+                  onAddClip={handleAddClip}
+                  storyboard={currentStoryboard}
+                />
               </div>
             </div>
           </div>
@@ -691,36 +798,6 @@ const MovieEditorPage: React.FC = () => {
         cancelText="Cancel"
         onConfirm={handleSave}
         onCancel={() => setShowSaveModal(false)}
-      />
-
-      {/* Add Clip Modal */}
-      <ConfirmationModal
-        isOpen={showAddClipModal}
-        title="Add Clip"
-        message={
-          <div className="mt-2">
-            <label htmlFor="clipName" className="block text-sm font-medium text-gray-300">
-              Clip Name
-            </label>
-            <input
-              type="text"
-              id="clipName"
-              className="input"
-              placeholder="Enter a name for your clip"
-              value={clipName}
-              onChange={(e) => setClipName(e.target.value)}
-              autoFocus
-            />
-            <p className="mt-2 text-sm text-gray-400">
-              This will save the current animation as a clip in your storyboard.
-            </p>
-          </div>
-        }
-        confirmText="Add Clip"
-        cancelText="Cancel"
-        onConfirm={handleSaveClip}
-        onCancel={() => setShowAddClipModal(false)}
-        confirmDisabled={!clipName.trim()}
       />
 
       {/* StoryboardGenerator Modal */}

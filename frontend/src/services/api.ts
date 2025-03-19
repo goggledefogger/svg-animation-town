@@ -346,6 +346,17 @@ export const AnimationStorageApi = {
       const data = await fetchApi<any>(`/animation/${id}`);
 
       if (data.success && data.animation) {
+        // Log animation structure to diagnose field issues
+        console.log('Animation retrieved from API:', {
+          id: data.animation.id,
+          name: data.animation.name,
+          prompt: data.animation.prompt,
+          hasPrompt: !!data.animation.prompt,
+          hasSvg: !!data.animation.svg,
+          hasChat: Array.isArray(data.animation.chatHistory),
+          chatLength: Array.isArray(data.animation.chatHistory) ? data.animation.chatHistory.length : 0
+        });
+        
         return data.animation;
       } else {
         throw new Error('Invalid response from server');

@@ -1,17 +1,10 @@
-import React, { useState, useEffect, useRef, KeyboardEvent, useCallback } from 'react';
+import React, { useState, useEffect, useRef, KeyboardEvent, useCallback, CSSProperties } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAnimation } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
 import ConfirmationModal from './ConfirmationModal';
 import ExportModal from './ExportModal';
-
-// Define the animation object type
-interface AnimationItem {
-  id: string;
-  name: string;
-  timestamp?: string;
-  [key: string]: any; // Allow for other properties
-}
+import AnimationList, { AnimationItem } from './AnimationList';
 
 interface HeaderProps {
   onExport?: () => void;
@@ -37,12 +30,11 @@ const Header: React.FC<HeaderProps> = ({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
-  const [savedAnimations, setSavedAnimations] = useState<(string | AnimationItem)[]>([]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [showAnimationList, setShowAnimationList] = useState(false);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const isLoadingRef = useRef(false); // Track loading state to prevent duplicate calls
+  const animationListButtonRef = useRef<HTMLButtonElement>(null);
   const isMovieEditorPage = location.pathname === '/movie-editor';
 
   // Reset - refresh from server and clear session state
@@ -75,45 +67,9 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  // Sort animations by timestamp (most recent first)
-  const sortAnimationsByTimestamp = useCallback((animations: (string | AnimationItem)[]) => {
-    return [...animations].sort((a, b) => {
-      // Extract timestamps, defaulting to empty string if undefined
-      const timestampA = typeof a === 'string' ? '' : (a.timestamp || '');
-      const timestampB = typeof b === 'string' ? '' : (b.timestamp || '');
-      
-      // Sort in descending order (newest first)
-      return timestampB.localeCompare(timestampA);
-    });
-  }, []);
-
-  // Load the list of saved animations when the component mounts or when a new animation is saved
-  useEffect(() => {
-    // Skip if already loading to prevent duplicate API calls
-    if (isLoadingRef.current) return;
-
-    const fetchAnimations = async () => {
-      try {
-        isLoadingRef.current = true; // Set loading flag
-        const animationsList = await getSavedAnimations();
-        setSavedAnimations(sortAnimationsByTimestamp(animationsList));
-      } catch (error) {
-        console.error('Error fetching saved animations:', error);
-        setSavedAnimations([]); // Set to empty array if there's an error
-      } finally {
-        isLoadingRef.current = false; // Clear loading flag
-      }
-    };
-
-    fetchAnimations();
-  }, [getSavedAnimations, sortAnimationsByTimestamp]);
-
-  // Close dropdown when clicking outside
+  // Close mobile nav when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setDropdownOpen(false);
-      }
       if (mobileNavRef.current && !mobileNavRef.current.contains(event.target as Node)) {
         setShowMobileNav(false);
       }
@@ -125,7 +81,7 @@ const Header: React.FC<HeaderProps> = ({
       // Remove event listener on cleanup
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [dropdownRef, mobileNavRef]);
+  }, [mobileNavRef]);
 
   const handleSave = async () => {
     if (animationName.trim()) {
@@ -133,14 +89,6 @@ const Header: React.FC<HeaderProps> = ({
       await saveAnimation(animationName.trim(), chatHistory);
       setShowSaveModal(false);
       setAnimationName('');
-
-      // Update the list of saved animations
-      try {
-        const animationsList = await getSavedAnimations();
-        setSavedAnimations(sortAnimationsByTimestamp(animationsList));
-      } catch (error) {
-        console.error('Error updating saved animations list:', error);
-      }
     }
   };
 
@@ -155,22 +103,57 @@ const Header: React.FC<HeaderProps> = ({
     setShowExportModal(false);
   };
 
-  // Create a function to handle dropdown toggle and refresh the list when opening
-  const handleDropdownToggle = async () => {
-    // If we're opening the dropdown, refresh the animation list
-    if (!dropdownOpen) {
-      try {
-        isLoadingRef.current = true; // Set loading flag
-        const animationsList = await getSavedAnimations();
-        setSavedAnimations(sortAnimationsByTimestamp(animationsList));
-      } catch (error) {
-        console.error('Error fetching saved animations:', error);
-      } finally {
-        isLoadingRef.current = false; // Clear loading flag
-      }
+  // Handle animation selection
+  const handleSelectAnimation = async (animation: AnimationItem) => {
+    try {
+      console.log(`Loading animation: ${animation.name} with ID: ${animation.id}`);
+      await loadAnimation(animation.id);
+      setShowAnimationList(false);
+    } catch (error) {
+      console.error(`Error loading animation "${animation.name}":`, error);
+      alert(`Failed to load animation "${animation.name}". Check console for details.`);
     }
-    // Toggle the dropdown state
-    setDropdownOpen(!dropdownOpen);
+  };
+
+  // Handle animation deletion
+  const handleDeleteAnimation = async (animation: AnimationItem): Promise<boolean> => {
+    try {
+      console.log(`Attempting to delete animation: ${animation.name} (${animation.id})`);
+      const success = await deleteAnimation(animation.id);
+      return success;
+    } catch (error) {
+      console.error(`Error deleting animation "${animation.name}":`, error);
+      return false;
+    }
+  };
+
+  // Position the animation list relative to the button
+  const getAnimationListPosition = (): CSSProperties => {
+    if (!animationListButtonRef.current) return {};
+    
+    const buttonRect = animationListButtonRef.current.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    
+    // Determine if we should align to the right (if near right edge)
+    const alignRight = buttonRect.right > viewportWidth - 250;
+    
+    if (alignRight) {
+      return {
+        position: 'absolute' as const,
+        right: '0',
+        top: `${buttonRect.height + 8}px`,
+        width: '240px',
+        zIndex: 50,
+      };
+    } else {
+      return {
+        position: 'absolute' as const, 
+        left: '0',
+        top: `${buttonRect.height + 8}px`,
+        width: '240px',
+        zIndex: 50,
+      };
+    }
   };
 
   return (
@@ -380,7 +363,7 @@ const Header: React.FC<HeaderProps> = ({
           <span className="hidden md:inline">Save</span>
         </button>
 
-        {/* Load Button - Either dropdown for Animation Editor or modal trigger for Movie Editor */}
+        {/* Load Button - Either modal for Movie Editor or animation list for Animation Editor */}
         {isMovieEditorPage && onLoad ? (
           <button
             className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
@@ -404,11 +387,11 @@ const Header: React.FC<HeaderProps> = ({
             <span className="hidden md:inline">Load</span>
           </button>
         ) : (
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative">
             <button
+              ref={animationListButtonRef}
               className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-              onClick={() => handleDropdownToggle()}
-              disabled={savedAnimations.length === 0}
+              onClick={() => setShowAnimationList(!showAnimationList)}
               aria-label="Load"
             >
               <svg
@@ -428,70 +411,17 @@ const Header: React.FC<HeaderProps> = ({
               <span className="hidden md:inline">Load</span>
             </button>
 
-            {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10">
-                <ul className="py-1">
-                  {savedAnimations.length > 0 ? (
-                    savedAnimations.map((animation) => {
-                      // Handle both string names and object structures
-                      const name = typeof animation === 'string' ? animation : animation.name;
-                      const id = typeof animation === 'string' ? null : animation.id;
-
-                      return (
-                        <li key={id || name} className="border-b border-gray-700 last:border-b-0">
-                          <div className="flex justify-between items-center px-4 py-2">
-                            <button
-                              className="text-left text-sm text-gray-200 hover:text-bat-yellow flex-grow truncate pr-2"
-                              onClick={async () => {
-                                try {
-                                  // Prefer to load by ID for server-saved animations
-                                  const loadId = id || name;
-                                  console.log(`Loading animation: ${name} with ID: ${loadId}`);
-                                  await loadAnimation(loadId);
-                                  setDropdownOpen(false);
-                                } catch (error) {
-                                  console.error(`Error loading animation "${name}":`, error);
-                                  alert(`Failed to load animation "${name}". Check console for details.`);
-                                }
-                              }}
-                            >
-                              {name}
-                            </button>
-                            <button
-                              className="text-red-400 hover:text-red-300 text-xs"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (window.confirm(`Delete animation "${name}"?`)) {
-                                  try {
-                                    // Try to delete by ID if available, otherwise by name
-                                    const deleteTarget = id || name;
-                                    console.log(`Attempting to delete animation: ${name} (${deleteTarget})`);
-                                    
-                                    const success = await deleteAnimation(deleteTarget);
-                                    if (success) {
-                                      // Refresh the list after successful deletion
-                                      const animationsList = await getSavedAnimations();
-                                      setSavedAnimations(sortAnimationsByTimestamp(animationsList));
-                                    } else {
-                                      alert(`Failed to delete animation "${name}".`);
-                                    }
-                                  } catch (error) {
-                                    console.error(`Error deleting animation "${name}":`, error);
-                                    alert(`Error deleting animation "${name}". Check console for details.`);
-                                  }
-                                }
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })
-                  ) : (
-                    <li className="px-4 py-2 text-sm text-gray-400">No saved animations</li>
-                  )}
-                </ul>
+            {showAnimationList && (
+              <div style={getAnimationListPosition()}>
+                <AnimationList 
+                  onSelectAnimation={handleSelectAnimation}
+                  onDeleteAnimation={handleDeleteAnimation}
+                  onClose={() => setShowAnimationList(false)}
+                  title="Load Animation"
+                  showThumbnails={true}
+                  maxHeight="max-h-96"
+                  showSearchFilter={true}
+                />
               </div>
             )}
           </div>

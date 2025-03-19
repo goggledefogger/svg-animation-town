@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import SvgThumbnail from './SvgThumbnail';
-import { MovieStorageApi } from '../services/api';
+import { MovieStorageApi, AnimationStorageApi } from '../services/api';
+import AnimationList, { AnimationItem } from './AnimationList';
 
 interface StoryboardPanelProps {
   clips: MovieClip[];
@@ -44,6 +45,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   // State to track clip thumbnails
   const [clipThumbnails, setClipThumbnails] = useState<Record<string, string>>({});
   const [loadingClips, setLoadingClips] = useState<Record<string, boolean>>({});
+  
+  // State for clip selector
+  const [showClipSelector, setShowClipSelector] = useState(false);
 
   // Load animation content for clips that have animationId but no SVG content
   useEffect(() => {
@@ -113,6 +117,69 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     return createPlaceholderSvg("No Preview");
   };
 
+  // Function to handle selecting an existing animation
+  const handleSelectExistingAnimation = useCallback((animation: AnimationItem, animationSvg?: string) => {
+    try {
+      // Special case for "Create New" option
+      if (animation.id === 'create-new') {
+        // For new clips, just call onAddClip directly which will handle navigation to the editor
+        onAddClip();
+        setShowClipSelector(false);
+        return;
+      }
+      
+      // For existing animations, store details in sessionStorage
+      sessionStorage.setItem('pending_animation_id', animation.id);
+      sessionStorage.setItem('pending_animation_name', animation.name);
+      
+      // Close the selector
+      setShowClipSelector(false);
+      
+      // Call onAddClip which will now detect and add the existing animation
+      onAddClip();
+    } catch (error) {
+      console.error('Error handling animation selection:', error);
+    }
+  }, [onAddClip]);
+  
+  // Get animation list with the "Create New" option added at the top
+  const getAnimationsWithCreateOption = useCallback((animations: AnimationItem[]): AnimationItem[] => {
+    // Check if the list already has a create-new option
+    const hasCreateNewOption = animations.some(animation => animation.id === 'create-new');
+    if (hasCreateNewOption) {
+      return animations;
+    }
+    
+    // Add a special "Create New" option at the top
+    const createNewOption: AnimationItem = {
+      id: 'create-new',
+      name: 'Create New Clip',
+      timestamp: new Date().toISOString()
+    };
+    
+    return [createNewOption, ...animations];
+  }, []);
+
+  // Special item renderer for the "Create New" option
+  const renderSpecialItem = useCallback((animation: AnimationItem) => {
+    if (animation.id === 'create-new') {
+      return (
+        <div className="flex items-center">
+          <div className="w-16 h-12 mr-2 flex-shrink-0 flex items-center justify-center bg-gray-900 rounded">
+            <svg className="w-6 h-6 text-bat-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-medium text-bat-yellow text-sm">Create New Clip</div>
+            <div className="text-xs text-gray-400">Start creating your animation right away</div>
+          </div>
+        </div>
+      );
+    }
+    return null; // Return null for regular items
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       {/* Generation Status Indicator */}
@@ -140,18 +207,27 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         </div>
       )}
 
+      {/* Clip Selector */}
+      {showClipSelector && (
+        <AnimationList
+          title="Add a Clip"
+          onSelectAnimation={handleSelectExistingAnimation}
+          onClose={() => setShowClipSelector(false)}
+          showThumbnails={true}
+          maxHeight="max-h-64"
+          containerClassName="mb-4 bg-gray-800 rounded-md p-3 border border-gray-700"
+          transformAnimations={getAnimationsWithCreateOption}
+          renderSpecialItem={renderSpecialItem}
+        />
+      )}
+
       {/* Clips List */}
       <div className="flex-1 overflow-y-auto">
         {/* No clips message */}
         {clips.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-40 border border-dashed border-gray-600 rounded-lg p-4">
-            <p className="text-gray-400 text-center mb-2">No clips in storyboard</p>
-            <button
-              className="btn btn-sm btn-outline"
-              onClick={onAddClip}
-            >
-              Add Clip
-            </button>
+          <div className="flex flex-col items-center justify-center h-full border border-dashed border-gray-600 rounded-lg p-4">
+            <p className="text-gray-400 text-center">No clips in storyboard</p>
+            <p className="text-gray-400 text-center text-sm mt-1">Use the button below to add your first clip</p>
           </div>
         )}
 
@@ -207,9 +283,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
       <div className="mt-4">
         <button
           className="w-full btn btn-sm btn-primary"
-          onClick={onAddClip}
+          onClick={() => setShowClipSelector(true)}
         >
-          Add New Clip
+          Add a Clip
         </button>
       </div>
     </div>
