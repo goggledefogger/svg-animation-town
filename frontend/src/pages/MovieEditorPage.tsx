@@ -921,8 +921,15 @@ const MovieEditorPage: React.FC = () => {
 
           {/* Mobile Only - Horizontally scrolling StoryboardPanel */}
           <div className="md:hidden bg-gotham-black border-t border-gray-700 p-4">
-            <h2 className="text-lg font-semibold mb-2">Storyboard</h2>
-            <div className="overflow-x-auto pb-4">
+            <div className="flex items-baseline mb-2">
+              <h2 className="text-lg font-semibold">Storyboard</h2>
+              {currentStoryboard.generationStatus && (
+                <div className="ml-2 text-xs text-gray-400">
+                  {currentStoryboard.generationStatus.completedScenes}/{currentStoryboard.generationStatus.totalScenes} generated
+                </div>
+              )}
+            </div>
+            <div className="overflow-x-auto pb-4 relative">
               <div className="inline-flex space-x-3 min-w-full">
                 <StoryboardPanel
                   clips={currentStoryboard.clips}

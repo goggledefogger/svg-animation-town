@@ -10,7 +10,35 @@ interface StoryboardPanelProps {
   onClipSelect: (clipId: string) => void;
   onAddClip: () => void;
   storyboard?: Storyboard; // Add storyboard prop to access generation status
+  renderHeaderContent?: boolean; // Whether to render the header content or not
 }
+
+// Helper function to create a generation status component for reuse
+export const GenerationStatusBadge: React.FC<{
+  isGenerating: boolean;
+  completedScenes: number;
+  totalScenes: number;
+  className?: string;
+}> = ({ isGenerating, completedScenes, totalScenes, className = "" }) => {
+  if (totalScenes === 0) return null;
+
+  if (isGenerating) {
+    return (
+      <div className={`flex items-center text-xs text-gray-400 ${className}`}>
+        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse mr-1"></div>
+        {completedScenes}/{totalScenes}
+      </div>
+    );
+  } else if (completedScenes > 0) {
+    return (
+      <div className={`text-xs text-gray-400 ${className}`}>
+        {completedScenes}/{totalScenes} generated
+      </div>
+    );
+  }
+
+  return null;
+};
 
 // Helper function to truncate prompt text
 const truncatePrompt = (prompt: string | undefined, maxLength = 100) => {
@@ -34,7 +62,8 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   activeClipId,
   onClipSelect,
   onAddClip,
-  storyboard
+  storyboard,
+  renderHeaderContent = false
 }) => {
   const hasGenerationStatus = storyboard?.generationStatus !== undefined;
   const isGenerating = storyboard?.generationStatus?.inProgress === true;
@@ -183,14 +212,28 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   // Calculate the content height (subtract button height from container)
   const buttonHeight = "44px"; // btn-sm height + padding + border
 
+  // If renderHeaderContent is true, just return the generation badge for the header
+  if (renderHeaderContent && hasGenerationStatus) {
+    return (
+      <div className="flex items-baseline">
+        <div className="text-gray-300 mr-2">Clips</div>
+        <GenerationStatusBadge
+          isGenerating={isGenerating}
+          completedScenes={completedScenes}
+          totalScenes={totalScenes}
+        />
+      </div>
+    );
+  }
+
   return (
     // Main container - grid layout to ensure fixed areas
     <div className="grid grid-rows-[auto_1fr_auto] h-full w-full">
       {/* Top section - fixed at top */}
       <div className="contents">
-        {/* Generation status */}
+        {/* Generation status - desktop only */}
         {hasGenerationStatus && (
-          <div className="p-2 bg-gray-800 rounded-md mb-2">
+          <div className="hidden md:block p-2 bg-gray-800 rounded-md mb-2">
             {isGenerating ? (
               <div>
                 <div className="text-sm font-medium mb-1">
@@ -215,14 +258,14 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
 
         {/* Animation selector */}
         {showClipSelector && (
-          <div className="mb-2 w-full overflow-hidden">
+          <div className="mb-2 w-full overflow-visible relative z-10">
             <AnimationList
               title="Add a Clip"
               onSelectAnimation={handleSelectExistingAnimation}
               onClose={() => setShowClipSelector(false)}
               showThumbnails={true}
               maxHeight="max-h-64"
-              containerClassName="bg-gray-800 rounded-md p-3 border border-gray-700 w-full overflow-hidden"
+              containerClassName="bg-gray-800 rounded-md p-3 border border-gray-700 w-full overflow-hidden absolute top-0 left-0 right-0"
               transformAnimations={getAnimationsWithCreateOption}
               renderSpecialItem={renderSpecialItem}
             />
