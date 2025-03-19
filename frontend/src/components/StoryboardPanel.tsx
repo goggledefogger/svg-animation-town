@@ -180,109 +180,119 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     return null; // Return null for regular items
   }, []);
 
+  // Calculate the content height (subtract button height from container)
+  const buttonHeight = "44px"; // btn-sm height + padding + border
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Top section with status */}
-      {hasGenerationStatus && (
-        <div className="mb-4 p-2 bg-gray-800 rounded-md flex-shrink-0">
-          {isGenerating ? (
-            <div>
-              <div className="text-sm font-medium mb-1">
-                Generating storyboard: {completedScenes}/{totalScenes} scenes
+    // Main container - grid layout to ensure fixed areas
+    <div className="grid grid-rows-[auto_1fr_auto] h-full w-full">
+      {/* Top section - fixed at top */}
+      <div className="contents">
+        {/* Generation status */}
+        {hasGenerationStatus && (
+          <div className="p-2 bg-gray-800 rounded-md mb-2">
+            {isGenerating ? (
+              <div>
+                <div className="text-sm font-medium mb-1">
+                  Generating storyboard: {completedScenes}/{totalScenes} scenes
+                </div>
+                <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-green-500 h-full rounded-full transition-all duration-500"
+                    style={{ width: `${generationProgress}%` }}
+                  ></div>
+                </div>
               </div>
-              <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-green-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${generationProgress}%` }}
-                ></div>
+            ) : (
+              <div className="text-sm">
+                {completedScenes > 0 ?
+                  `Generated ${completedScenes}/${totalScenes} scenes` :
+                  'Ready to generate'}
               </div>
-            </div>
-          ) : (
-            <div className="text-sm">
-              {completedScenes > 0 ?
-                `Generated ${completedScenes}/${totalScenes} scenes` :
-                'Ready to generate'}
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {/* Animation selector if shown */}
-      {showClipSelector && (
-        <div className="flex-shrink-0">
-          <AnimationList
-            title="Add a Clip"
-            onSelectAnimation={handleSelectExistingAnimation}
-            onClose={() => setShowClipSelector(false)}
-            showThumbnails={true}
-            maxHeight="max-h-64"
-            containerClassName="mb-4 bg-gray-800 rounded-md p-3 border border-gray-700"
-            transformAnimations={getAnimationsWithCreateOption}
-            renderSpecialItem={renderSpecialItem}
-          />
-        </div>
-      )}
+        {/* Animation selector */}
+        {showClipSelector && (
+          <div className="mb-2">
+            <AnimationList
+              title="Add a Clip"
+              onSelectAnimation={handleSelectExistingAnimation}
+              onClose={() => setShowClipSelector(false)}
+              showThumbnails={true}
+              maxHeight="max-h-64"
+              containerClassName="bg-gray-800 rounded-md p-3 border border-gray-700"
+              transformAnimations={getAnimationsWithCreateOption}
+              renderSpecialItem={renderSpecialItem}
+            />
+          </div>
+        )}
+      </div>
 
-      {/* Scrollable clips with fixed height */}
-      <div className="overflow-y-auto flex-1" style={{ minHeight: 0 }}>
+      {/* Middle section - scrollable content */}
+      <div className="overflow-hidden min-h-0 w-full">
         {/* No clips message */}
         {clips.length === 0 && (
-          <div className="flex flex-col items-center justify-center border border-dashed border-gray-600 rounded-lg p-4 mb-4 h-32">
+          <div className="flex flex-col items-center justify-center border border-dashed border-gray-600 rounded-lg p-4 h-32 mb-2">
             <p className="text-gray-400 text-center">No clips in storyboard</p>
             <p className="text-gray-400 text-center text-sm mt-1">Use the button below to add your first clip</p>
           </div>
         )}
 
-        {/* Clip items */}
+        {/* Clips list with responsive scrolling */}
         {clips.length > 0 && (
-          <div className="space-y-3 p-1 mb-4">
-            {clips
-              .sort((a, b) => a.order - b.order)
-              .map((clip) => (
-                <div
-                  key={clip.id}
-                  className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all ${
-                    clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'
-                  }`}
-                  onClick={() => onClipSelect(clip.id)}
-                >
-                  {/* Clip thumbnail preview with overlaid info */}
-                  <div className="aspect-video overflow-hidden relative group">
-                    <SvgThumbnail svgContent={getClipSvgContent(clip)} />
+          <div className="h-full w-full md:overflow-y-auto md:overflow-x-hidden overflow-x-auto overflow-y-hidden">
+            {/* For mobile: horizontal layout, For desktop: vertical layout */}
+            <div className="flex md:flex-col md:space-y-3 space-x-3 md:space-x-0 p-1 w-max md:w-auto">
+              {clips
+                .sort((a, b) => a.order - b.order)
+                .map((clip) => (
+                  <div
+                    key={clip.id}
+                    className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all flex-shrink-0 md:w-full w-60
+                      ${clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'}
+                    `}
+                    onClick={() => onClipSelect(clip.id)}
+                  >
+                    {/* Clip thumbnail preview with overlaid info */}
+                    <div className="aspect-video overflow-hidden relative group">
+                      <SvgThumbnail svgContent={getClipSvgContent(clip)} />
 
-                    {/* Top overlay with clip name and number */}
-                    <div className="absolute top-0 left-0 right-0 px-2 py-1 flex justify-between bg-gradient-to-b from-black/70 to-transparent">
-                      <span className="text-xs text-white font-medium truncate max-w-[70%] drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
-                        {clip.name}
-                      </span>
-                      <span className="text-xs text-white bg-black/50 rounded-full h-5 w-5 flex items-center justify-center">
-                        {clip.order + 1}
-                      </span>
-                    </div>
+                      {/* Top overlay with clip name and number */}
+                      <div className="absolute top-0 left-0 right-0 px-2 py-1 flex justify-between bg-gradient-to-b from-black/70 to-transparent">
+                        <span className="text-xs text-white font-medium truncate max-w-[70%] drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                          {clip.name}
+                        </span>
+                        <span className="text-xs text-white bg-black/50 rounded-full h-5 w-5 flex items-center justify-center">
+                          {clip.order + 1}
+                        </span>
+                      </div>
 
-                    {/* Bottom overlay with duration and prompt */}
-                    <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-90 group-hover:opacity-100 transition-opacity">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs text-white font-medium">{clip.duration}s</span>
-                        {clip.animationId && (
-                          <span className="text-xs text-white bg-black/30 px-1 rounded">Server Saved</span>
+                      {/* Bottom overlay with duration and prompt */}
+                      <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-90 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs text-white font-medium">{clip.duration}s</span>
+                          {clip.animationId && (
+                            <span className="text-xs text-white bg-black/30 px-1 rounded">Server Saved</span>
+                          )}
+                        </div>
+                        {clip.prompt && (
+                          <p className="text-xs text-white italic truncate drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
+                            {truncatePrompt(clip.prompt)}
+                          </p>
                         )}
                       </div>
-                      {clip.prompt && (
-                        <p className="text-xs text-white italic truncate drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
-                          {truncatePrompt(clip.prompt)}
-                        </p>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Button - fixed at bottom, not affected by scrolling */}
-      <div className="pt-2 mt-auto border-t border-gray-700 flex-shrink-0">
+      {/* Bottom section - fixed at bottom */}
+      <div className="pt-2 border-t border-gray-700 bg-gray-900 mt-2 w-full">
         <button
           className="w-full btn btn-sm btn-primary"
           onClick={() => setShowClipSelector(true)}
