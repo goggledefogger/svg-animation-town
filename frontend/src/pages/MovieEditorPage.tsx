@@ -30,6 +30,7 @@ const LoadStoryboardModal: React.FC<{
   const [loadError, setLoadError] = useState<string | null>(null);
   const [storyboardToDelete, setStoryboardToDelete] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Load storyboards when modal opens
   useEffect(() => {
@@ -59,6 +60,23 @@ const LoadStoryboardModal: React.FC<{
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
           );
 
+          // Check first storyboard for debugging
+          if (storyboardsData.length > 0) {
+            const firstStoryboard = storyboardsData[0];
+            const firstClip = firstStoryboard.clips && firstStoryboard.clips.length > 0
+              ? firstStoryboard.clips[0]
+              : null;
+
+            console.log('First storyboard loaded:', {
+              id: firstStoryboard.id,
+              name: firstStoryboard.name,
+              clipCount: firstStoryboard.clips?.length || 0,
+              hasFirstClip: Boolean(firstClip),
+              firstClipHasSvg: Boolean(firstClip?.svgContent),
+              svgLength: firstClip?.svgContent?.length || 0
+            });
+          }
+
           setLoadedStoryboards(storyboardsData);
         } catch (err) {
           console.error('Error loading storyboards:', err);
@@ -72,98 +90,144 @@ const LoadStoryboardModal: React.FC<{
     }
   }, [isOpen, getSavedStoryboards]);
 
+  // Filter storyboards based on search query
+  const filteredStoryboards = loadedStoryboards.filter(storyboard =>
+    searchQuery === '' || storyboard.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex flex-col">
-      {/* Header */}
-      <div className="bg-gotham-blue border-b border-gray-700 p-4 flex justify-between items-center">
-        <h2 className="text-lg font-medium text-white">Load Storyboard</h2>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-white"
-          aria-label="Close"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-gotham-blue border border-gray-700 rounded-lg shadow-lg w-full max-w-xl max-h-[80vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="bg-gotham-blue border-b border-gray-700 p-4 flex justify-between items-center">
+          <h2 className="text-lg font-medium text-white">Load Storyboard</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
-        {isLoadingStoryboards && (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-8 h-8 border-4 border-gray-400 border-t-bat-yellow rounded-full animate-spin"></div>
-            <p className="ml-3 text-gray-400">Loading storyboards...</p>
-          </div>
-        )}
+        {/* Search input */}
+        <div className="p-3 bg-gotham-blue/60 border-b border-gray-700">
+          <input
+            type="text"
+            placeholder="Search storyboards..."
+            className="w-full bg-gotham-black border border-gray-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-bat-yellow"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
 
-        {loadError && (
-          <div className="bg-red-900 bg-opacity-20 border border-red-800 rounded-md p-4">
-            <p className="text-red-400">{loadError}</p>
-          </div>
-        )}
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-0">
+          {isLoadingStoryboards && (
+            <div className="flex items-center justify-center h-32">
+              <div className="w-8 h-8 border-4 border-gray-400 border-t-bat-yellow rounded-full animate-spin"></div>
+              <p className="ml-3 text-gray-400">Loading storyboards...</p>
+            </div>
+          )}
 
-        {!isLoadingStoryboards && !loadError && loadedStoryboards.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-32 text-center">
-            <p className="text-gray-400">No saved storyboards found.</p>
-            <p className="text-sm text-gray-500 mt-2">Create and save a storyboard to see it here.</p>
-          </div>
-        )}
+          {loadError && (
+            <div className="bg-red-900 bg-opacity-20 border border-red-800 rounded-md p-4 m-3">
+              <p className="text-red-400">{loadError}</p>
+            </div>
+          )}
 
-        {!isLoadingStoryboards && !loadError && loadedStoryboards.length > 0 && (
-          <div className="space-y-3">
-            {loadedStoryboards.map((storyboard) => {
-              // Find the first clip to use as a thumbnail
-              const firstClip = storyboard.clips && storyboard.clips.length > 0
-                ? storyboard.clips[0]
-                : null;
+          {!isLoadingStoryboards && !loadError && filteredStoryboards.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-32 text-center">
+              {searchQuery ? (
+                <p className="text-gray-400">No storyboards matching "{searchQuery}"</p>
+              ) : (
+                <>
+                  <p className="text-gray-400">No saved storyboards found.</p>
+                  <p className="text-sm text-gray-500 mt-2">Create and save a storyboard to see it here.</p>
+                </>
+              )}
+            </div>
+          )}
 
-              return (
-                <div
-                  key={storyboard.id}
-                  className="border border-gray-700 hover:border-bat-yellow rounded-md bg-gotham-black transition overflow-hidden flex"
-                >
-                  {/* Thumbnail area */}
+          {!isLoadingStoryboards && !loadError && filteredStoryboards.length > 0 && (
+            <div className="divide-y divide-gray-700">
+              {filteredStoryboards.map((storyboard) => {
+                // Find the first clip to use as a thumbnail
+                const firstClip = storyboard.clips && storyboard.clips.length > 0
+                  ? storyboard.clips[0]
+                  : null;
+
+                // Debug logs for thumbnail issues
+                if (isLoadingStoryboards) {
+                  // Only log the first storyboard as an example
+                  if (storyboard === filteredStoryboards[0]) {
+                    console.log(`Sample storyboard "${storyboard.name}": Has SVG content: ${Boolean(firstClip?.svgContent)}`);
+                  }
+                }
+
+                return (
                   <div
-                    className="w-24 h-20 flex-shrink-0 flex items-center justify-center bg-gray-900 border-r border-gray-700"
-                    onClick={async () => {
-                      await onLoadStoryboard(storyboard.id);
-                      onClose();
-                    }}
+                    key={storyboard.id}
+                    className="flex hover:bg-gotham-blue/20 transition p-0"
                   >
-                    {firstClip && firstClip.svgContent ? (
-                      <div className="w-full h-full overflow-hidden relative">
-                        <SvgThumbnail svgContent={firstClip.svgContent} />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center w-full h-full text-gray-500">
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Content area */}
-                  <div className="flex-1 p-3">
+                    {/* Thumbnail area */}
                     <div
-                      className="cursor-pointer"
+                      className="w-24 h-20 flex-shrink-0 bg-gray-800 cursor-pointer border-r border-gray-700 relative overflow-hidden"
                       onClick={async () => {
                         await onLoadStoryboard(storyboard.id);
                         onClose();
                       }}
                     >
-                      <div className="font-medium text-bat-yellow text-sm">{storyboard.name}</div>
-                      <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
-                        <span>{storyboard.clips?.length || 0} clips</span>
-                        <span>{new Date(storyboard.updatedAt).toLocaleString()}</span>
+                      {firstClip && firstClip.svgContent ? (
+                        <>
+                          {/* Using iframe for isolated SVG rendering */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-white">
+                            <iframe
+                              srcDoc={firstClip.svgContent}
+                              className="w-full h-full border-0"
+                              title={`Thumbnail for ${storyboard.name}`}
+                              sandbox="allow-same-origin"
+                            />
+                          </div>
+                          <div className="absolute bottom-0 right-0 bg-black/60 text-xs text-gray-300 px-1 py-0.5">
+                            {storyboard.clips?.length || 0} clips
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center w-full h-full text-gray-500">
+                          <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z" />
+                          </svg>
+                          <span className="text-xs">{storyboard.clips?.length || 0} clips</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content area */}
+                    <div
+                      className="flex-1 p-3 cursor-pointer flex flex-col justify-between"
+                      onClick={async () => {
+                        await onLoadStoryboard(storyboard.id);
+                        onClose();
+                      }}
+                    >
+                      <div>
+                        <div className="font-medium text-bat-yellow text-sm">{storyboard.name}</div>
+                        <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                          <span>{storyboard.clips?.length || 0} clips</span>
+                          <span>{new Date(storyboard.updatedAt).toLocaleString()}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-gray-700 flex justify-end">
+
+                    {/* Delete button */}
+                    <div className="flex items-center pr-3">
                       <button
-                        className="text-xs text-red-400 hover:text-red-300"
+                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1"
                         onClick={(e) => {
                           e.stopPropagation();
                           setStoryboardToDelete(storyboard.id);
@@ -174,21 +238,11 @@ const LoadStoryboardModal: React.FC<{
                       </button>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="bg-gotham-blue border-t border-gray-700 p-4">
-        <button
-          className="w-full btn btn-outline"
-          onClick={onClose}
-        >
-          Close
-        </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Delete Confirmation */}
