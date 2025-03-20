@@ -1,5 +1,6 @@
 import { ApiResponse, ApiError } from '../types/api';
 import { ApiError as CustomApiError } from './movie.api';
+import { Storyboard } from '../contexts/MovieContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -421,41 +422,45 @@ export const AnimationStorageApi = {
  */
 export const MovieStorageApi = {
   /**
-   * Save a movie/storyboard to the server
+   * Save a movie to the server (via backend API)
    */
-  saveMovie: async (storyboard: any): Promise<{ id: string }> => {
+  saveMovie: async (storyboard: Storyboard): Promise<{id: string, success: boolean, message: string}> => {
     try {
-      // Create a deep copy to prevent mutation issues
-      const storyboardCopy = JSON.parse(JSON.stringify(storyboard));
-
-      // Ensure clips array is preserved and properly formatted
-      if (!storyboardCopy.clips) {
-        storyboardCopy.clips = [];
+      // Basic validation to ensure we're not missing required fields
+      if (!storyboard.id) {
+        throw new Error('Storyboard ID is required');
       }
 
-      const data = await fetchApi<any>(
+      // Convert dates to ISO strings if they're Date objects
+      const preparedStoryboard = {
+        ...storyboard,
+        createdAt: storyboard.createdAt instanceof Date ? storyboard.createdAt.toISOString() : storyboard.createdAt,
+        updatedAt: storyboard.updatedAt instanceof Date ? storyboard.updatedAt.toISOString() : storyboard.updatedAt,
+      };
+
+      const response = await fetchApi<any>(
         '/movie/save',
         {
           method: 'POST',
-          body: JSON.stringify(storyboardCopy),
+          body: JSON.stringify(preparedStoryboard),
         }
       );
 
-      if (data.success && data.id) {
-        return { id: data.id };
-      } else {
-        throw new Error('Invalid response from server');
-      }
+      return {
+        id: response.id || storyboard.id,
+        success: true,
+        message: response.message || 'Storyboard saved successfully'
+      };
     } catch (error) {
-      console.error('Error saving storyboard:', error);
+      console.error('Error saving movie:', error);
       throw error;
     }
   },
 
   /**
-   * List all saved movies/storyboards
+   * List all movies from the server (via backend API)
    */
-  listMovies: async (): Promise<any[]> => {
+  listMovies: async (): Promise<Storyboard[]> => {
     try {
       const data = await fetchApi<any>('/movie/list');
 
@@ -465,15 +470,15 @@ export const MovieStorageApi = {
         throw new Error('Invalid response from server');
       }
     } catch (error) {
-      console.error('Error listing storyboards:', error);
+      console.error('Error listing movies:', error);
       throw error;
     }
   },
 
   /**
-   * Get a movie/storyboard by ID
+   * Get a movie from the server (via backend API)
    */
-  getMovie: async (id: string): Promise<any> => {
+  getMovie: async (id: string): Promise<Storyboard | null> => {
     try {
       const data = await fetchApi<any>(`/movie/${id}`);
 
@@ -483,7 +488,7 @@ export const MovieStorageApi = {
         throw new Error('Invalid response from server');
       }
     } catch (error) {
-      console.error(`Error fetching movie with ID ${id}:`, error);
+      console.error(`Error getting movie ${id}:`, error);
       throw error;
     }
   },
@@ -495,9 +500,7 @@ export const MovieStorageApi = {
     try {
       const data = await fetchApi<any>(
         `/movie/${id}`,
-        {
-          method: 'DELETE',
-        }
+        { method: 'DELETE' }
       );
 
       return data.success === true;

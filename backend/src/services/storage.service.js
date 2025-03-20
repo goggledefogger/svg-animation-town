@@ -231,6 +231,7 @@ class StorageService {
 
       const data = await fs.readFile(filePath, 'utf8');
       const movie = JSON.parse(data);
+
       return movie;
     } catch (error) {
       console.error(`Error getting movie ${id}:`, error);
@@ -240,10 +241,19 @@ class StorageService {
 
   /**
    * List all movies/storyboards
-   * @returns {Promise<Array>} List of movie metadata
+   * @returns {Promise<Array>} Array of movie metadata objects
    */
   async listMovies() {
     try {
+      // Check if directory exists
+      try {
+        await fs.access(MOVIES_DIR);
+      } catch (err) {
+        console.error('Movies directory does not exist or is not accessible:', err);
+        await this._ensureDirectoryExists(MOVIES_DIR);
+        return []; // Return empty array if directory was just created
+      }
+
       const files = await fs.readdir(MOVIES_DIR);
       const jsonFiles = files.filter(file => file.endsWith('.json'));
 
@@ -257,9 +267,9 @@ class StorageService {
             return {
               id: movie.id,
               name: movie.name,
-              description: movie.description,
-              clipCount: movie.clips?.length || 0,
-              updatedAt: movie.updatedAt
+              description: movie.description || '',
+              clipCount: movie.clips ? movie.clips.length : 0,
+              updatedAt: movie.updatedAt || movie.timestamp || new Date().toISOString()
             };
           } catch (error) {
             console.error(`Error reading movie file ${file}:`, error);

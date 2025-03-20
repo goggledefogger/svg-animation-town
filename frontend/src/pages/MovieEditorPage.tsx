@@ -24,7 +24,8 @@ const LoadStoryboardModal: React.FC<{
   onLoadStoryboard: (id: string) => Promise<void | boolean>;
   onDeleteStoryboard: (id: string) => Promise<void | boolean>;
   getSavedStoryboards: () => Promise<string[]>;
-}> = ({ isOpen, onClose, onLoadStoryboard, onDeleteStoryboard, getSavedStoryboards }) => {
+  refreshTrigger?: number; // Add a refresh trigger prop
+}> = ({ isOpen, onClose, onLoadStoryboard, onDeleteStoryboard, getSavedStoryboards, refreshTrigger = 0 }) => {
   const [loadedStoryboards, setLoadedStoryboards] = useState<Storyboard[]>([]);
   const [isLoadingStoryboards, setIsLoadingStoryboards] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -32,20 +33,27 @@ const LoadStoryboardModal: React.FC<{
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load storyboards when modal opens
+  // Load storyboards when modal opens or refreshTrigger changes
   useEffect(() => {
     if (isOpen) {
       setIsLoadingStoryboards(true);
+      setLoadedStoryboards([]); // Clear previous data
 
       const fetchStoryboards = async () => {
         try {
+          // Clear session storage cache to force fresh data
+          sessionStorage.removeItem('current_animation_state');
+          sessionStorage.removeItem('page_just_loaded');
+          sessionStorage.setItem('force_server_refresh', 'true');
+
           // Get list of storyboard IDs
           const storyboardIds = await getSavedStoryboards();
 
-          // Fetch details for each storyboard
+          // Fetch details for each storyboard directly from server for freshest data
           const storyboardsData: Storyboard[] = [];
           for (const id of storyboardIds) {
             try {
+              // Use direct API call to bypass any stale cache
               const storyboard = await MovieStorageApi.getMovie(id);
               if (storyboard) {
                 storyboardsData.push(storyboard as Storyboard);
@@ -60,23 +68,6 @@ const LoadStoryboardModal: React.FC<{
             new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
           );
 
-          // Check first storyboard for debugging
-          if (storyboardsData.length > 0) {
-            const firstStoryboard = storyboardsData[0];
-            const firstClip = firstStoryboard.clips && firstStoryboard.clips.length > 0
-              ? firstStoryboard.clips[0]
-              : null;
-
-            console.log('First storyboard loaded:', {
-              id: firstStoryboard.id,
-              name: firstStoryboard.name,
-              clipCount: firstStoryboard.clips?.length || 0,
-              hasFirstClip: Boolean(firstClip),
-              firstClipHasSvg: Boolean(firstClip?.svgContent),
-              svgLength: firstClip?.svgContent?.length || 0
-            });
-          }
-
           setLoadedStoryboards(storyboardsData);
         } catch (err) {
           console.error('Error loading storyboards:', err);
@@ -88,7 +79,16 @@ const LoadStoryboardModal: React.FC<{
 
       fetchStoryboards();
     }
-  }, [isOpen, getSavedStoryboards]);
+  }, [isOpen, getSavedStoryboards, refreshTrigger]); // Added refreshTrigger as dependency
+
+  // Remove the debug log for storyboard names
+  useEffect(() => {
+    setSearchQuery('');
+    // Force clearing the loaded storyboards when modal is closed
+    if (!isOpen) {
+      setLoadedStoryboards([]);
+    }
+  }, [isOpen]);
 
   // Filter storyboards based on search query
   const filteredStoryboards = loadedStoryboards.filter(storyboard =>
@@ -294,19 +294,11 @@ const MovieEditorPage: React.FC = () => {
     deleteStoryboard,
     getSavedStoryboards,
     createNewStoryboard,
-    addClip
+    addClip,
+    renameStoryboard
   } = useMovie();
 
   const navigate = useNavigate();
-
-  // Add useEffect to track changes to currentStoryboard
-  useEffect(() => {
-    console.log('Current storyboard updated:', currentStoryboard.id);
-    console.log('Clips count:', currentStoryboard.clips.length);
-    if (currentStoryboard.clips.length > 0) {
-      console.log('First clip:', currentStoryboard.clips[0].name);
-    }
-  }, [currentStoryboard]);
 
   // Playback timer for clips - refined for better performance and sync
   useEffect(() => {
@@ -576,19 +568,13 @@ const MovieEditorPage: React.FC = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [storyboardName, setStoryboardName] = useState(currentStoryboard.name);
+  const [showRenameModal, setShowRenameModal] = useState(false);
   const [showStoryboardGeneratorModal, setShowStoryboardGeneratorModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGeneratingClipsModal, setShowGeneratingClipsModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
-
-  // Helper function to show toast notifications
-  const showToastNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToastMessage(message);
-    setToastType(type);
-    setShowToast(true);
-  }, []);
 
   // Update with a properly defined interface for the progress state
   interface GenerationProgressState {
@@ -608,35 +594,115 @@ const MovieEditorPage: React.FC = () => {
   const [showMobileClipEditor, setShowMobileClipEditor] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [storyboardToDelete, setStoryboardToDelete] = useState<string | null>(null);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] = useState(false);
+  const [loadModalRefreshTrigger, setLoadModalRefreshTrigger] = useState(0);
 
-  // Function to reset application state
-  const resetApplication = useCallback(() => {
-    // Clear localStorage
-    localStorage.removeItem('svg-animator-storyboards');
+  // Keep storyboardName in sync with currentStoryboard.name
+  useEffect(() => {
+    setStoryboardName(currentStoryboard.name);
+  }, [currentStoryboard.name]);
 
-    // Clear sessionStorage animation state (needed to reset the animation viewer)
-    sessionStorage.removeItem('current_animation_state');
-    sessionStorage.removeItem('page_just_loaded');
-    sessionStorage.setItem('force_server_refresh', 'true');
+  // Helper function to show toast notifications
+  const showToastNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+  }, []);
 
-    // Create a new empty storyboard
-    createNewStoryboard();
+  // Function to handle showing the rename modal
+  const handleShowRenameModal = () => {
+    setStoryboardName(currentStoryboard.name);
+    setShowRenameModal(true);
+  };
 
-    // Clear URL parameters
-    window.history.replaceState({}, document.title, window.location.pathname);
+  // Function to handle renaming the storyboard
+  const handleRename = async () => {
+    try {
+      // Create an updated storyboard object with the new name
+      const updatedStoryboard = {
+        ...currentStoryboard,
+        name: storyboardName,
+        updatedAt: new Date()
+      };
 
-    // Reload the page to ensure a clean state
-    window.location.reload();
-  }, [createNewStoryboard]);
+      // Save directly to API to ensure consistent server state
+      try {
+        const result = await MovieStorageApi.saveMovie(updatedStoryboard);
 
-  const handleClipSelect = (clipId: string) => {
-    setActiveClipId(clipId);
+        // Update the state after the save completes successfully
+        setCurrentStoryboard(updatedStoryboard);
+
+        // Also update the context
+        renameStoryboard(storyboardName);
+      } catch (serverError) {
+        console.error('Error saving renamed storyboard to server:', serverError);
+        throw serverError; // Rethrow to be caught by outer catch
+      }
+
+      // Increment refresh trigger to reload storyboards in load modal
+      setLoadModalRefreshTrigger(prev => prev + 1);
+
+      setShowRenameModal(false);
+
+      // Show success toast
+      showToastNotification('Storyboard renamed successfully!');
+    } catch (error) {
+      console.error('Error renaming storyboard:', error);
+      showToastNotification('Failed to rename storyboard', 'error');
+    }
+  };
+
+  // Update the save modal's save function to set the name and then save
+  const handleSaveWithName = async () => {
+    try {
+      // Create an updated storyboard object with the new name
+      const updatedStoryboard = {
+        ...currentStoryboard,
+        name: storyboardName,
+        updatedAt: new Date()
+      };
+
+      // Save directly to API to ensure consistent server state
+      try {
+        const result = await MovieStorageApi.saveMovie(updatedStoryboard);
+
+        // Update the state after the save completes successfully
+        setCurrentStoryboard(updatedStoryboard);
+
+        // Also update the context
+        renameStoryboard(storyboardName);
+      } catch (serverError) {
+        console.error('Error saving storyboard to server:', serverError);
+        throw serverError; // Rethrow to be caught by outer catch
+      }
+
+      // Increment refresh trigger to reload storyboards in load modal
+      setLoadModalRefreshTrigger(prev => prev + 1);
+
+      setShowSaveModal(false);
+
+      // Show success toast
+      showToastNotification('Storyboard saved successfully!');
+    } catch (error) {
+      console.error('Error saving storyboard:', error);
+      showToastNotification('Failed to save storyboard', 'error');
+    }
   };
 
   const handleSave = async () => {
     try {
+      // If this is a new storyboard with default name, show the save modal
+      if (currentStoryboard.name === 'New Movie' || !currentStoryboard.name) {
+        setStoryboardName(currentStoryboard.name);
+        setShowSaveModal(true);
+        return;
+      }
+
       await saveStoryboard();
-      setShowSaveModal(false);
+
+      // Increment refresh trigger to reload storyboards in load modal
+      setLoadModalRefreshTrigger(prev => prev + 1);
 
       // Show success toast
       showToastNotification('Storyboard saved successfully!');
@@ -713,9 +779,6 @@ const MovieEditorPage: React.FC = () => {
     // Run the check when the component mounts
     checkIncompleteGenerations();
   }, [currentStoryboard, isGenerating]);
-
-  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
-  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] = useState(false);
 
   const handleGenerateStoryboard = async (prompt: string, aiProvider: 'openai' | 'claude', numScenes?: number) => {
     try {
@@ -1206,6 +1269,30 @@ const MovieEditorPage: React.FC = () => {
     }
   };
 
+  // Function to reset application state
+  const resetApplication = useCallback(() => {
+    // Clear localStorage
+    localStorage.removeItem('svg-animator-storyboards');
+
+    // Clear sessionStorage animation state (needed to reset the animation viewer)
+    sessionStorage.removeItem('current_animation_state');
+    sessionStorage.removeItem('page_just_loaded');
+    sessionStorage.setItem('force_server_refresh', 'true');
+
+    // Create a new empty storyboard
+    createNewStoryboard();
+
+    // Clear URL parameters
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    // Reload the page to ensure a clean state
+    window.location.reload();
+  }, [createNewStoryboard]);
+
+  const handleClipSelect = (clipId: string) => {
+    setActiveClipId(clipId);
+  };
+
   return (
     <>
       <div className="flex flex-col h-screen overflow-hidden bg-gotham-black text-white">
@@ -1215,6 +1302,7 @@ const MovieEditorPage: React.FC = () => {
           onSave={handleSave}
           onLoad={() => setShowLoadModal(true)}
           onGenerate={() => setShowStoryboardGeneratorModal(true)}
+          onRename={handleShowRenameModal}
           storyboardName={currentStoryboard.name}
           onReset={resetApplication}
         />
@@ -1357,8 +1445,34 @@ const MovieEditorPage: React.FC = () => {
           }
           confirmText="Save"
           cancelText="Cancel"
-          onConfirm={handleSave}
+          onConfirm={handleSaveWithName}
           onCancel={() => setShowSaveModal(false)}
+        />
+
+        {/* Rename Modal */}
+        <ConfirmationModal
+          isOpen={showRenameModal}
+          title="Rename Storyboard"
+          message={
+            <div className="mt-2">
+              <label htmlFor="renameStoryboard" className="block text-sm font-medium text-gray-300">
+                Storyboard Name
+              </label>
+              <input
+                type="text"
+                id="renameStoryboard"
+                className="input"
+                placeholder="Enter a new name for your storyboard"
+                value={storyboardName}
+                onChange={(e) => setStoryboardName(e.target.value)}
+                autoFocus
+              />
+            </div>
+          }
+          confirmText="Rename"
+          cancelText="Cancel"
+          onConfirm={handleRename}
+          onCancel={() => setShowRenameModal(false)}
         />
 
         {/* Delete Storyboard Confirmation */}
@@ -1397,10 +1511,13 @@ const MovieEditorPage: React.FC = () => {
           const success = await deleteStoryboard(id);
           if (success) {
             showToastNotification(`Storyboard deleted successfully!`);
+            // Increment refresh trigger to reload storyboards in load modal
+            setLoadModalRefreshTrigger(prev => prev + 1);
           }
           return success;
         }}
         getSavedStoryboards={getSavedStoryboards}
+        refreshTrigger={loadModalRefreshTrigger}
       />
 
       {/* Toast Notification */}

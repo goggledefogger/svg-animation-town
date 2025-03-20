@@ -12,6 +12,7 @@ interface HeaderProps {
   onSave?: () => void;
   onLoad?: () => void;
   onGenerate?: () => void;
+  onRename?: () => void;
   storyboardName?: string;
   onReset?: () => void;
 }
@@ -185,6 +186,7 @@ const Header: React.FC<HeaderProps> = ({
   onSave,
   onLoad,
   onGenerate,
+  onRename,
   storyboardName,
   onReset
 }) => {
@@ -370,6 +372,27 @@ const Header: React.FC<HeaderProps> = ({
             alt="Gotham Logo"
             className="h-7 w-7"
           />
+
+          {/* Desktop storyboard name display */}
+          {isMovieEditorPage && storyboardName && (
+            <div
+              className="ml-4 px-3 py-1 rounded hover:bg-gray-800 cursor-pointer flex items-center transition-colors group"
+              onClick={onRename}
+              title="Click to rename"
+            >
+              <span className="text-gray-400 text-sm mr-1.5">Storyboard:</span>
+              <span className="text-bat-yellow font-medium">{storyboardName}</span>
+              <svg
+                className="w-4 h-4 ml-1.5 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </div>
+          )}
         </div>
 
         {/* Center section - buttons */}
@@ -442,12 +465,25 @@ const Header: React.FC<HeaderProps> = ({
             />
           </div>
 
-          {/* Center - storyboard name when in movie mode */}
+          {/* Center - storyboard name when in movie mode - now clickable */}
           {isMovieEditorPage && storyboardName && (
-            <span className="text-sm text-gray-300 flex-grow mx-4 text-center">
+            <div
+              className="text-sm text-gray-300 flex-grow mx-4 text-center flex justify-center items-center cursor-pointer hover:bg-gray-800 rounded py-1 px-2 transition-colors"
+              onClick={onRename}
+              title="Click to rename"
+            >
               <span className="text-gray-400 mr-1">Storyboard:</span>
-              {storyboardName}
-            </span>
+              <span className="text-bat-yellow">{storyboardName}</span>
+              <svg
+                className="w-3.5 h-3.5 ml-1 text-gray-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </div>
           )}
 
           {/* Right side with editor dropdown */}
