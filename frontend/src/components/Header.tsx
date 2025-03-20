@@ -5,6 +5,7 @@ import { useMovie } from '../contexts/MovieContext';
 import ConfirmationModal from './ConfirmationModal';
 import ExportModal from './ExportModal';
 import AnimationList, { AnimationItem } from './AnimationList';
+import './Header.css'; // Import custom CSS for shimmer effect
 
 interface HeaderProps {
   onExport?: () => void;
@@ -47,6 +48,7 @@ interface ActionButtonProps {
   text?: string;
   yellow?: boolean;
   disabled?: boolean;
+  magical?: boolean;
 }
 
 const ActionButton: React.FC<ActionButtonProps> = ({
@@ -56,25 +58,50 @@ const ActionButton: React.FC<ActionButtonProps> = ({
   icon,
   text,
   yellow = false,
-  disabled = false
+  disabled = false,
+  magical = false
 }) => {
   const isMobile = window.innerWidth < 768;
+  const [animate, setAnimate] = useState(false);
   const baseClasses = "rounded-md flex items-center justify-center";
-  const colorClasses = yellow
-    ? "bg-bat-yellow text-black hover:opacity-90"
-    : "bg-gray-800 text-white hover:bg-gray-700";
+  const colorClasses = magical
+    ? "magical-button text-white"
+    : yellow
+      ? "bg-bat-yellow text-black hover:opacity-90"
+      : "bg-gray-800 text-white hover:bg-gray-700";
   const sizeClasses = isMobile ? "p-2.5 w-12 h-12" : "px-5 py-2";
+
+  // Add animation class periodically if magical
+  useEffect(() => {
+    if (!magical) return;
+
+    // Initial animation on mount
+    setAnimate(true);
+    const initialTimeout = setTimeout(() => setAnimate(false), 2000);
+
+    // Set up interval to animate every 20 seconds
+    const interval = setInterval(() => {
+      setAnimate(true);
+      setTimeout(() => setAnimate(false), 2000);
+    }, 20000);
+
+    // Clean up
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
+  }, [magical]);
 
   return (
     <button
-      className={`${baseClasses} ${colorClasses} ${sizeClasses}`}
+      className={`${baseClasses} ${colorClasses} ${sizeClasses} ${magical && animate ? 'animate' : ''}`}
       onClick={onClick}
       aria-label={ariaLabel}
       title={title}
       disabled={disabled}
     >
-      {icon}
-      {!isMobile && text && <span>{text}</span>}
+      <span className={magical ? `magical-content ${animate ? 'animate' : ''}` : ""}>{icon}</span>
+      {!isMobile && text && <span className={magical ? `magical-content ${animate ? 'animate' : ''} ml-2` : ""}>{text}</span>}
     </button>
   );
 };
@@ -352,6 +379,7 @@ const Header: React.FC<HeaderProps> = ({
               title="Generate with AI"
               icon={createIcon(iconPaths.generate)}
               text="Generate"
+              magical={true}
             />
           )}
 
@@ -438,6 +466,7 @@ const Header: React.FC<HeaderProps> = ({
               ariaLabel="Generate"
               title="Generate with AI"
               icon={createIcon(iconPaths.generate)}
+              magical={true}
             />
           )}
 

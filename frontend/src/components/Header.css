@@ -1,0 +1,113 @@
+/* Magical button background shimmer effect */
+.magical-button {
+  background: linear-gradient(
+    45deg,
+    #8e2de2, /* Purple */
+    #4a00e0, /* Deep blue */
+    #3f5efb, /* Blue */
+    #6a82fb, /* Light blue */
+    #fc466b, /* Pink */
+    #a445b2  /* Magenta */
+  );
+  background-size: 300% 300%;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(138, 43, 226, 0.3);
+  transition: all 0.3s ease;
+}
+
+.magical-button.animate {
+  animation: shimmer 2s ease forwards;
+  box-shadow: 0 0 15px rgba(138, 43, 226, 0.5);
+}
+
+.magical-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 15px rgba(138, 43, 226, 0.6);
+}
+
+.magical-button:before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  opacity: 0;
+}
+
+.magical-button.animate:before {
+  animation: ripple 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Text and icon shimmer effect */
+.magical-content {
+  position: relative;
+  z-index: 1;
+  color: white;
+  text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+}
+
+.magical-content.animate {
+  animation: colorize 2s ease forwards;
+}
+
+/* Shimmer background animation */
+@keyframes shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Magic ripple effect animation */
+@keyframes ripple {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Text color animation */
+@keyframes colorize {
+  0% {
+    color: #ffffff;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+  }
+  25% {
+    color: #ffdd99;
+    text-shadow: 0 0 10px rgba(255, 221, 153, 0.7);
+  }
+  50% {
+    color: #ffffff;
+    text-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  }
+  75% {
+    color: #d6f5ff;
+    text-shadow: 0 0 10px rgba(214, 245, 255, 0.7);
+  }
+  100% {
+    color: #ffffff;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+  }
+}
