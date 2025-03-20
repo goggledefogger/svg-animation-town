@@ -23,6 +23,12 @@ const config = {
     model: process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219',
     temperature: 0.7,
     maxTokens: 12000,
+    // Rate limiter configuration
+    rateLimiter: {
+      tokensPerMinute: parseInt(process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 8000,
+      tokensPerRequest: parseInt(process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 1600,
+      maxConcurrentRequests: parseInt(process.env.CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 2
+    }
   },
 
   // AI Provider selection

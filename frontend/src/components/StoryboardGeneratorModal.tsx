@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 interface StoryboardGeneratorModalProps {
   isOpen: boolean;
   onCancel: () => void;
-  onGenerate: (prompt: string, provider: 'openai' | 'claude') => void;
+  onGenerate: (prompt: string, provider: 'openai' | 'claude', numScenes?: number) => void;
   isLoading: boolean;
 }
 
@@ -15,14 +15,20 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
 }) => {
   const [prompt, setPrompt] = useState('');
   const [provider, setProvider] = useState<'openai' | 'claude'>('openai');
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [numScenes, setNumScenes] = useState<'auto' | number>('auto');
+  const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
+  const [scenesDropdownOpen, setScenesDropdownOpen] = useState(false);
+  const providerDropdownRef = useRef<HTMLDivElement>(null);
+  const scenesDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setDropdownOpen(false);
+      if (providerDropdownRef.current && !providerDropdownRef.current.contains(event.target as Node)) {
+        setProviderDropdownOpen(false);
+      }
+      if (scenesDropdownRef.current && !scenesDropdownRef.current.contains(event.target as Node)) {
+        setScenesDropdownOpen(false);
       }
     }
 
@@ -30,17 +36,26 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [dropdownRef]);
+  }, [providerDropdownRef, scenesDropdownRef]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (prompt.trim()) {
-      onGenerate(prompt.trim(), provider);
+      // Pass undefined for numScenes when 'auto' is selected, otherwise pass the number
+      onGenerate(
+        prompt.trim(),
+        provider,
+        numScenes === 'auto' ? undefined : numScenes
+      );
     }
   };
 
   const getProviderDisplayName = (providerValue: 'openai' | 'claude') => {
     return providerValue === 'openai' ? 'OpenAI' : 'Claude';
+  };
+
+  const getScenesDisplayName = (scenesValue: 'auto' | number) => {
+    return scenesValue === 'auto' ? 'Auto' : scenesValue.toString();
   };
 
   if (!isOpen) {
@@ -85,69 +100,137 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
             />
           </div>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              AI Provider
-            </label>
-
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
             {/* Dropdown for AI Provider selection */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                type="button"
-                className={`
-                  flex items-center justify-between w-full px-4 py-2 text-sm
-                  bg-gray-700 border ${isLoading ? 'border-gray-600' : 'border-gray-600 hover:border-gray-500'}
-                  rounded-md focus:outline-none ${provider === 'openai' ? 'text-bat-yellow' : provider === 'claude' ? 'text-bat-yellow' : 'text-white'}
-                `}
-                onClick={() => !isLoading && setDropdownOpen(!dropdownOpen)}
-                disabled={isLoading}
-              >
-                <span>{getProviderDisplayName(provider)}</span>
-                <svg
-                  className={`ml-2 w-4 h-4 transition-transform ${dropdownOpen ? 'transform rotate-180' : ''}`}
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  aria-hidden="true"
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                AI Provider
+              </label>
+              <div className="relative" ref={providerDropdownRef}>
+                <button
+                  type="button"
+                  className={`
+                    flex items-center justify-between w-full px-4 py-2 text-sm
+                    bg-gray-700 border ${isLoading ? 'border-gray-600' : 'border-gray-600 hover:border-gray-500'}
+                    rounded-md focus:outline-none ${provider === 'openai' ? 'text-bat-yellow' : provider === 'claude' ? 'text-bat-yellow' : 'text-white'}
+                  `}
+                  onClick={() => !isLoading && setProviderDropdownOpen(!providerDropdownOpen)}
+                  disabled={isLoading}
                 >
-                  <path
-                    fillRule="evenodd"
-                    d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
+                  <span>{getProviderDisplayName(provider)}</span>
+                  <svg
+                    className={`ml-2 w-4 h-4 transition-transform ${providerDropdownOpen ? 'transform rotate-180' : ''}`}
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
 
-              {dropdownOpen && (
-                <div className="absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg">
-                  <ul className="py-1 text-sm">
-                    <li>
-                      <button
-                        type="button"
-                        className={`w-full px-4 py-2 text-left ${provider === 'openai' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
-                        onClick={() => {
-                          setProvider('openai');
-                          setDropdownOpen(false);
-                        }}
-                      >
-                        OpenAI
-                      </button>
-                    </li>
-                    <li>
-                      <button
-                        type="button"
-                        className={`w-full px-4 py-2 text-left ${provider === 'claude' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
-                        onClick={() => {
-                          setProvider('claude');
-                          setDropdownOpen(false);
-                        }}
-                      >
-                        Claude
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              )}
+                {providerDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg">
+                    <ul className="py-1 text-sm">
+                      <li>
+                        <button
+                          type="button"
+                          className={`w-full px-4 py-2 text-left ${provider === 'openai' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                          onClick={() => {
+                            setProvider('openai');
+                            setProviderDropdownOpen(false);
+                          }}
+                        >
+                          OpenAI
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          type="button"
+                          className={`w-full px-4 py-2 text-left ${provider === 'claude' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                          onClick={() => {
+                            setProvider('claude');
+                            setProviderDropdownOpen(false);
+                          }}
+                        >
+                          Claude
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Dropdown for Number of Scenes selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Number of Scenes
+              </label>
+              <div className="relative" ref={scenesDropdownRef}>
+                <button
+                  type="button"
+                  className={`
+                    flex items-center justify-between w-full px-4 py-2 text-sm
+                    bg-gray-700 border ${isLoading ? 'border-gray-600' : 'border-gray-600 hover:border-gray-500'}
+                    rounded-md focus:outline-none text-bat-yellow
+                  `}
+                  onClick={() => !isLoading && setScenesDropdownOpen(!scenesDropdownOpen)}
+                  disabled={isLoading}
+                >
+                  <span>{getScenesDisplayName(numScenes)}</span>
+                  <svg
+                    className={`ml-2 w-4 h-4 transition-transform ${scenesDropdownOpen ? 'transform rotate-180' : ''}`}
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+
+                {scenesDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <ul className="py-1 text-sm">
+                      <li>
+                        <button
+                          type="button"
+                          className={`w-full px-4 py-2 text-left ${numScenes === 'auto' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                          onClick={() => {
+                            setNumScenes('auto');
+                            setScenesDropdownOpen(false);
+                          }}
+                        >
+                          Auto
+                        </button>
+                      </li>
+                      {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                        <li key={num}>
+                          <button
+                            type="button"
+                            className={`w-full px-4 py-2 text-left ${numScenes === num ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                            onClick={() => {
+                              setNumScenes(num);
+                              setScenesDropdownOpen(false);
+                            }}
+                          >
+                            {num}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

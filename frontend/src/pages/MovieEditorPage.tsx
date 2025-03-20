@@ -428,7 +428,10 @@ const MovieEditorPage: React.FC = () => {
     checkIncompleteGenerations();
   }, [currentStoryboard, isGenerating]);
 
-  const handleGenerateStoryboard = async (prompt: string, aiProvider: 'openai' | 'claude') => {
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [showDeleteConfirmationModal, setShowDeleteConfirmationModal] = useState(false);
+
+  const handleGenerateStoryboard = async (prompt: string, aiProvider: 'openai' | 'claude', numScenes?: number) => {
     try {
       // Reset any previous errors
       setGenerationError(null);
@@ -437,9 +440,7 @@ const MovieEditorPage: React.FC = () => {
       setIsGenerating(true);
 
       // Call the API to generate a storyboard
-      const response = await MovieApi.generateStoryboard(prompt, aiProvider);
-
-      console.log('Generated storyboard:', response);
+      const response = await MovieApi.generateStoryboard(prompt, aiProvider, numScenes);
 
       // Close the generator modal
       setShowStoryboardGeneratorModal(false);
@@ -651,25 +652,44 @@ const MovieEditorPage: React.FC = () => {
 
           // Generate SVG for this scene, with error handling for mobile timeouts
           let result;
-          try {
-            // Set a timeout to handle the case where the API request hangs
-            const timeoutMs = 30000; // 30 seconds timeout
-            const timeoutPromise = new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error(`Scene generation timed out after ${timeoutMs/1000} seconds`)), timeoutMs);
-            });
+          let retryCount = 0;
+          const maxRetries = 1; // One retry attempt
 
-            // Race the actual API call against the timeout
-            result = await Promise.race([
-              AnimationApi.generate(scene.svgPrompt, aiProvider),
-              timeoutPromise
-            ]);
-          } catch (generateError) {
-            console.error(`Error generating scene ${absoluteSceneIndex+1}:`, generateError);
-            throw new Error(`Failed to generate SVG: ${generateError instanceof Error ? generateError.message : 'Unknown error'}`);
+          while (retryCount <= maxRetries) {
+            try {
+              // Set a timeout to handle the case where the API request hangs
+              const timeoutMs = parseInt(import.meta.env.VITE_SCENE_GENERATION_TIMEOUT_MS || '300000', 10);
+
+              // Generate without a manual timeout promise - rely on the API's built-in timeout
+              result = await AnimationApi.generate(scene.svgPrompt, aiProvider);
+
+              // If we got here, the generation was successful
+              break;
+            } catch (generateError) {
+              console.error(`Error generating scene ${absoluteSceneIndex+1} (attempt ${retryCount + 1}):`, generateError);
+
+              // Check if it's an abort error - most likely a timeout
+              const isAbortError = generateError instanceof Error &&
+                (generateError.message.includes('aborted') ||
+                 generateError.message.includes('abort') ||
+                 generateError.name === 'AbortError');
+
+              if (isAbortError && retryCount < maxRetries) {
+                // Only retry for abort/timeout errors
+                console.log(`Retrying scene ${absoluteSceneIndex+1} generation after abort/timeout`);
+                retryCount++;
+                // Short delay before retry
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                continue;
+              }
+
+              // Either not an abort error or we've reached max retries
+              throw new Error(`Failed to generate SVG: ${generateError instanceof Error ? generateError.message : 'Unknown error'}`);
+            }
           }
 
           // Verify the generated SVG is valid
-          if (!result.svg || !result.svg.includes('<svg')) {
+          if (!result || !result.svg || !result.svg.includes('<svg')) {
             throw new Error(`Invalid SVG generated for scene ${absoluteSceneIndex+1}`);
           }
 
@@ -688,14 +708,10 @@ const MovieEditorPage: React.FC = () => {
 
           // Get the scene name
           const sceneName = `Scene ${absoluteSceneIndex + 1}: ${scene.id || 'Untitled'}`;
-          console.log(`Generated scene ${absoluteSceneIndex+1} with name: ${sceneName}`);
 
-          // Use the animation ID returned from the API since the backend now saves animations automatically
-          // If no ID is returned, log a warning but continue with local data
+          // Detailed animation ID logging only for missing IDs
           if (!result.animationId) {
-            console.warn(`No animation ID returned for scene ${absoluteSceneIndex+1}, this may indicate the backend didn't save it`);
-          } else {
-            console.log(`Scene ${absoluteSceneIndex+1} saved with animation ID: ${result.animationId}`);
+            console.warn(`No animation ID returned for scene ${absoluteSceneIndex+1}`);
           }
 
           // Add this scene to the storyboard
@@ -707,11 +723,13 @@ const MovieEditorPage: React.FC = () => {
             order: absoluteSceneIndex,
             prompt: scene.svgPrompt,
             chatHistory,
-            animationId: result.animationId // Use the animation ID from the generate API result
+            // Add a timestamp to track when this was created
+            createdAt: new Date(),
+            // Store the animation ID (which might be undefined)
+            animationId: result.animationId,
+            // Store the provider used to generate this clip
+            provider: aiProvider
           };
-
-          // Log the animation ID before updating state
-          console.log(`About to add clip with animation ID: ${result.animationId}`);
 
           // Update the storyboard with the new clip and updated generation status
           setCurrentStoryboard(prevStoryboard => {
@@ -727,8 +745,15 @@ const MovieEditorPage: React.FC = () => {
               order: newClip.order,
               prompt: newClip.prompt || "",
               chatHistory: newClip.chatHistory || [],
-              animationId: result.animationId // Explicitly set again to ensure it's included
+              createdAt: newClip.createdAt,
+              provider: newClip.provider,
+              // Store the animation ID with detailed logging if missing
+              animationId: result.animationId
             };
+
+            if (!result.animationId) {
+              console.warn(`Adding clip #${absoluteSceneIndex+1} with missing animationId`);
+            }
 
             const updatedStoryboard = {
               ...prevStoryboard,
@@ -741,17 +766,12 @@ const MovieEditorPage: React.FC = () => {
               }
             };
 
-            // Log the storyboard for debugging
-            console.log(`Updated storyboard now has ${updatedStoryboard.clips.length} clips`);
-            console.log(`Last clip has animation ID: ${updatedStoryboard.clips[updatedStoryboard.clips.length-1].animationId}`);
-
             // CRITICAL FIX: Save the storyboard directly with the updated clips
             // We need to save the storyboard directly using the updated object, not the React state
-            MovieStorageApi.saveMovie(updatedStoryboard).then(result => {
-              console.log(`Direct save successful with ID: ${result.id}`);
-            }).catch(err => {
-              console.error('Error in direct storyboard save:', err);
-            });
+            MovieStorageApi.saveMovie(updatedStoryboard)
+              .catch(err => {
+                console.error('Error saving storyboard after adding clip:', err);
+              });
 
             // Increment our local counter for successful clips
             successfulClipsCount++;
@@ -759,85 +779,88 @@ const MovieEditorPage: React.FC = () => {
             return updatedStoryboard;
           });
 
-          // Save storyboard after each clip to persist progress
-          // REMOVED: await saveStoryboard() - this would use stale state
-          console.log(`Storyboard updated with scene ${absoluteSceneIndex+1} and saved to server`);
+          // Success report with minimal information
+          console.log(`Generated scene ${absoluteSceneIndex+1}: ${sceneName}`);
+        } catch (sceneError) {
+          // Handle errors for this specific scene
+          console.error(`Error generating scene ${absoluteSceneIndex+1}:`, sceneError);
 
-          console.log(`Successfully generated SVG for scene ${absoluteSceneIndex+1}`);
-
-          // Sleep briefly between scene generations to prevent overwhelming mobile devices
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-        } catch (error) {
-          console.error(`Error generating clip for scene ${absoluteSceneIndex}:`, error);
+          // Log the error details
           errors.push({
             sceneIndex: absoluteSceneIndex,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: sceneError instanceof Error ? sceneError.message : String(sceneError)
           });
-
-          // On mobile, sleep a bit longer after an error to allow recovery
-          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       });
 
-      await Promise.all(scenePromises);
+      try {
+        // Wait for all scene generation to complete
+        await Promise.all(scenePromises);
 
-      // Check if we have any successful clips - Using our local counter instead of state
-      if (successfulClipsCount === 0) {
-        throw new Error(`Failed to generate any scenes for the storyboard. ${errors.length > 0 ?
-          `Errors: ${errors.map(e => `Scene ${e.sceneIndex + 1}: ${e.error}`).join(', ')}` : ''}`);
-      } else {
-        console.log(`Successfully generated ${successfulClipsCount} scenes for the storyboard`);
-
-        // If there were some errors but not all
-        if (errors.length > 0) {
-          console.warn(`Generated ${successfulClipsCount} scenes but ${errors.length} failed`);
-        }
-      }
-
-      // Update status to completed
-      setCurrentStoryboard(prevStoryboard => {
-        const finalStoryboard = {
-          ...prevStoryboard,
+        // Create final copy of storyboard with current state
+        const finalStoryboard: Storyboard = {
+          ...currentStoryboard,
           updatedAt: new Date(),
           generationStatus: {
-            ...prevStoryboard.generationStatus!,
+            ...currentStoryboard.generationStatus!,
             inProgress: false,
-            completedAt: new Date(),
-            completedScenes: prevStoryboard.generationStatus!.totalScenes // Set completedScenes to totalScenes
+            completedAt: new Date()
           }
         };
 
-        // Do a direct save of the final storyboard with the same ID to avoid creating a new file
-        console.log(`Final save of storyboard with ID ${finalStoryboard.id}`);
-        MovieStorageApi.saveMovie(finalStoryboard).then(result => {
-          console.log(`Final storyboard saved successfully with ID: ${result.id}`);
-        }).catch(err => {
-          console.error('Error in final storyboard save:', err);
+        // Set as current storyboard
+        setCurrentStoryboard(finalStoryboard);
+
+        // Report final status with errors if any
+        console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
+        if (errors.length > 0) {
+          console.error(`Encountered ${errors.length} errors during generation`);
+        }
+
+        // Save the final storyboard
+        try {
+          await MovieStorageApi.saveMovie(finalStoryboard);
+        } catch (saveError) {
+          console.error('Failed to save final storyboard:', saveError);
+        }
+      } catch (error) {
+        console.error('Error processing storyboard:', error);
+
+        // Update status to indicate failure but mark inProgress false
+        setCurrentStoryboard(prevStoryboard => {
+          const errorStoryboard = {
+            ...prevStoryboard,
+            updatedAt: new Date(),
+            generationStatus: {
+              ...prevStoryboard.generationStatus!,
+              inProgress: false, // Critical: Mark as not in progress even if it failed
+              completedAt: new Date(),
+              error: error instanceof Error ? error.message : 'Unknown error during generation'
+            }
+          };
+
+          // Direct save of error state using the same ID to prevent creating a new file
+          console.log(`Saving error state for storyboard with ID ${errorStoryboard.id}`);
+          MovieStorageApi.saveMovie(errorStoryboard).then(result => {
+            console.log(`Error state saved with ID: ${result.id}`);
+          }).catch(err => {
+            console.error('Error saving storyboard error state:', err);
+          });
+
+          return errorStoryboard;
         });
 
-        return finalStoryboard;
-      });
+        // Extract the error message
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error processing storyboard';
+        console.error(`Generation failed: ${errorMsg}`);
 
-      // Final save with completed status
-      // await saveStoryboard(); - This was creating a second file with a different ID
-      console.log(`Storyboard generation completed with ${newStoryboard.clips.length} clips`);
+        // Only set error and show modal for complete failures
+        setGenerationError(errorMsg);
+        setShowErrorModal(true);
 
-      // Set the first clip as active if available
-      if (newStoryboard.clips.length > 0) {
-        setActiveClipId(newStoryboard.clips[0].id);
-      }
-
-      // Hide the progress modal
-      setShowGeneratingClipsModal(false);
-      setIsGenerating(false);
-
-      // Show warning if some scenes failed
-      if (errors.length > 0) {
-        const warningMessage = `Generated ${successfulClipsCount} out of ${storyboard.scenes.length} scenes. ${errors.length} scenes failed to generate.`;
-        console.warn(warningMessage);
-        // Don't set error message or show error modal for partial successes
-        // Just log a warning in the console instead
+        // Hide modals and reset state
+        setShowGeneratingClipsModal(false);
+        setIsGenerating(false);
       }
     } catch (error) {
       console.error('Error processing storyboard:', error);

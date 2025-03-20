@@ -69,6 +69,14 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       timestamp
     });
 
+    // Log detailed information about the saved animation
+    console.log(`Animation saved with ID: ${animationId}`, {
+      nameLength: animationName.length,
+      svgLength: svg.length,
+      provider: provider || config.aiProvider,
+      timestamp
+    });
+
     // Return the SVG, message, and the animation ID
     return res.status(200).json({
       success: true,

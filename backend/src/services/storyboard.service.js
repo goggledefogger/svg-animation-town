@@ -20,9 +20,20 @@ NEVER generate SVG content or code. Only generate a JSON structure.`;
 /**
  * Create user prompt for storyboard generation
  * @param {string} prompt - Movie concept prompt
+ * @param {number} numScenes - Number of scenes to generate (optional)
  * @returns {string} User prompt
  */
-const createUserPrompt = (prompt) => {
+const createUserPrompt = (prompt, numScenes) => {
+  let scenesInstruction = '';
+
+  if (numScenes) {
+    // If numScenes is specified, include it in the prompt
+    scenesInstruction = `3. Include EXACTLY ${numScenes} scene${numScenes > 1 ? 's' : ''} that tell a cohesive story.`;
+  } else {
+    // If numScenes is not specified, use the default range
+    scenesInstruction = '3. Include 3-7 scenes that tell a cohesive story.';
+  }
+
   return `Create a storyboard for this movie concept: "${prompt}"
 
 IMPORTANT INSTRUCTIONS:
@@ -41,7 +52,7 @@ IMPORTANT INSTRUCTIONS:
 }
 
 2. Each scene needs those exact fields.
-3. Include 3-7 scenes that tell a cohesive story.
+${scenesInstruction}
 4. For each scene's "svgPrompt", write a detailed prompt that describes what should be in that scene's animation.
 5. DO NOT include any SVG code or XML tags.`;
 };
@@ -103,14 +114,15 @@ const processStoryboard = (storyboard) => {
  * Completely separate from SVG generation flow
  *
  * @param {string} prompt - Movie concept prompt
+ * @param {number} numScenes - Optional number of scenes to generate
  * @returns {Object} Storyboard object with title, description, and scenes
  */
-exports.generateStoryboardWithOpenAI = async (prompt) => {
+exports.generateStoryboardWithOpenAI = async (prompt, numScenes) => {
   validateStoryboardRequest(prompt, config.openai.apiKey, 'OpenAI');
 
   try {
     const systemPrompt = createSystemPrompt();
-    const userPrompt = createUserPrompt(prompt);
+    const userPrompt = createUserPrompt(prompt, numScenes);
 
     console.log('Sending storyboard generation request to OpenAI');
     console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
@@ -177,9 +189,10 @@ exports.generateStoryboardWithOpenAI = async (prompt) => {
  * Generate a storyboard using Claude
  *
  * @param {string} prompt - Movie concept prompt
+ * @param {number} numScenes - Optional number of scenes to generate
  * @returns {Object} Storyboard object with title, description and scenes
  */
-exports.generateStoryboardWithClaude = async (prompt) => {
+exports.generateStoryboardWithClaude = async (prompt, numScenes) => {
   validateStoryboardRequest(prompt, config.claude.apiKey, 'Claude');
 
   try {
@@ -190,7 +203,7 @@ exports.generateStoryboardWithClaude = async (prompt) => {
     });
 
     const systemPrompt = createSystemPrompt();
-    const userPrompt = createUserPrompt(prompt);
+    const userPrompt = createUserPrompt(prompt, numScenes);
 
     console.log('Sending storyboard generation request to Claude');
     console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
@@ -307,20 +320,22 @@ exports.generateStoryboardWithClaude = async (prompt) => {
  *
  * @param {string} prompt - Movie concept prompt
  * @param {string} provider - Optional override for AI provider (openai or claude)
+ * @param {number} numScenes - Optional number of scenes to generate
  * @returns {Object} Storyboard object
  */
-exports.generateStoryboard = async (prompt, provider = null) => {
+exports.generateStoryboard = async (prompt, provider = null, numScenes = null) => {
   // Use the specified provider or fall back to configured default
   const selectedProvider = provider || config.aiProvider;
 
   console.log(`Using ${selectedProvider} for storyboard generation`);
+  console.log(`Number of scenes requested: ${numScenes ? numScenes : 'Auto'}`);
 
   // Call the appropriate provider-specific implementation
   switch (selectedProvider.toLowerCase()) {
     case 'openai':
-      return await exports.generateStoryboardWithOpenAI(prompt);
+      return await exports.generateStoryboardWithOpenAI(prompt, numScenes);
     case 'claude':
-      return await exports.generateStoryboardWithClaude(prompt);
+      return await exports.generateStoryboardWithClaude(prompt, numScenes);
     default:
       throw new ServiceUnavailableError(`Unknown AI provider: ${selectedProvider}`);
   }

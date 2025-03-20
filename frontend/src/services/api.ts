@@ -24,8 +24,8 @@ export async function fetchApi<T>(
     const shouldLogRequest = !isGet || import.meta.env.DEV;
 
     if (shouldLogRequest) {
-      console.log(`Making API request to: ${API_URL}${endpoint}`);
-      if (!isGet) console.log('Request options:', options);
+      // Simplified logging - only log POST and other non-GET operations
+      if (!isGet) console.log(`API ${options.method || 'GET'} request to: ${endpoint}`);
     }
 
     // Dispatch API call start event
@@ -46,15 +46,12 @@ export async function fetchApi<T>(
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       data = await response.json();
-      // Only log detailed responses when helpful
-      if (shouldLogRequest && !endpoint.includes('/list')) {
-        console.log('API response:', data);
+      // Only log responses when there are errors
+      if (!response.ok) {
+        console.log('API error response:', data);
       }
     } else {
       const text = await response.text();
-      if (shouldLogRequest) {
-        console.log('API text response:', text.substring(0, 200) + (text.length > 200 ? '...' : ''));
-      }
       try {
         // Try to parse it as JSON anyway
         data = JSON.parse(text);
@@ -109,8 +106,8 @@ export const AnimationApi = {
     prompt: string,
     provider: 'openai' | 'claude' = 'openai'
   ): Promise<{ svg: string; message: string; animationId?: string }> => {
-    console.log('Generating animation with prompt:', prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''));
-    console.log('Using AI provider:', provider);
+    // Only log provider choice, not the prompt
+    console.log(`Generating animation using ${provider}`);
 
     try {
       // Set a longer timeout for mobile devices that may have slow connections
@@ -119,9 +116,15 @@ export const AnimationApi = {
         body: JSON.stringify({ prompt, provider }),
       };
 
+      // Get timeout value from env or use 5 minutes as default
+      const timeoutMs = parseInt(import.meta.env.VITE_REQUEST_TIMEOUT_MS || '300000', 10);
+
       // Use an AbortController to allow cancellation if it takes too long
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      const timeoutId = setTimeout(() => {
+        console.log(`Request timeout of ${timeoutMs/1000} seconds reached, aborting generation`);
+        controller.abort();
+      }, timeoutMs);
 
       // Add the signal to the options
       const optionsWithSignal = {
@@ -139,20 +142,15 @@ export const AnimationApi = {
         // Clear the timeout if the request completed
         clearTimeout(timeoutId);
 
-        console.log('Received animation data from generate endpoint');
-
         // Handle both new SVG-based responses and legacy element-based responses
         if (data.svg) {
           if (typeof data.svg !== 'string' || !data.svg.includes('<svg')) {
-            console.error('Invalid SVG content received:', typeof data.svg);
-            console.error('SVG preview:', data.svg?.substring(0, 100));
+            console.error('Invalid SVG content received');
             throw new CustomApiError('Invalid SVG content received from server');
           }
 
-          // Log animation ID from response
-          if (data.animationId) {
-            console.log(`API generate endpoint returned animation ID: ${data.animationId}`);
-          } else {
+          // Only log when animation ID is missing
+          if (!data.animationId) {
             console.warn('API generate endpoint did not return an animation ID');
           }
 
@@ -174,8 +172,21 @@ export const AnimationApi = {
 
         // Handle AbortController errors specifically
         if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
-          console.error('Animation generation request timed out');
-          throw new CustomApiError('Animation generation timed out after 60 seconds', 408);
+          console.error('Animation generation request aborted', fetchError);
+
+          // Check if controller.signal.reason exists (added in newer browsers)
+          let abortReason = 'Unknown reason';
+          try {
+            // @ts-ignore - reason property might not exist in older browsers
+            if (controller.signal.reason) {
+              // @ts-ignore
+              abortReason = controller.signal.reason.message || 'Timeout reached';
+            }
+          } catch (e) {
+            // Ignore errors from accessing possibly nonexistent properties
+          }
+
+          throw new CustomApiError(`Animation generation aborted: ${abortReason}. This might be due to a timeout after ${timeoutMs/1000} seconds or a server connectivity issue.`, 408);
         }
 
         // Rethrow the original error
@@ -377,17 +388,6 @@ export const AnimationStorageApi = {
       const data = await fetchApi<any>(`/animation/${id}`);
 
       if (data.success && data.animation) {
-        // Log animation structure to diagnose field issues
-        console.log('Animation retrieved from API:', {
-          id: data.animation.id,
-          name: data.animation.name,
-          prompt: data.animation.prompt,
-          hasPrompt: !!data.animation.prompt,
-          hasSvg: !!data.animation.svg,
-          hasChat: Array.isArray(data.animation.chatHistory),
-          chatLength: Array.isArray(data.animation.chatHistory) ? data.animation.chatHistory.length : 0
-        });
-
         return data.animation;
       } else {
         throw new Error('Invalid response from server');
@@ -424,8 +424,6 @@ export const MovieStorageApi = {
    * Save a movie/storyboard to the server
    */
   saveMovie: async (storyboard: any): Promise<{ id: string }> => {
-    console.log(`Saving storyboard with name: ${storyboard.name}`);
-
     try {
       const data = await fetchApi<any>(
         '/movie/save',
@@ -469,11 +467,9 @@ export const MovieStorageApi = {
    */
   getMovie: async (id: string): Promise<any> => {
     try {
-      console.log(`Fetching movie with ID: ${id}`);
       const data = await fetchApi<any>(`/movie/${id}`);
 
       if (data.success && data.movie) {
-        console.log(`Successfully retrieved movie: ${data.movie.name}`);
         return data.movie;
       } else {
         throw new Error('Invalid response from server');
@@ -508,11 +504,9 @@ export const MovieStorageApi = {
    */
   getClipAnimation: async (animationId: string): Promise<any> => {
     try {
-      console.log(`Fetching animation with ID: ${animationId}`);
       const data = await fetchApi<any>(`/animation/${animationId}`);
 
       if (data.success && data.animation) {
-        console.log(`Successfully retrieved animation data with ID: ${animationId}`);
         return data.animation;
       } else {
         throw new Error('Invalid response from server');

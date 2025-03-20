@@ -6,7 +6,7 @@ const config = require('../config');
  * Generate a storyboard from a text prompt
  */
 exports.generateStoryboard = asyncHandler(async (req, res) => {
-  const { prompt, provider } = req.body;
+  const { prompt, provider, numScenes } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
@@ -15,7 +15,8 @@ exports.generateStoryboard = asyncHandler(async (req, res) => {
   try {
     // Use the dedicated storyboard service - completely separate from SVG generation
     console.log(`Generating storyboard for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
-    const storyboard = await StoryboardService.generateStoryboard(prompt, provider);
+    console.log(`Number of scenes requested: ${numScenes ? numScenes : 'Auto'}`);
+    const storyboard = await StoryboardService.generateStoryboard(prompt, provider, numScenes);
 
     // By this point storyboard should be fully validated and ready to return
     console.log(`Successfully generated storyboard outline with ${storyboard.scenes.length} scenes`);

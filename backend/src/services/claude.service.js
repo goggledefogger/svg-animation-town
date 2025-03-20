@@ -9,6 +9,98 @@ const {
 const { ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
 
+// Rate limiter implementation for Claude API
+// Using a token bucket algorithm to manage the rate limit
+const rateLimiter = {
+  // Bucket capacity from config (Claude's rate limit tokens per minute)
+  tokenBucket: config.claude.rateLimiter.tokensPerMinute,
+  // Max tokens per request from config
+  tokensPerRequest: config.claude.rateLimiter.tokensPerRequest,
+  // Parallel requests allowed from config
+  maxConcurrentRequests: config.claude.rateLimiter.maxConcurrentRequests,
+  // Ongoing requests counter
+  currentRequests: 0,
+  // Last refill timestamp
+  lastRefillTime: Date.now(),
+  // Queue for pending requests
+  requestQueue: [],
+
+  // Refill the token bucket based on elapsed time (tokens are refilled at rate of tokensPerMinute per minute)
+  refillBucket() {
+    const now = Date.now();
+    const elapsedMs = now - this.lastRefillTime;
+
+    // Calculate tokens to add (proportional to elapsed time)
+    const tokensToAdd = Math.floor((elapsedMs / 60000) * config.claude.rateLimiter.tokensPerMinute);
+
+    if (tokensToAdd > 0) {
+      this.tokenBucket = Math.min(config.claude.rateLimiter.tokensPerMinute, this.tokenBucket + tokensToAdd);
+      this.lastRefillTime = now;
+      console.log(`Rate limiter: Refilled bucket with ${tokensToAdd} tokens. Current tokens: ${this.tokenBucket}`);
+    }
+  },
+
+  // Process the next request in the queue if possible
+  processQueue() {
+    // Process queued requests if we have capacity
+    while (this.requestQueue.length > 0 &&
+           this.currentRequests < this.maxConcurrentRequests &&
+           this.tokenBucket >= this.tokensPerRequest) {
+
+      const nextRequest = this.requestQueue.shift();
+      this.executeRequest(nextRequest);
+    }
+  },
+
+  // Execute a request with rate limiting
+  executeRequest({ fn, args, resolve, reject }) {
+    this.currentRequests++;
+    this.tokenBucket -= this.tokensPerRequest;
+
+    console.log(`Rate limiter: Executing request. Tokens remaining: ${this.tokenBucket}, Current requests: ${this.currentRequests}`);
+
+    // Execute the actual request
+    fn(...args)
+      .then(result => {
+        this.currentRequests--;
+        resolve(result);
+        this.processQueue(); // Check if we can process more requests
+      })
+      .catch(error => {
+        this.currentRequests--;
+
+        // Handle rate limit errors specifically
+        if (error?.message?.includes('429') || error?.message?.includes('rate_limit')) {
+          console.log('Rate limit error detected, adjusting token bucket');
+          // Reset token bucket to a low value to force throttling
+          this.tokenBucket = Math.min(this.tokenBucket, this.tokensPerRequest / 2);
+        }
+
+        reject(error);
+        this.processQueue(); // Check if we can process more requests
+      });
+  },
+
+  // Queue a request to be executed when capacity is available
+  enqueueRequest(fn, args) {
+    // Refill bucket before checking capacity
+    this.refillBucket();
+
+    return new Promise((resolve, reject) => {
+      const request = { fn, args, resolve, reject };
+
+      // If we have capacity, execute immediately
+      if (this.currentRequests < this.maxConcurrentRequests && this.tokenBucket >= this.tokensPerRequest) {
+        this.executeRequest(request);
+      } else {
+        // Otherwise, add to queue
+        console.log(`Rate limiter: Queuing request. Current queue length: ${this.requestQueue.length}`);
+        this.requestQueue.push(request);
+      }
+    });
+  }
+};
+
 /**
  * Get an initialized Anthropic client
  *
@@ -180,136 +272,156 @@ const generateBasicSvg = (prompt, isUpdate = false) => {
  * @returns {string} Response with SVG content
  */
 const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) => {
-  try {
-    // Get Anthropic client
-    const anthropic = getAnthropicClient();
+  // This is the actual API call function that will be rate limited
+  const makeClaudeRequest = async (prompt, currentSvg, isUpdate) => {
+    try {
+      // Get Anthropic client
+      const anthropic = getAnthropicClient();
 
-    // Build prompts with Claude-specific instructions
-    const systemPrompt = buildClaudeSystemPrompt(isUpdate);
-    const userPrompt = buildClaudeUserPrompt(prompt, currentSvg, isUpdate);
+      // Build prompts with Claude-specific instructions
+      const systemPrompt = buildClaudeSystemPrompt(isUpdate);
+      const userPrompt = buildClaudeUserPrompt(prompt, currentSvg, isUpdate);
 
-    console.log(`Sending ${isUpdate ? 'update' : 'creation'} request to Claude (${config.claude.model})`);
+      console.log(`Sending ${isUpdate ? 'update' : 'creation'} request to Claude (${config.claude.model})`);
 
-    // Adjust temperature slightly lower for updates to improve consistency
-    const temperature = isUpdate
-      ? Math.max(0.1, config.claude.temperature - 0.2)
-      : config.claude.temperature;
+      // Adjust temperature slightly lower for updates to improve consistency
+      const temperature = isUpdate
+        ? Math.max(0.1, config.claude.temperature - 0.2)
+        : config.claude.temperature;
 
-    // Call Claude API without response_format parameter
-    const completion = await anthropic.messages.create({
-      model: config.claude.model,
-      max_tokens: config.claude.maxTokens,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: temperature
-    });
+      // Call Claude API without response_format parameter
+      const completion = await anthropic.messages.create({
+        model: config.claude.model,
+        max_tokens: config.claude.maxTokens,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: temperature
+      });
 
-    console.log('Claude response received');
+      console.log('Claude response received');
 
-    // Extract the content from the response
-    if (completion.content && completion.content.length > 0) {
-      const textBlock = completion.content.find(block => block.type === 'text');
+      // Extract the content from the response
+      if (completion.content && completion.content.length > 0) {
+        const textBlock = completion.content.find(block => block.type === 'text');
 
-      if (textBlock && textBlock.text) {
+        if (textBlock && textBlock.text) {
+          // Process response text (existing code)
+          // ... existing code ...
 
-        try {
-          // If the text is empty or just whitespace, generate an error
-          if (!textBlock.text.trim()) {
-            throw new ServiceUnavailableError('Claude returned an empty response');
-          }
-
-          // Parse the JSON response
-          let parsedResponse;
           try {
-            // First try direct JSON parsing
-            parsedResponse = JSON.parse(textBlock.text);
-            console.log('Successfully parsed direct JSON response');
-          } catch (directParseError) {
-            console.log('Direct JSON parsing failed, attempting to extract JSON from text');
+            // If the text is empty or just whitespace, generate an error
+            if (!textBlock.text.trim()) {
+              throw new ServiceUnavailableError('Claude returned an empty response');
+            }
 
-            // Try to extract JSON using regex
-            const jsonRegex = /\{(?:[^{}]|(\{(?:[^{}]|(\{(?:[^{}]|(\{[^{}]*\}))*\}))*\}))*\}/g;
-            const jsonMatches = textBlock.text.match(jsonRegex);
+            // Parse the JSON response
+            let parsedResponse;
+            try {
+              // First try direct JSON parsing
+              parsedResponse = JSON.parse(textBlock.text);
+              console.log('Successfully parsed direct JSON response');
+            } catch (directParseError) {
+              console.log('Direct JSON parsing failed, attempting to extract JSON from text');
 
-            if (jsonMatches && jsonMatches.length > 0) {
-              try {
-                // Try each JSON match until one parses successfully
-                for (const potentialJson of jsonMatches) {
+              // Try to extract JSON using regex
+              const jsonRegex = /\{(?:[^{}]|(\{(?:[^{}]|(\{(?:[^{}]|(\{[^{}]*\}))*\}))*\}))*\}/g;
+              const jsonMatches = textBlock.text.match(jsonRegex);
+
+              if (jsonMatches && jsonMatches.length > 0) {
+                try {
+                  // Try each JSON match until one parses successfully
+                  for (const potentialJson of jsonMatches) {
+                    try {
+                      parsedResponse = JSON.parse(potentialJson);
+                      console.log('Successfully extracted JSON using regex');
+                      break;
+                    } catch (e) {
+                      // Continue to next match
+                    }
+                  }
+                } catch (extractionError) {
+                  console.error('Failed to extract valid JSON:', extractionError);
+                }
+              }
+
+              // If we still don't have a valid parsed response, check for JSON in code blocks
+              if (!parsedResponse) {
+                const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/;
+                const codeBlockMatch = textBlock.text.match(codeBlockRegex);
+
+                if (codeBlockMatch && codeBlockMatch[1]) {
                   try {
-                    parsedResponse = JSON.parse(potentialJson);
-                    console.log('Successfully extracted JSON using regex');
-                    break;
-                  } catch (e) {
-                    // Continue to next match
+                    parsedResponse = JSON.parse(codeBlockMatch[1]);
+                    console.log('Successfully extracted JSON from code block');
+                  } catch (codeBlockError) {
+                    console.error('Failed to parse JSON from code block:', codeBlockError);
                   }
                 }
-              } catch (extractionError) {
-                console.error('Failed to extract valid JSON:', extractionError);
+              }
+
+              // If all extraction methods failed, throw the original error
+              if (!parsedResponse) {
+                console.error('All JSON extraction methods failed');
+                throw new ServiceUnavailableError('Claude did not return a valid JSON response');
               }
             }
 
-            // If we still don't have a valid parsed response, check for JSON in code blocks
-            if (!parsedResponse) {
-              const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)```/;
-              const codeBlockMatch = textBlock.text.match(codeBlockRegex);
-
-              if (codeBlockMatch && codeBlockMatch[1]) {
-                try {
-                  parsedResponse = JSON.parse(codeBlockMatch[1]);
-                  console.log('Successfully extracted JSON from code block');
-                } catch (codeBlockError) {
-                  console.error('Failed to parse JSON from code block:', codeBlockError);
-                }
-              }
+            // Validate the required fields
+            if (!parsedResponse.svg) {
+              throw new ServiceUnavailableError('SVG field is missing from the response');
             }
 
-            // If all extraction methods failed, throw the original error
-            if (!parsedResponse) {
-              console.error('All JSON extraction methods failed');
-              throw new ServiceUnavailableError('Claude did not return a valid JSON response');
+            const svgContent = parsedResponse.svg;
+
+            if (!svgContent.trim().startsWith('<svg')) {
+              throw new ServiceUnavailableError('Invalid SVG: Must start with <svg> tag');
             }
+
+            if (!svgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
+              throw new ServiceUnavailableError('Invalid SVG: Missing required xmlns attribute');
+            }
+
+            if (!svgContent.includes('viewBox="0 0 800 600"')) {
+              throw new ServiceUnavailableError('Invalid SVG: Missing or incorrect viewBox');
+            }
+
+            if (!svgContent.includes('<style>')) {
+              throw new ServiceUnavailableError('Invalid SVG: Missing style tag for animations');
+            }
+
+            console.log('SVG validation passed, returning response');
+            return formatParsedResponse(parsedResponse);
+          } catch (parseError) {
+            console.error('Failed to parse Claude response as JSON:', parseError);
+            throw new ServiceUnavailableError('Claude did not return a valid JSON response');
           }
-
-          // Validate the required fields
-          if (!parsedResponse.svg) {
-            throw new ServiceUnavailableError('SVG field is missing from the response');
-          }
-
-          const svgContent = parsedResponse.svg;
-
-          if (!svgContent.trim().startsWith('<svg')) {
-            throw new ServiceUnavailableError('Invalid SVG: Must start with <svg> tag');
-          }
-
-          if (!svgContent.includes('xmlns="http://www.w3.org/2000/svg"')) {
-            throw new ServiceUnavailableError('Invalid SVG: Missing required xmlns attribute');
-          }
-
-          if (!svgContent.includes('viewBox="0 0 800 600"')) {
-            throw new ServiceUnavailableError('Invalid SVG: Missing or incorrect viewBox');
-          }
-
-          if (!svgContent.includes('<style>')) {
-            throw new ServiceUnavailableError('Invalid SVG: Missing style tag for animations');
-          }
-
-          console.log('SVG validation passed, returning response');
-          return formatParsedResponse(parsedResponse);
-        } catch (parseError) {
-          console.error('Failed to parse Claude response as JSON:', parseError);
-          throw new ServiceUnavailableError('Claude did not return a valid JSON response');
         }
+
+        throw new ServiceUnavailableError('Claude response missing text content');
       }
 
-      throw new ServiceUnavailableError('Claude response missing text content');
+      throw new ServiceUnavailableError('Claude response contains no content');
+    } catch (error) {
+      console.error('Claude API Error:', error);
+      throw new ServiceUnavailableError(`Claude API Error: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  // Use the rate limiter to control API request flow
+  try {
+    return await rateLimiter.enqueueRequest(makeClaudeRequest, [prompt, currentSvg, isUpdate]);
+  } catch (error) {
+    console.error('Rate limited Claude request failed:', error);
+
+    // If we get rate limit errors despite our limiter, provide a basic SVG fallback
+    if (error?.message?.includes('429') || error?.message?.includes('rate_limit')) {
+      console.log('Providing fallback SVG due to rate limiting');
+      return formatParsedResponse(generateBasicSvg(prompt, isUpdate));
     }
 
-    throw new ServiceUnavailableError('Claude response contains no content');
-  } catch (error) {
-    console.error('Claude API Error:', error);
-    throw new ServiceUnavailableError(`Claude API Error: ${error.message || 'Unknown error'}`);
+    throw error;
   }
 };
 
@@ -332,4 +444,20 @@ exports.generateAnimation = async (prompt) => {
  */
 exports.updateAnimation = async (prompt, currentSvg = '') => {
   return processSvgWithClaude(prompt, currentSvg, true);
+};
+
+/**
+ * Get current status of the rate limiter for debugging
+ *
+ * @returns {Object} Current state of the rate limiter
+ */
+exports.getRateLimiterStatus = () => {
+  return {
+    tokenBucket: rateLimiter.tokenBucket,
+    tokensPerRequest: rateLimiter.tokensPerRequest,
+    maxConcurrentRequests: rateLimiter.maxConcurrentRequests,
+    currentRequests: rateLimiter.currentRequests,
+    requestQueue: rateLimiter.requestQueue.length,
+    lastRefillTime: rateLimiter.lastRefillTime
+  };
 };

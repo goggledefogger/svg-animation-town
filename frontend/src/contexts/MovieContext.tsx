@@ -14,6 +14,8 @@ export interface MovieClip {
   prompt?: string;
   chatHistory?: Message[];
   animationId?: string; // Reference to saved animation ID in backend storage
+  createdAt?: Date;     // When the clip was created
+  provider?: 'openai' | 'claude'; // Which AI provider was used to generate the clip
 }
 
 // Define storyboard interface
@@ -158,10 +160,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Get storyboards from server
       let storyboardIds: string[] = [];
       try {
-        console.log('Fetching storyboards from server...');
         const serverStoryboards = await MovieStorageApi.listMovies();
         storyboardIds = serverStoryboards.map(sb => sb.id);
-        console.log(`Found ${storyboardIds.length} storyboards on server`);
 
         // Check for force refresh flag and clear it if present
         const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
@@ -178,10 +178,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Also include storyboards from local storage
       try {
         const localIds = getSavedStoryboardsFromStorage();
-        console.log(`Found ${localIds.length} storyboards in local storage`);
 
         storyboardIds = [...new Set([...storyboardIds, ...localIds])];
-        console.log(`Combined total: ${storyboardIds.length} unique storyboards`);
       } catch (localError) {
         console.error('Error getting storyboards from local storage:', localError);
       }
@@ -592,7 +590,9 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
             text: generatedSvg.message,
             timestamp: new Date()
           }],
-          animationId: generatedSvg.animationId
+          animationId: generatedSvg.animationId,
+          createdAt: new Date(),
+          provider: scene.provider
         };
 
         // Log if an animation ID was returned from the backend
@@ -612,7 +612,9 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
           svgContent: createErrorSvg(scene.description),
           duration: scene.duration || 5,
           order: index,
-          prompt: scene.svgPrompt
+          prompt: scene.svgPrompt,
+          createdAt: new Date(),
+          provider: scene.provider
         };
       }
     });

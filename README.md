@@ -104,16 +104,29 @@ The AI assistant becomes your creative partner - understanding context, making i
 
    # Default AI Provider (openai or claude)
    AI_PROVIDER=openai
+
+   # Rate Limiter Configuration
+   CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE=8000
+   CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST=1600
+   CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=2
    ```
 4. Start the backend server: `npm run dev`
 
 ### Frontend Setup
 1. Navigate to the frontend directory: `cd frontend`
 2. Install dependencies: `npm install`
-3. Create a `.env` file with:
+3. Create a `.env` file based on `.env.example`:
    ```
+   # API connection
    VITE_API_URL=http://localhost:3001/api
+
+   # Request timeout settings (in milliseconds)
+   VITE_REQUEST_TIMEOUT_MS=300000
+   VITE_SCENE_GENERATION_TIMEOUT_MS=300000
    ```
+   The timeout settings are particularly important for movie generation, where multiple scenes need to be created:
+   - `VITE_REQUEST_TIMEOUT_MS`: Controls the overall API request timeout (default: 5 minutes)
+   - `VITE_SCENE_GENERATION_TIMEOUT_MS`: Controls the timeout for individual scene generation (default: 5 minutes)
 4. Start the frontend development server: `npm start`
 5. Open your browser to `http://localhost:3000`
 
@@ -183,6 +196,21 @@ To ensure a graceful user experience, the system includes several safeguards:
 - Automatic fallback to error SVGs when validation fails
 - Descriptive error messages that guide the user
 - Rate limiting and error handling for OpenAI API issues
+
+## Rate Limiting
+
+The application includes a token bucket rate limiter for Claude API requests to prevent rate limit errors (429):
+
+- Manages Claude's 8,000 tokens per minute rate limit
+- Allows configurable concurrent requests (default: 2)
+- Queues additional requests when at capacity
+- Falls back to simple SVG generation when rate limits are hit
+- Configurable through environment variables:
+  ```
+  CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE=8000
+  CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST=1600
+  CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=2
+  ```
 
 ## Contributing
 
