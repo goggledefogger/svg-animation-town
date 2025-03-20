@@ -11,6 +11,12 @@ interface StoryboardPanelProps {
   onAddClip: () => void;
   storyboard?: Storyboard; // Add storyboard prop to access generation status
   renderHeaderContent?: boolean; // Whether to render the header content or not
+  generationProgress?: {
+    current: number;
+    total: number;
+    resumedFrom?: number;
+  };
+  isGenerating?: boolean;
 }
 
 // Helper function to create a generation status component for reuse
@@ -19,20 +25,21 @@ export const GenerationStatusBadge: React.FC<{
   completedScenes: number;
   totalScenes: number;
   className?: string;
-}> = ({ isGenerating, completedScenes, totalScenes, className = "" }) => {
+  showText?: boolean;
+}> = ({ isGenerating, completedScenes, totalScenes, className = "", showText = true }) => {
   if (totalScenes === 0) return null;
 
   if (isGenerating) {
     return (
       <div className={`flex items-center text-xs text-gray-400 ${className}`}>
         <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse mr-1"></div>
-        {completedScenes}/{totalScenes}
+        {showText && `${completedScenes}/${totalScenes}`}
       </div>
     );
   } else if (completedScenes > 0) {
     return (
       <div className={`text-xs text-gray-400 ${className}`}>
-        {completedScenes}/{totalScenes} generated
+        {showText && `${completedScenes}/${totalScenes} generated`}
       </div>
     );
   }
@@ -63,46 +70,64 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   onClipSelect,
   onAddClip,
   storyboard,
-  renderHeaderContent = false
+  renderHeaderContent = false,
+  generationProgress,
+  isGenerating: propIsGenerating
 }) => {
-  const hasGenerationStatus = storyboard?.generationStatus !== undefined;
-  const isGenerating = storyboard?.generationStatus?.inProgress === true;
-  const totalScenes = storyboard?.generationStatus?.totalScenes || 0;
-  const completedScenes = storyboard?.generationStatus?.completedScenes || 0;
+  // Use provided values if available, fallback to storyboard values
+  const hasGenerationStatus = storyboard?.generationStatus !== undefined || generationProgress !== undefined;
+  const isGenerating = propIsGenerating !== undefined ? propIsGenerating : storyboard?.generationStatus?.inProgress === true;
+  const totalScenes = generationProgress?.total || storyboard?.generationStatus?.totalScenes || 0;
+  const completedScenes = generationProgress?.current || storyboard?.generationStatus?.completedScenes || 0;
 
   // Simple counter for display purposes
   const [displayCount, setDisplayCount] = useState(0);
 
-  // Reset display count when generation starts/stops
+  // Reset display count when generation starts/stops or when props change
   useEffect(() => {
     if (!isGenerating) {
       // When generation completes, show actual final count
       setDisplayCount(completedScenes);
-    } else if (totalScenes > 0 && displayCount === 0) {
-      // When generation starts, initialize to 0
-      setDisplayCount(0);
+    } else if (totalScenes > 0 && completedScenes > 0) {
+      // When we're generating and the completed scenes have changed,
+      // update the display count to match the new progress
+      // Only update if the value has actually changed to prevent unnecessary re-renders
+      if (Math.abs(displayCount - completedScenes) > 0.01) {
+        setDisplayCount(completedScenes);
+      }
     }
-  }, [isGenerating, completedScenes, totalScenes, displayCount]);
+  }, [isGenerating, completedScenes, totalScenes]);
 
-  // Increment display count smoothly using an interval
+  // Simplified animation logic to avoid infinite loops and excessive renders
   useEffect(() => {
+    // Only run animation when actively generating and we have valid counts
     if (!isGenerating || totalScenes === 0) return;
 
-    // Only run the interval if we need to catch up to completedScenes
-    if (displayCount < completedScenes) {
-      const timer = setInterval(() => {
-        setDisplayCount(current => {
-          // Increment by 1 until we reach the actual completed count
-          return current < completedScenes ? current + 1 : current;
-        });
-      }, 500); // Adjust timing as needed for smoother animation
+    // Don't animate if we're already at the target value
+    // Use a tolerance to avoid floating point comparison issues
+    if (Math.abs(displayCount - completedScenes) < 0.01) return;
 
-      return () => clearInterval(timer);
-    }
-  }, [isGenerating, completedScenes, displayCount, totalScenes]);
+    const timer = setInterval(() => {
+      setDisplayCount(current => {
+        // Calculate the next value with a small increment
+        const next = Math.min(current + 0.1, completedScenes);
 
-  // Simple progress calculation based on displayed count
-  const displayProgress = totalScenes > 0 ? Math.round((displayCount / totalScenes) * 100) : 0;
+        // If we're very close to the target, just set it exactly
+        if (Math.abs(next - completedScenes) < 0.01) {
+          return completedScenes;
+        }
+
+        return next;
+      });
+    }, 300); // Slower updates to reduce CPU usage and avoid excessive API calls
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [isGenerating, completedScenes, totalScenes, displayCount]);
+
+  // Simple progress calculation based on displayed count - ensure it's a percentage
+  const displayProgress = totalScenes > 0 ? Math.min(Math.round((Math.floor(displayCount) / totalScenes) * 100), 100) : 0;
 
   // State to track clip thumbnails
   const [clipThumbnails, setClipThumbnails] = useState<Record<string, string>>({});
@@ -266,11 +291,11 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
             {isGenerating ? (
               <div>
                 <div className="text-sm font-medium mb-1">
-                  Generating storyboard: {displayCount}/{totalScenes} scenes
+                  Generating storyboard: {Math.floor(displayCount)}/{totalScenes} scenes
                 </div>
                 <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
                   <div
-                    className="bg-green-500 h-full rounded-full transition-all duration-500"
+                    className="bg-green-500 h-full rounded-full transition-all duration-300"
                     style={{ width: `${displayProgress}%` }}
                   ></div>
                 </div>
@@ -278,7 +303,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
             ) : (
               <div className="text-sm">
                 {completedScenes > 0 ?
-                  `Generated ${displayCount}/${totalScenes} scenes` :
+                  `Generated ${Math.floor(completedScenes)}/${totalScenes} scenes` :
                   'Ready to generate'}
               </div>
             )}
