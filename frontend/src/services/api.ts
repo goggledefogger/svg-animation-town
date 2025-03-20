@@ -425,11 +425,19 @@ export const MovieStorageApi = {
    */
   saveMovie: async (storyboard: any): Promise<{ id: string }> => {
     try {
+      // Create a deep copy to prevent mutation issues
+      const storyboardCopy = JSON.parse(JSON.stringify(storyboard));
+
+      // Ensure clips array is preserved and properly formatted
+      if (!storyboardCopy.clips) {
+        storyboardCopy.clips = [];
+      }
+
       const data = await fetchApi<any>(
         '/movie/save',
         {
           method: 'POST',
-          body: JSON.stringify(storyboard),
+          body: JSON.stringify(storyboardCopy),
         }
       );
 

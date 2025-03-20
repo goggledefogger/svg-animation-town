@@ -798,18 +798,38 @@ const MovieEditorPage: React.FC = () => {
         await Promise.all(scenePromises);
 
         // Create final copy of storyboard with current state
-        const finalStoryboard: Storyboard = {
-          ...currentStoryboard,
-          updatedAt: new Date(),
-          generationStatus: {
-            ...currentStoryboard.generationStatus!,
-            inProgress: false,
-            completedAt: new Date()
-          }
-        };
+        setCurrentStoryboard(prevStoryboard => {
+          const finalStoryboard: Storyboard = {
+            ...prevStoryboard,
+            updatedAt: new Date(),
+            generationStatus: {
+              ...prevStoryboard.generationStatus!,
+              inProgress: false,
+              completedAt: new Date()
+            }
+          };
 
-        // Set as current storyboard
-        setCurrentStoryboard(finalStoryboard);
+          // Explicitly log the final state to verify clips are present
+          console.log(`Finalizing storyboard ${finalStoryboard.id} with ${finalStoryboard.clips.length} clips`);
+
+          // Save the final storyboard and ensure we preserve the current ID
+          MovieStorageApi.saveMovie(finalStoryboard)
+            .then(result => {
+              // Log the saved state
+              console.log(`Final storyboard saved with ID: ${result.id} (original: ${finalStoryboard.id})`);
+
+              // If server assigned a different ID, update our reference but keep all clips
+              if (result.id !== finalStoryboard.id) {
+                console.log(`Server assigned different ID - updating reference only`);
+                finalStoryboard.id = result.id;
+              }
+            })
+            .catch(saveError => {
+              console.error('Failed to save final storyboard:', saveError);
+            });
+
+          return finalStoryboard;
+        });
 
         // Report final status with errors if any
         console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
@@ -817,12 +837,9 @@ const MovieEditorPage: React.FC = () => {
           console.error(`Encountered ${errors.length} errors during generation`);
         }
 
-        // Save the final storyboard
-        try {
-          await MovieStorageApi.saveMovie(finalStoryboard);
-        } catch (saveError) {
-          console.error('Failed to save final storyboard:', saveError);
-        }
+        // IMPORTANT: Reset UI state after successful generation
+        setShowGeneratingClipsModal(false);
+        setIsGenerating(false);
       } catch (error) {
         console.error('Error processing storyboard:', error);
 
