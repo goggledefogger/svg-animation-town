@@ -15,7 +15,6 @@ exports.generateStoryboard = asyncHandler(async (req, res) => {
   try {
     // Use the dedicated storyboard service - completely separate from SVG generation
     console.log(`Generating storyboard for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
-    console.log(`Number of scenes requested: ${numScenes ? numScenes : 'Auto'}`);
     const storyboard = await StoryboardService.generateStoryboard(prompt, provider, numScenes);
 
     // By this point storyboard should be fully validated and ready to return
