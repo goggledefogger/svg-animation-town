@@ -16,6 +16,180 @@ import SvgThumbnail from '../components/SvgThumbnail';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAnimation } from '../contexts/AnimationContext';
 
+// Create a dedicated LoadStoryboardModal component
+const LoadStoryboardModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onLoadStoryboard: (id: string) => Promise<void | boolean>;
+  onDeleteStoryboard: (id: string) => Promise<void | boolean>;
+  getSavedStoryboards: () => Promise<string[]>;
+}> = ({ isOpen, onClose, onLoadStoryboard, onDeleteStoryboard, getSavedStoryboards }) => {
+  const [loadedStoryboards, setLoadedStoryboards] = useState<Storyboard[]>([]);
+  const [isLoadingStoryboards, setIsLoadingStoryboards] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [storyboardToDelete, setStoryboardToDelete] = useState<string | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+
+  // Load storyboards when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoadingStoryboards(true);
+
+      const fetchStoryboards = async () => {
+        try {
+          // Get list of storyboard IDs
+          const storyboardIds = await getSavedStoryboards();
+
+          // Fetch details for each storyboard
+          const storyboardsData: Storyboard[] = [];
+          for (const id of storyboardIds) {
+            try {
+              const storyboard = await MovieStorageApi.getMovie(id);
+              if (storyboard) {
+                storyboardsData.push(storyboard as Storyboard);
+              }
+            } catch (err) {
+              console.error(`Error fetching storyboard ${id}:`, err);
+            }
+          }
+
+          // Sort by updated date (newest first)
+          storyboardsData.sort((a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+
+          setLoadedStoryboards(storyboardsData);
+        } catch (err) {
+          console.error('Error loading storyboards:', err);
+          setLoadError('Failed to load storyboards');
+        } finally {
+          setIsLoadingStoryboards(false);
+        }
+      };
+
+      fetchStoryboards();
+    }
+  }, [isOpen, getSavedStoryboards]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex flex-col">
+      {/* Header */}
+      <div className="bg-gotham-blue border-b border-gray-700 p-4 flex justify-between items-center">
+        <h2 className="text-lg font-medium text-white">Load Storyboard</h2>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-white"
+          aria-label="Close"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-4">
+        {isLoadingStoryboards && (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-8 h-8 border-4 border-gray-400 border-t-bat-yellow rounded-full animate-spin"></div>
+            <p className="ml-3 text-gray-400">Loading storyboards...</p>
+          </div>
+        )}
+
+        {loadError && (
+          <div className="bg-red-900 bg-opacity-20 border border-red-800 rounded-md p-4">
+            <p className="text-red-400">{loadError}</p>
+          </div>
+        )}
+
+        {!isLoadingStoryboards && !loadError && loadedStoryboards.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-32 text-center">
+            <p className="text-gray-400">No saved storyboards found.</p>
+            <p className="text-sm text-gray-500 mt-2">Create and save a storyboard to see it here.</p>
+          </div>
+        )}
+
+        {!isLoadingStoryboards && !loadError && loadedStoryboards.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {loadedStoryboards.map((storyboard) => (
+              <div
+                key={storyboard.id}
+                className="border border-gray-700 hover:border-bat-yellow rounded-md p-4 bg-gotham-black transition"
+              >
+                <div
+                  className="cursor-pointer"
+                  onClick={async () => {
+                    await onLoadStoryboard(storyboard.id);
+                    onClose();
+                  }}
+                >
+                  <div className="font-medium text-bat-yellow">{storyboard.name}</div>
+                  <div className="text-sm text-gray-400 mt-1">
+                    {storyboard.clips?.length || 0} clips
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Updated: {new Date(storyboard.updatedAt).toLocaleString()}
+                  </div>
+                </div>
+                <div className="mt-2 pt-2 border-t border-gray-700">
+                  <button
+                    className="text-xs text-red-400 hover:text-red-300"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStoryboardToDelete(storyboard.id);
+                      setShowDeleteConfirmation(true);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="bg-gotham-blue border-t border-gray-700 p-4">
+        <button
+          className="w-full btn btn-outline"
+          onClick={onClose}
+        >
+          Close
+        </button>
+      </div>
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirmation}
+        title="Delete Storyboard"
+        message="Are you sure you want to delete this storyboard? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={async () => {
+          if (storyboardToDelete) {
+            await onDeleteStoryboard(storyboardToDelete);
+
+            // Remove the deleted storyboard from the list
+            setLoadedStoryboards(prev =>
+              prev.filter(board => board.id !== storyboardToDelete)
+            );
+
+            setStoryboardToDelete(null);
+            setShowDeleteConfirmation(false);
+          }
+        }}
+        onCancel={() => {
+          setStoryboardToDelete(null);
+          setShowDeleteConfirmation(false);
+        }}
+      />
+    </div>
+  );
+};
+
 const MovieEditorPage: React.FC = () => {
   const {
     currentStoryboard,
@@ -921,296 +1095,190 @@ const MovieEditorPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gotham-black text-white">
-      {/* Header */}
-      <Header
-        onExport={() => handleExport('svg')}
-        onSave={handleSave}
-        onLoad={() => setShowLoadModal(true)}
-        onGenerate={() => setShowStoryboardGeneratorModal(true)}
-        storyboardName={currentStoryboard.name}
-        onReset={resetApplication}
-      />
+    <>
+      <div className="flex flex-col h-screen overflow-hidden bg-gotham-black text-white">
+        {/* Header */}
+        <Header
+          onExport={() => handleExport('svg')}
+          onSave={handleSave}
+          onLoad={() => setShowLoadModal(true)}
+          onGenerate={() => setShowStoryboardGeneratorModal(true)}
+          storyboardName={currentStoryboard.name}
+          onReset={resetApplication}
+        />
 
-      {/* Main content area with flex layout */}
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        {/* Animation view and controls - take less space on mobile */}
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:h-full md:max-h-full">
-          {activeClipId ? (
-            <>
-              <div className="flex-1 h-full flex items-center justify-center">
-                <AnimationCanvas />
+        {/* Main content area with flex layout */}
+        <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+          {/* Animation view and controls - take less space on mobile */}
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:h-full md:max-h-full">
+            {activeClipId ? (
+              <>
+                <div className="flex-1 h-full flex items-center justify-center">
+                  <AnimationCanvas />
+                </div>
+                <AnimationControls />
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full bg-gray-900">
+                <div className="text-center">
+                  <p className="text-lg text-gray-400 mb-4">No clip selected</p>
+                  <button
+                    className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
+                    onClick={handleAddClip}
+                  >
+                    Add your first clip
+                  </button>
+                </div>
               </div>
-              <AnimationControls />
-            </>
-          ) : (
-            <div className="flex items-center justify-center h-full bg-gray-900">
-              <div className="text-center">
-                <p className="text-lg text-gray-400 mb-4">No clip selected</p>
-                <button
-                  className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
-                  onClick={handleAddClip}
-                >
-                  Add your first clip
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Storyboard panel - taller on mobile */}
-        <div className="md:w-80 h-64 md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-l border-gray-700">
-          <StoryboardPanel
-            clips={currentStoryboard.clips}
-            activeClipId={activeClipId}
-            onClipSelect={handleClipSelect}
-            onAddClip={handleAddClip}
-            storyboard={currentStoryboard}
-          />
-        </div>
-      </div>
-
-      {/* Modals */}
-      {/* StoryboardGenerator Modal */}
-      <StoryboardGeneratorModal
-        isOpen={showStoryboardGeneratorModal}
-        onCancel={() => setShowStoryboardGeneratorModal(false)}
-        onGenerate={handleGenerateStoryboard}
-        isLoading={isGenerating}
-      />
-
-      {/* Generating Clips Progress Modal */}
-      <ConfirmationModal
-        isOpen={showGeneratingClipsModal}
-        title="Generating Clips"
-        message={
-          <div className="mt-2">
-            <p className="text-center mb-4">
-              {generationProgress.resumedFrom ?
-                `Resuming animation generation from scene ${generationProgress.resumedFrom + 1}...` :
-                `Creating animations for each scene in your storyboard...`
-              }
-            </p>
-            <div className="w-full bg-gray-700 rounded-full h-2.5">
-              <div
-                className="bg-bat-yellow h-2.5 rounded-full"
-                style={{
-                  width: `${generationProgress.total ?
-                    (generationProgress.current / generationProgress.total) * 100 : 0}%`
-                }}
-              ></div>
-            </div>
-            <p className="text-center mt-2 text-sm text-gray-400">
-              {generationProgress.current} of {generationProgress.total} scenes completed
-              {generationProgress.resumedFrom ?
-                ` (resumed from scene ${generationProgress.resumedFrom + 1})` :
-                ''
-              }
-            </p>
-            <p className="text-center mt-2 text-sm text-gray-400">
-              This may take a few minutes. Please don't close this window.
-            </p>
-            {generationProgress.resumedFrom && (
-              <p className="text-center mt-2 text-sm text-yellow-400">
-                Your previous progress was saved. Generation will continue where it left off.
-              </p>
             )}
           </div>
-        }
-        confirmText="Please wait..."
-        cancelText="Cancel"
-        onConfirm={() => {}} // No action on confirm
-        onCancel={() => {}} // No action on cancel - force user to wait
-        confirmDisabled={true}
-        showSpinner={true}
-      />
 
-      {/* Error Modal */}
-      <ConfirmationModal
-        isOpen={showErrorModal}
-        title="Storyboard Generation Error"
-        message={
-          <div className="mt-2">
-            <p className="text-center mb-4 text-red-500">
-              Failed to generate storyboard
-            </p>
-            <p className="text-sm text-gray-300 bg-gotham-gray p-3 rounded max-h-60 overflow-y-auto">
-              {generationError || 'Unknown error occurred'}
-            </p>
-            <p className="text-center mt-4 text-sm text-gray-400">
-              Please try again with a different prompt or AI provider.
-            </p>
-          </div>
-        }
-        confirmText="OK"
-        cancelText={undefined}
-        onConfirm={() => setShowErrorModal(false)}
-        onCancel={() => setShowErrorModal(false)}
-      />
-
-      {/* Save Modal */}
-      <ConfirmationModal
-        isOpen={showSaveModal}
-        title="Save Storyboard"
-        message={
-          <div className="mt-2">
-            <label htmlFor="storyboardName" className="block text-sm font-medium text-gray-300">
-              Storyboard Name
-            </label>
-            <input
-              type="text"
-              id="storyboardName"
-              className="input"
-              placeholder="Enter a name for your storyboard"
-              value={storyboardName}
-              onChange={(e) => setStoryboardName(e.target.value)}
-              autoFocus
+          {/* Storyboard panel - taller on mobile */}
+          <div className="md:w-80 h-64 md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-l border-gray-700">
+            <StoryboardPanel
+              clips={currentStoryboard.clips}
+              activeClipId={activeClipId}
+              onClipSelect={handleClipSelect}
+              onAddClip={handleAddClip}
+              storyboard={currentStoryboard}
             />
           </div>
-        }
-        confirmText="Save"
-        cancelText="Cancel"
-        onConfirm={handleSave}
-        onCancel={() => setShowSaveModal(false)}
-      />
+        </div>
 
-      {/* Load Storyboard Modal */}
-      <ConfirmationModal
-        isOpen={showLoadModal}
-        title="Load Storyboard"
-        message={
-          <div className="mt-2">
-            <p className="text-sm text-gray-300 mb-4">
-              Select a storyboard to load:
-            </p>
-            <div className="max-h-96 overflow-y-auto">
-              {(() => {
-                // Use state to track loaded storyboards
-                const [loadedStoryboards, setLoadedStoryboards] = useState<Storyboard[]>([]);
-                const [isLoadingStoryboards, setIsLoadingStoryboards] = useState(false);
-                const [loadError, setLoadError] = useState<string | null>(null);
+        {/* Modals */}
+        {/* StoryboardGenerator Modal */}
+        <StoryboardGeneratorModal
+          isOpen={showStoryboardGeneratorModal}
+          onCancel={() => setShowStoryboardGeneratorModal(false)}
+          onGenerate={handleGenerateStoryboard}
+          isLoading={isGenerating}
+        />
 
-                // Load storyboards when modal opens
-                useEffect(() => {
-                  if (showLoadModal) {
-                    setIsLoadingStoryboards(true);
-
-                    const fetchStoryboards = async () => {
-                      try {
-                        // Get list of storyboard IDs
-                        const storyboardIds = await getSavedStoryboards();
-
-                        // Fetch details for each storyboard
-                        const storyboardsData: Storyboard[] = [];
-                        for (const id of storyboardIds) {
-                          try {
-                            const storyboard = await MovieStorageApi.getMovie(id);
-                            if (storyboard) {
-                              storyboardsData.push(storyboard as Storyboard);
-                            }
-                          } catch (err) {
-                            console.error(`Error fetching storyboard ${id}:`, err);
-                          }
-                        }
-
-                        // Sort by updated date (newest first)
-                        storyboardsData.sort((a, b) =>
-                          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-                        );
-
-                        setLoadedStoryboards(storyboardsData);
-                      } catch (err) {
-                        console.error('Error loading storyboards:', err);
-                        setLoadError('Failed to load storyboards');
-                      } finally {
-                        setIsLoadingStoryboards(false);
-                      }
-                    };
-
-                    fetchStoryboards();
-                  }
-                }, [showLoadModal]);
-
-                // Show loading state
-                if (isLoadingStoryboards) {
-                  return <p className="text-gray-400">Loading storyboards...</p>;
+        {/* Generating Clips Progress Modal */}
+        <ConfirmationModal
+          isOpen={showGeneratingClipsModal}
+          title="Generating Clips"
+          message={
+            <div className="mt-2">
+              <p className="text-center mb-4">
+                {generationProgress.resumedFrom ?
+                  `Resuming animation generation from scene ${generationProgress.resumedFrom + 1}...` :
+                  `Creating animations for each scene in your storyboard...`
                 }
-
-                // Show error
-                if (loadError) {
-                  return <p className="text-red-400">{loadError}</p>;
+              </p>
+              <div className="w-full bg-gray-700 rounded-full h-2.5">
+                <div
+                  className="bg-bat-yellow h-2.5 rounded-full"
+                  style={{
+                    width: `${generationProgress.total ?
+                      (generationProgress.current / generationProgress.total) * 100 : 0}%`
+                  }}
+                ></div>
+              </div>
+              <p className="text-center mt-2 text-sm text-gray-400">
+                {generationProgress.current} of {generationProgress.total} scenes completed
+                {generationProgress.resumedFrom ?
+                  ` (resumed from scene ${generationProgress.resumedFrom + 1})` :
+                  ''
                 }
-
-                // Show empty state
-                if (loadedStoryboards.length === 0) {
-                  return <p className="text-gray-400">No saved storyboards found.</p>;
-                }
-
-                // Show list of storyboards
-                return loadedStoryboards.map((storyboard) => (
-                  <div
-                    key={storyboard.id}
-                    className="border border-gray-700 hover:border-bat-yellow rounded-md p-3 mb-2"
-                  >
-                    <div
-                      className="cursor-pointer"
-                      onClick={async () => {
-                        await loadStoryboard(storyboard.id);
-                        setShowLoadModal(false);
-                      }}
-                    >
-                      <div className="font-medium text-bat-yellow">{storyboard.name}</div>
-                      <div className="text-sm text-gray-400 mt-1">
-                        {storyboard.clips?.length || 0} clips
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Updated: {new Date(storyboard.updatedAt).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="mt-2 pt-2 border-t border-gray-700">
-                      <button
-                        className="text-xs text-red-400 hover:text-red-300"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setStoryboardToDelete(storyboard.id);
-                          setShowDeleteConfirmation(true);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ));
-              })()}
+              </p>
+              <p className="text-center mt-2 text-sm text-gray-400">
+                This may take a few minutes. Please don't close this window.
+              </p>
+              {generationProgress.resumedFrom && (
+                <p className="text-center mt-2 text-sm text-yellow-400">
+                  Your previous progress was saved. Generation will continue where it left off.
+                </p>
+              )}
             </div>
-          </div>
-        }
-        confirmText="Close"
-        cancelText={undefined}
-        onConfirm={() => setShowLoadModal(false)}
-        onCancel={() => {}}
-      />
+          }
+          confirmText="Please wait..."
+          cancelText="Cancel"
+          onConfirm={() => {}} // No action on confirm
+          onCancel={() => {}} // No action on cancel - force user to wait
+          confirmDisabled={true}
+          showSpinner={true}
+        />
 
-      {/* Delete Storyboard Confirmation */}
-      <ConfirmationModal
-        isOpen={showDeleteConfirmation}
-        title="Delete Storyboard"
-        message="Are you sure you want to delete this storyboard? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        onConfirm={async () => {
-          if (storyboardToDelete) {
-            await deleteStoryboard(storyboardToDelete);
+        {/* Error Modal */}
+        <ConfirmationModal
+          isOpen={showErrorModal}
+          title="Storyboard Generation Error"
+          message={
+            <div className="mt-2">
+              <p className="text-center mb-4 text-red-500">
+                Failed to generate storyboard
+              </p>
+              <p className="text-sm text-gray-300 bg-gotham-gray p-3 rounded max-h-60 overflow-y-auto">
+                {generationError || 'Unknown error occurred'}
+              </p>
+              <p className="text-center mt-4 text-sm text-gray-400">
+                Please try again with a different prompt or AI provider.
+              </p>
+            </div>
+          }
+          confirmText="OK"
+          cancelText={undefined}
+          onConfirm={() => setShowErrorModal(false)}
+          onCancel={() => setShowErrorModal(false)}
+        />
+
+        {/* Save Modal */}
+        <ConfirmationModal
+          isOpen={showSaveModal}
+          title="Save Storyboard"
+          message={
+            <div className="mt-2">
+              <label htmlFor="storyboardName" className="block text-sm font-medium text-gray-300">
+                Storyboard Name
+              </label>
+              <input
+                type="text"
+                id="storyboardName"
+                className="input"
+                placeholder="Enter a name for your storyboard"
+                value={storyboardName}
+                onChange={(e) => setStoryboardName(e.target.value)}
+                autoFocus
+              />
+            </div>
+          }
+          confirmText="Save"
+          cancelText="Cancel"
+          onConfirm={handleSave}
+          onCancel={() => setShowSaveModal(false)}
+        />
+
+        {/* Delete Storyboard Confirmation */}
+        <ConfirmationModal
+          isOpen={showDeleteConfirmation}
+          title="Delete Storyboard"
+          message="Are you sure you want to delete this storyboard? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={async () => {
+            if (storyboardToDelete) {
+              await deleteStoryboard(storyboardToDelete);
+              setStoryboardToDelete(null);
+              setShowDeleteConfirmation(false);
+            }
+          }}
+          onCancel={() => {
             setStoryboardToDelete(null);
             setShowDeleteConfirmation(false);
-          }
-        }}
-        onCancel={() => {
-          setStoryboardToDelete(null);
-          setShowDeleteConfirmation(false);
-        }}
+          }}
+        />
+      </div>
+
+      {/* Move the LoadStoryboardModal outside all containers to ensure it's not constrained */}
+      <LoadStoryboardModal
+        isOpen={showLoadModal}
+        onClose={() => setShowLoadModal(false)}
+        onLoadStoryboard={loadStoryboard}
+        onDeleteStoryboard={deleteStoryboard}
+        getSavedStoryboards={getSavedStoryboards}
       />
-    </div>
+    </>
   );
 };
 

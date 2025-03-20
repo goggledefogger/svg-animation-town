@@ -340,16 +340,19 @@ const Header: React.FC<HeaderProps> = ({
         </button>
 
         {showAnimationList && (
-          <div style={getAnimationListPosition()}>
-            <AnimationList
-              onSelectAnimation={handleSelectAnimation}
-              onDeleteAnimation={handleDeleteAnimation}
-              onClose={() => setShowAnimationList(false)}
-              title="Load Animation"
-              showThumbnails={true}
-              maxHeight="max-h-96"
-              showSearchFilter={true}
-            />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div className="bg-gotham-blue border border-gray-700 rounded-lg shadow-lg w-full max-w-md">
+              <AnimationList
+                onSelectAnimation={handleSelectAnimation}
+                onDeleteAnimation={handleDeleteAnimation}
+                onClose={() => setShowAnimationList(false)}
+                title="Load Animation"
+                showThumbnails={true}
+                maxHeight="max-h-96"
+                showSearchFilter={true}
+                containerClassName="rounded-lg w-full"
+              />
+            </div>
           </div>
         )}
       </div>
