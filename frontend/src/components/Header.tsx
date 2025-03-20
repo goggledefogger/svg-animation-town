@@ -12,8 +12,146 @@ interface HeaderProps {
   onLoad?: () => void;
   onGenerate?: () => void;
   storyboardName?: string;
-  onReset?: () => void; // Add new reset prop for movie editor
+  onReset?: () => void;
 }
+
+// Icon component for reusability
+interface IconProps {
+  path: string;
+  className?: string;
+}
+
+const Icon: React.FC<IconProps> = ({ path, className = "w-5 h-5" }) => (
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d={path}
+    />
+  </svg>
+);
+
+// Reusable action button component
+interface ActionButtonProps {
+  onClick: () => void;
+  ariaLabel: string;
+  title: string;
+  icon: React.ReactNode;
+  text?: string;
+  yellow?: boolean;
+  disabled?: boolean;
+}
+
+const ActionButton: React.FC<ActionButtonProps> = ({
+  onClick,
+  ariaLabel,
+  title,
+  icon,
+  text,
+  yellow = false,
+  disabled = false
+}) => {
+  const isMobile = window.innerWidth < 768;
+  const baseClasses = "rounded-md flex items-center justify-center";
+  const colorClasses = yellow
+    ? "bg-bat-yellow text-black hover:opacity-90"
+    : "bg-gray-800 text-white hover:bg-gray-700";
+  const sizeClasses = isMobile ? "p-2.5 w-12 h-12" : "px-5 py-2";
+
+  return (
+    <button
+      className={`${baseClasses} ${colorClasses} ${sizeClasses}`}
+      onClick={onClick}
+      aria-label={ariaLabel}
+      title={title}
+      disabled={disabled}
+    >
+      {icon}
+      {!isMobile && text && <span>{text}</span>}
+    </button>
+  );
+};
+
+// Dropdown menu component
+interface EditorDropdownProps {
+  isMovieEditorPage: boolean;
+  showNav: boolean;
+  setShowNav: (show: boolean) => void;
+  forMobile?: boolean;
+  dropdownRef: React.RefObject<HTMLDivElement>;
+}
+
+const EditorDropdown: React.FC<EditorDropdownProps> = ({
+  isMovieEditorPage,
+  showNav,
+  setShowNav,
+  forMobile = false,
+  dropdownRef
+}) => {
+  const buttonClasses = forMobile
+    ? "px-4 py-2.5 rounded-lg bg-gray-800 text-white hover:bg-gray-700 focus:outline-none"
+    : "px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-700 focus:outline-none";
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        className={`flex items-center gap-2 ${buttonClasses}`}
+        onClick={() => setShowNav(!showNav)}
+        aria-label="Navigation menu"
+      >
+        <span className="font-medium">
+          {isMovieEditorPage ? 'Movie' : 'Animation'}
+        </span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+        </svg>
+      </button>
+
+      {showNav && (
+        <div className="absolute top-full right-0 mt-1 bg-gotham-blue border border-gray-700 rounded-md shadow-lg z-50 w-48">
+          <div className="py-1">
+            <Link
+              to="/"
+              className={`flex items-center px-4 py-2 ${
+                !isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
+              }`}
+              onClick={() => setShowNav(false)}
+            >
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+              </svg>
+              Animation Editor
+            </Link>
+            <Link
+              to="/movie-editor"
+              className={`flex items-center px-4 py-2 ${
+                isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
+              }`}
+              onClick={() => setShowNav(false)}
+            >
+              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
+              </svg>
+              Movie Editor
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Header: React.FC<HeaderProps> = ({
   onExport,
@@ -23,35 +161,27 @@ const Header: React.FC<HeaderProps> = ({
   storyboardName,
   onReset
 }) => {
-  const { loadPreset, resetEverything, saveAnimation, loadAnimation, deleteAnimation, getSavedAnimations, exportAnimation, svgContent, chatHistory } = useAnimation();
-  const navigate = useNavigate();
+  const { resetEverything, saveAnimation, loadAnimation, deleteAnimation, exportAnimation, svgContent, chatHistory } = useAnimation();
   const location = useLocation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
-  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [showNavDropdown, setShowNavDropdown] = useState(false);
   const [showAnimationList, setShowAnimationList] = useState(false);
   const mobileNavRef = useRef<HTMLDivElement>(null);
-  const isLoadingRef = useRef(false); // Track loading state to prevent duplicate calls
+  const desktopNavRef = useRef<HTMLDivElement>(null);
   const animationListButtonRef = useRef<HTMLButtonElement>(null);
   const isMovieEditorPage = location.pathname === '/movie-editor';
+  const isMobile = window.innerWidth < 768;
 
   // Reset - refresh from server and clear session state
   const resetPage = useCallback(() => {
     // Clear all animation state from sessionStorage
     sessionStorage.removeItem('current_animation_state');
-
-    // Also clear page_just_loaded flag so the state isn't restored
     sessionStorage.removeItem('page_just_loaded');
-
-    // Set a flag in sessionStorage to indicate we want fresh data from server
     sessionStorage.setItem('force_server_refresh', 'true');
-
-    // Call the resetEverything function to clear in-memory state
     resetEverything();
-
-    // Refresh the page to load fresh data from server
     window.location.reload();
   }, [resetEverything]);
 
@@ -59,33 +189,31 @@ const Header: React.FC<HeaderProps> = ({
   const handleResetConfirm = () => {
     setShowResetModal(false);
     if (isMovieEditorPage && onReset) {
-      // Use the movie editor reset function if we're on that page
       onReset();
     } else {
-      // Use animation editor reset otherwise
       resetPage();
     }
   };
 
-  // Close mobile nav when clicking outside
+  // Close nav when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (mobileNavRef.current && !mobileNavRef.current.contains(event.target as Node)) {
-        setShowMobileNav(false);
+      if (
+        (mobileNavRef.current && !mobileNavRef.current.contains(event.target as Node)) &&
+        (desktopNavRef.current && !desktopNavRef.current.contains(event.target as Node))
+      ) {
+        setShowNavDropdown(false);
       }
     }
 
-    // Add event listener
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      // Remove event listener on cleanup
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [mobileNavRef]);
+  }, [mobileNavRef, desktopNavRef]);
 
   const handleSave = async () => {
     if (animationName.trim()) {
-      // Use chatHistory directly from AnimationContext
       await saveAnimation(animationName.trim(), chatHistory);
       setShowSaveModal(false);
       setAnimationName('');
@@ -106,7 +234,6 @@ const Header: React.FC<HeaderProps> = ({
   // Handle animation selection
   const handleSelectAnimation = async (animation: AnimationItem) => {
     try {
-      console.log(`Loading animation: ${animation.name} with ID: ${animation.id}`);
       await loadAnimation(animation.id);
       setShowAnimationList(false);
     } catch (error) {
@@ -118,7 +245,6 @@ const Header: React.FC<HeaderProps> = ({
   // Handle animation deletion
   const handleDeleteAnimation = async (animation: AnimationItem): Promise<boolean> => {
     try {
-      console.log(`Attempting to delete animation: ${animation.name} (${animation.id})`);
       const success = await deleteAnimation(animation.id);
       return success;
     } catch (error) {
@@ -130,329 +256,224 @@ const Header: React.FC<HeaderProps> = ({
   // Position the animation list relative to the button
   const getAnimationListPosition = (): CSSProperties => {
     if (!animationListButtonRef.current) return {};
-    
+
     const buttonRect = animationListButtonRef.current.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
-    
-    // Determine if we should align to the right (if near right edge)
     const alignRight = buttonRect.right > viewportWidth - 250;
-    
-    if (alignRight) {
-      return {
-        position: 'absolute' as const,
-        right: '0',
-        top: `${buttonRect.height + 8}px`,
-        width: '240px',
-        zIndex: 50,
-      };
-    } else {
-      return {
-        position: 'absolute' as const, 
-        left: '0',
-        top: `${buttonRect.height + 8}px`,
-        width: '240px',
-        zIndex: 50,
-      };
+
+    return {
+      position: 'absolute',
+      right: alignRight ? '0' : 'auto',
+      left: alignRight ? 'auto' : '0',
+      top: `${buttonRect.height + 8}px`,
+      width: '240px',
+      zIndex: 50,
+    };
+  };
+
+  // Icon paths
+  const iconPaths = {
+    reset: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+    generate: "M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z",
+    load: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12",
+    save: "M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4v8m-6-8v8m1-10V4a1 1 0 011-1h4a1 1 0 011 1v4",
+    export: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+  };
+
+  // Create icon components with the right class based on mobile or not
+  const createIcon = (path: string) => (
+    <Icon path={path} className={`w-5 h-5 ${!isMobile && "mr-2"}`} />
+  );
+
+  // Render the Load button (slightly different behavior based on mode)
+  const renderLoadButton = () => {
+    if (isMovieEditorPage && onLoad) {
+      return (
+        <ActionButton
+          onClick={onLoad}
+          ariaLabel="Load"
+          title="Load"
+          icon={createIcon(iconPaths.load)}
+          text="Load"
+        />
+      );
     }
+
+    return (
+      <div className="relative">
+        <button
+          ref={animationListButtonRef}
+          className={`rounded-md bg-gray-800 text-white hover:bg-gray-700 flex items-center justify-center ${isMobile ? "p-2.5 w-12 h-12" : "px-5 py-2"}`}
+          onClick={() => setShowAnimationList(!showAnimationList)}
+          aria-label="Load"
+          title="Load"
+        >
+          {createIcon(iconPaths.load)}
+          {!isMobile && <span>Load</span>}
+        </button>
+
+        {showAnimationList && (
+          <div style={getAnimationListPosition()}>
+            <AnimationList
+              onSelectAnimation={handleSelectAnimation}
+              onDeleteAnimation={handleDeleteAnimation}
+              onClose={() => setShowAnimationList(false)}
+              title="Load Animation"
+              showThumbnails={true}
+              maxHeight="max-h-96"
+              showSearchFilter={true}
+            />
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
-    <header className="bg-gotham-black p-4 shadow-lg border-b border-gray-700 flex justify-between items-center">
-      <div className="flex items-center">
+    <header className="bg-gotham-black shadow-lg border-b border-gray-700">
+      {/* Desktop layout - single row */}
+      <div className="hidden md:flex justify-between items-center px-4 py-3">
+        {/* Left section - logo */}
         <div className="flex items-center">
           <img
             src="/favicon.svg"
             alt="Gotham Logo"
-            className="h-6 md:h-8 mr-2"
+            className="h-7 w-7"
           />
         </div>
 
-        {/* Mobile Editor Selector Dropdown */}
-        <div className="md:hidden relative" ref={mobileNavRef}>
-          <button
-            className="flex items-center space-x-1 px-3 py-1 border border-gray-700 rounded-md bg-gotham-blue text-gray-300 hover:bg-gray-700 focus:outline-none"
-            onClick={() => setShowMobileNav(!showMobileNav)}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              {isMovieEditorPage ? (
-                // Movie icon
-                <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-              ) : (
-                // Animation icon
-                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-              )}
-            </svg>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
-          </button>
-
-          {showMobileNav && (
-            <div className="absolute top-full left-0 mt-1 bg-gotham-blue border border-gray-700 rounded-md shadow-lg z-50 w-48">
-              <div className="py-1">
-                <Link
-                  to="/"
-                  className={`flex items-center px-4 py-2 ${
-                    !isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
-                  }`}
-                  onClick={() => setShowMobileNav(false)}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
-                  </svg>
-                  Animation
-                </Link>
-                <Link
-                  to="/movie-editor"
-                  className={`flex items-center px-4 py-2 ${
-                    isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
-                  }`}
-                  onClick={() => setShowMobileNav(false)}
-                >
-                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"></path>
-                  </svg>
-                  Movie
-                </Link>
-              </div>
-            </div>
+        {/* Center section - buttons */}
+        <div className="flex items-center gap-3">
+          {/* Generate button - only shown on movie editor page */}
+          {isMovieEditorPage && onGenerate && (
+            <ActionButton
+              onClick={onGenerate}
+              ariaLabel="Generate"
+              title="Generate with AI"
+              icon={createIcon(iconPaths.generate)}
+              text="Generate"
+            />
           )}
+
+          {/* Reset Button */}
+          <ActionButton
+            onClick={() => setShowResetModal(true)}
+            ariaLabel="Reset"
+            title="Reset"
+            icon={createIcon(iconPaths.reset)}
+            text="Reset"
+          />
+
+          {/* Load Button */}
+          {renderLoadButton()}
+
+          {/* Save Button */}
+          <ActionButton
+            onClick={isMovieEditorPage && onSave ? onSave : () => setShowSaveModal(true)}
+            disabled={!isMovieEditorPage && !svgContent}
+            ariaLabel="Save"
+            title="Save"
+            icon={createIcon(iconPaths.save)}
+            text="Save"
+          />
+
+          {/* Export Button - Yellow button */}
+          <ActionButton
+            onClick={isMovieEditorPage && onExport ? onExport : () => setShowExportModal(true)}
+            disabled={!isMovieEditorPage && !svgContent}
+            ariaLabel="Export"
+            title="Export"
+            icon={createIcon(iconPaths.export)}
+            text="Export"
+            yellow={true}
+          />
         </div>
 
-        {/* Desktop Navigation Links */}
-        <nav className="hidden md:flex space-x-4">
-          <Link
-            to="/"
-            className={`transition-colors ${
-              location.pathname === '/'
-                ? 'text-bat-yellow'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Animation Editor
-          </Link>
-          <Link
-            to="/movie-editor"
-            className={`transition-colors ${
-              location.pathname === '/movie-editor'
-                ? 'text-bat-yellow'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Movie Editor
-          </Link>
-        </nav>
+        {/* Right section - dropdown */}
+        <EditorDropdown
+          isMovieEditorPage={isMovieEditorPage}
+          showNav={showNavDropdown}
+          setShowNav={setShowNavDropdown}
+          dropdownRef={desktopNavRef}
+        />
       </div>
 
-      {/* Controls section - shows different controls based on page */}
-      <div className="flex space-x-2">
-        {/* Storyboard name - only shown on movie editor page */}
-        {isMovieEditorPage && storyboardName && (
-          <span className="hidden md:flex items-center text-sm text-gray-300 mr-4">
-            <span className="text-xs text-gray-400 mr-1">Storyboard:</span>
-            {storyboardName}
-          </span>
-        )}
-
-        {/* Generate button - only shown on movie editor page */}
-        {isMovieEditorPage && onGenerate && (
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={onGenerate}
-            aria-label="Generate"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-              />
-            </svg>
-            <span className="hidden md:inline">Generate with AI</span>
-          </button>
-        )}
-
-        {/* Reset Button - only shown on animation editor page */}
-        {!isMovieEditorPage && (
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowResetModal(true)}
-            aria-label="Reset"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            <span className="hidden md:inline">Reset</span>
-          </button>
-        )}
-
-        {/* Reset Button - Movie Editor */}
-        {isMovieEditorPage && (
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={() => setShowResetModal(true)}
-            aria-label="Reset Movie Editor"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            <span className="hidden md:inline">Reset</span>
-          </button>
-        )}
-
-        {/* Save Button */}
-        <button
-          className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-          onClick={isMovieEditorPage && onSave ? onSave : () => setShowSaveModal(true)}
-          disabled={!isMovieEditorPage && !svgContent}
-          aria-label="Save"
-        >
-          <svg
-            className="w-4 h-4 md:mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+      {/* Mobile layout - two rows */}
+      <div className="md:hidden flex flex-col space-y-2 p-2">
+        {/* Top row with main navigation */}
+        <div className="flex justify-between items-center px-2">
+          {/* Left side with logo */}
+          <div className="flex items-center">
+            <img
+              src="/favicon.svg"
+              alt="Gotham Logo"
+              className="h-6 w-6"
             />
-          </svg>
-          <span className="hidden md:inline">Save</span>
-        </button>
-
-        {/* Load Button - Either modal for Movie Editor or animation list for Animation Editor */}
-        {isMovieEditorPage && onLoad ? (
-          <button
-            className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-            onClick={onLoad}
-            aria-label="Load"
-          >
-            <svg
-              className="w-4 h-4 md:mr-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-              />
-            </svg>
-            <span className="hidden md:inline">Load</span>
-          </button>
-        ) : (
-          <div className="relative">
-            <button
-              ref={animationListButtonRef}
-              className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-              onClick={() => setShowAnimationList(!showAnimationList)}
-              aria-label="Load"
-            >
-              <svg
-                className="w-4 h-4 md:mr-1"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0l-4-4m4 4V4"
-                />
-              </svg>
-              <span className="hidden md:inline">Load</span>
-            </button>
-
-            {showAnimationList && (
-              <div style={getAnimationListPosition()}>
-                <AnimationList 
-                  onSelectAnimation={handleSelectAnimation}
-                  onDeleteAnimation={handleDeleteAnimation}
-                  onClose={() => setShowAnimationList(false)}
-                  title="Load Animation"
-                  showThumbnails={true}
-                  maxHeight="max-h-96"
-                  showSearchFilter={true}
-                />
-              </div>
-            )}
           </div>
-        )}
 
-        {/* Export Button */}
-        <button
-          className="btn btn-outline flex items-center justify-center p-2 md:py-1 md:px-4"
-          onClick={isMovieEditorPage && onExport ? onExport : () => setShowExportModal(true)}
-          disabled={!isMovieEditorPage && !svgContent}
-          aria-label="Export"
-        >
-          <svg
-            className="w-4 h-4 md:mr-1"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+          {/* Center - storyboard name when in movie mode */}
+          {isMovieEditorPage && storyboardName && (
+            <span className="text-sm text-gray-300 flex-grow mx-4 text-center">
+              <span className="text-gray-400 mr-1">Storyboard:</span>
+              {storyboardName}
+            </span>
+          )}
+
+          {/* Right side with editor dropdown */}
+          <EditorDropdown
+            isMovieEditorPage={isMovieEditorPage}
+            showNav={showNavDropdown}
+            setShowNav={setShowNavDropdown}
+            forMobile={true}
+            dropdownRef={mobileNavRef}
+          />
+        </div>
+
+        {/* Bottom row with action buttons - left aligned with consistent gap */}
+        <div className="flex justify-start gap-3 px-2 overflow-x-auto">
+          {/* Generate button - only shown on movie editor page */}
+          {isMovieEditorPage && onGenerate && (
+            <ActionButton
+              onClick={onGenerate}
+              ariaLabel="Generate"
+              title="Generate with AI"
+              icon={createIcon(iconPaths.generate)}
             />
-          </svg>
-          <span className="hidden md:inline">Export</span>
-        </button>
+          )}
+
+          {/* Reset Button */}
+          <ActionButton
+            onClick={() => setShowResetModal(true)}
+            ariaLabel="Reset"
+            title="Reset"
+            icon={createIcon(iconPaths.reset)}
+          />
+
+          {/* Load Button */}
+          {renderLoadButton()}
+
+          {/* Save Button */}
+          <ActionButton
+            onClick={isMovieEditorPage && onSave ? onSave : () => setShowSaveModal(true)}
+            disabled={!isMovieEditorPage && !svgContent}
+            ariaLabel="Save"
+            title="Save"
+            icon={createIcon(iconPaths.save)}
+          />
+
+          {/* Export Button - Yellow button */}
+          <ActionButton
+            onClick={isMovieEditorPage && onExport ? onExport : () => setShowExportModal(true)}
+            disabled={!isMovieEditorPage && !svgContent}
+            ariaLabel="Export"
+            title="Export"
+            icon={createIcon(iconPaths.export)}
+            yellow={true}
+          />
+        </div>
       </div>
 
-      {/* Reset Confirmation Modal */}
+      {/* Modals */}
       <ConfirmationModal
         isOpen={showResetModal}
         title="Reset Everything?"
