@@ -69,7 +69,40 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const isGenerating = storyboard?.generationStatus?.inProgress === true;
   const totalScenes = storyboard?.generationStatus?.totalScenes || 0;
   const completedScenes = storyboard?.generationStatus?.completedScenes || 0;
-  const generationProgress = totalScenes > 0 ? Math.round((completedScenes / totalScenes) * 100) : 0;
+
+  // Simple counter for display purposes
+  const [displayCount, setDisplayCount] = useState(0);
+
+  // Reset display count when generation starts/stops
+  useEffect(() => {
+    if (!isGenerating) {
+      // When generation completes, show actual final count
+      setDisplayCount(completedScenes);
+    } else if (totalScenes > 0 && displayCount === 0) {
+      // When generation starts, initialize to 0
+      setDisplayCount(0);
+    }
+  }, [isGenerating, completedScenes, totalScenes, displayCount]);
+
+  // Increment display count smoothly using an interval
+  useEffect(() => {
+    if (!isGenerating || totalScenes === 0) return;
+
+    // Only run the interval if we need to catch up to completedScenes
+    if (displayCount < completedScenes) {
+      const timer = setInterval(() => {
+        setDisplayCount(current => {
+          // Increment by 1 until we reach the actual completed count
+          return current < completedScenes ? current + 1 : current;
+        });
+      }, 500); // Adjust timing as needed for smoother animation
+
+      return () => clearInterval(timer);
+    }
+  }, [isGenerating, completedScenes, displayCount, totalScenes]);
+
+  // Simple progress calculation based on displayed count
+  const displayProgress = totalScenes > 0 ? Math.round((displayCount / totalScenes) * 100) : 0;
 
   // State to track clip thumbnails
   const [clipThumbnails, setClipThumbnails] = useState<Record<string, string>>({});
@@ -233,19 +266,19 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
             {isGenerating ? (
               <div>
                 <div className="text-sm font-medium mb-1">
-                  Generating storyboard: {completedScenes}/{totalScenes} scenes
+                  Generating storyboard: {displayCount}/{totalScenes} scenes
                 </div>
                 <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-green-500 h-full rounded-full transition-all duration-500"
-                    style={{ width: `${generationProgress}%` }}
+                    style={{ width: `${displayProgress}%` }}
                   ></div>
                 </div>
               </div>
             ) : (
               <div className="text-sm">
                 {completedScenes > 0 ?
-                  `Generated ${completedScenes}/${totalScenes} scenes` :
+                  `Generated ${displayCount}/${totalScenes} scenes` :
                   'Ready to generate'}
               </div>
             )}
