@@ -15,6 +15,7 @@ import Header from '../components/Header';
 import SvgThumbnail from '../components/SvgThumbnail';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAnimation } from '../contexts/AnimationContext';
+import Toast from '../components/Toast';
 
 // Create a dedicated LoadStoryboardModal component
 const LoadStoryboardModal: React.FC<{
@@ -112,41 +113,70 @@ const LoadStoryboardModal: React.FC<{
         )}
 
         {!isLoadingStoryboards && !loadError && loadedStoryboards.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2">
-            {loadedStoryboards.map((storyboard) => (
-              <div
-                key={storyboard.id}
-                className="border border-gray-700 hover:border-bat-yellow rounded-md p-4 bg-gotham-black transition"
-              >
+          <div className="space-y-3">
+            {loadedStoryboards.map((storyboard) => {
+              // Find the first clip to use as a thumbnail
+              const firstClip = storyboard.clips && storyboard.clips.length > 0
+                ? storyboard.clips[0]
+                : null;
+
+              return (
                 <div
-                  className="cursor-pointer"
-                  onClick={async () => {
-                    await onLoadStoryboard(storyboard.id);
-                    onClose();
-                  }}
+                  key={storyboard.id}
+                  className="border border-gray-700 hover:border-bat-yellow rounded-md bg-gotham-black transition overflow-hidden flex"
                 >
-                  <div className="font-medium text-bat-yellow">{storyboard.name}</div>
-                  <div className="text-sm text-gray-400 mt-1">
-                    {storyboard.clips?.length || 0} clips
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Updated: {new Date(storyboard.updatedAt).toLocaleString()}
-                  </div>
-                </div>
-                <div className="mt-2 pt-2 border-t border-gray-700">
-                  <button
-                    className="text-xs text-red-400 hover:text-red-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setStoryboardToDelete(storyboard.id);
-                      setShowDeleteConfirmation(true);
+                  {/* Thumbnail area */}
+                  <div
+                    className="w-24 h-20 flex-shrink-0 flex items-center justify-center bg-gray-900 border-r border-gray-700"
+                    onClick={async () => {
+                      await onLoadStoryboard(storyboard.id);
+                      onClose();
                     }}
                   >
-                    Delete
-                  </button>
+                    {firstClip && firstClip.svgContent ? (
+                      <div className="w-full h-full overflow-hidden relative">
+                        <SvgThumbnail svgContent={firstClip.svgContent} />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center w-full h-full text-gray-500">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content area */}
+                  <div className="flex-1 p-3">
+                    <div
+                      className="cursor-pointer"
+                      onClick={async () => {
+                        await onLoadStoryboard(storyboard.id);
+                        onClose();
+                      }}
+                    >
+                      <div className="font-medium text-bat-yellow text-sm">{storyboard.name}</div>
+                      <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                        <span>{storyboard.clips?.length || 0} clips</span>
+                        <span>{new Date(storyboard.updatedAt).toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-gray-700 flex justify-end">
+                      <button
+                        className="text-xs text-red-400 hover:text-red-300"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStoryboardToDelete(storyboard.id);
+                          setShowDeleteConfirmation(true);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -333,6 +363,8 @@ const MovieEditorPage: React.FC = () => {
             alert(`Movie with ID "${movieId}" not found. Creating a new storyboard instead.`);
             // Create new storyboard
             createNewStoryboard();
+          } else {
+            showToastNotification(`Storyboard loaded successfully!`);
           }
         } catch (error) {
           console.error(`Error loading movie with ID ${movieId}:`, error);
@@ -493,6 +525,16 @@ const MovieEditorPage: React.FC = () => {
   const [showStoryboardGeneratorModal, setShowStoryboardGeneratorModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showGeneratingClipsModal, setShowGeneratingClipsModal] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
+
+  // Helper function to show toast notifications
+  const showToastNotification = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+  }, []);
 
   // Update with a properly defined interface for the progress state
   interface GenerationProgressState {
@@ -538,13 +580,29 @@ const MovieEditorPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    await saveStoryboard();
-    setShowSaveModal(false);
+    try {
+      await saveStoryboard();
+      setShowSaveModal(false);
+
+      // Show success toast
+      showToastNotification('Storyboard saved successfully!');
+    } catch (error) {
+      console.error('Error saving storyboard:', error);
+
+      // Show error toast
+      showToastNotification('Failed to save storyboard', 'error');
+    }
   };
 
   const handleExport = (format: 'json' | 'svg') => {
-    exportStoryboard(format);
-    setShowExportModal(false);
+    try {
+      exportStoryboard(format);
+      setShowExportModal(false);
+      showToastNotification(`Storyboard exported as ${format.toUpperCase()} successfully!`);
+    } catch (error) {
+      console.error('Error exporting storyboard:', error);
+      showToastNotification('Failed to export storyboard', 'error');
+    }
   };
 
   // Add a new effect to check for incomplete generations when the page loads
@@ -1109,8 +1167,19 @@ const MovieEditorPage: React.FC = () => {
 
         {/* Main content area with flex layout */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+          {/* Storyboard panel - taller on mobile, now appears below animation on mobile but left on desktop */}
+          <div className="md:w-80 h-64 md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-r border-gray-700 order-2 md:order-1">
+            <StoryboardPanel
+              clips={currentStoryboard.clips}
+              activeClipId={activeClipId}
+              onClipSelect={handleClipSelect}
+              onAddClip={handleAddClip}
+              storyboard={currentStoryboard}
+            />
+          </div>
+
           {/* Animation view and controls - take less space on mobile */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:h-full md:max-h-full">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:h-full md:max-h-full order-1 md:order-2">
             {activeClipId ? (
               <>
                 <div className="flex-1 h-full flex items-center justify-center">
@@ -1131,17 +1200,6 @@ const MovieEditorPage: React.FC = () => {
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Storyboard panel - taller on mobile */}
-          <div className="md:w-80 h-64 md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-l border-gray-700">
-            <StoryboardPanel
-              clips={currentStoryboard.clips}
-              activeClipId={activeClipId}
-              onClipSelect={handleClipSelect}
-              onAddClip={handleAddClip}
-              storyboard={currentStoryboard}
-            />
           </div>
         </div>
 
@@ -1274,9 +1332,28 @@ const MovieEditorPage: React.FC = () => {
       <LoadStoryboardModal
         isOpen={showLoadModal}
         onClose={() => setShowLoadModal(false)}
-        onLoadStoryboard={loadStoryboard}
-        onDeleteStoryboard={deleteStoryboard}
+        onLoadStoryboard={async (id) => {
+          const success = await loadStoryboard(id);
+          if (success) {
+            showToastNotification(`Storyboard loaded successfully!`);
+          }
+          return success;
+        }}
+        onDeleteStoryboard={async (id) => {
+          const success = await deleteStoryboard(id);
+          if (success) {
+            showToastNotification(`Storyboard deleted successfully!`);
+          }
+          return success;
+        }}
         getSavedStoryboards={getSavedStoryboards}
+      />
+
+      {/* Toast Notification */}
+      <Toast
+        message={toastMessage}
+        type={toastType}
+        show={showToast}
       />
     </>
   );
