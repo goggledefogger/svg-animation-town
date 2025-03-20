@@ -229,6 +229,13 @@ export const AnimationApi = {
   ): Promise<{ svg: string; message: string }> => {
     console.log('Updating animation with prompt:', prompt);
     console.log('Using AI provider:', provider);
+    console.log('Current SVG length:', currentSvg?.length || 0);
+
+    if (!currentSvg || currentSvg.length < 10 || !currentSvg.includes('<svg')) {
+      console.error('Invalid current SVG provided for update:',
+                   currentSvg ? currentSvg.substring(0, 50) + '...' : 'null or empty');
+      throw new Error('Cannot update animation: No valid SVG content to modify');
+    }
 
     try {
       const data = await fetchApi<any>(
@@ -243,6 +250,16 @@ export const AnimationApi = {
 
       // Handle both new SVG-based responses and legacy element-based responses
       if (data.svg) {
+        console.log('Received updated SVG length:', data.svg.length);
+
+        // Compare input and output SVGs to detect if they're identical
+        const isSvgIdentical = data.svg === currentSvg;
+        if (isSvgIdentical) {
+          console.warn('The received SVG is identical to the current SVG. The update may not have worked correctly.');
+        } else {
+          console.log('SVG content has changed - update successful');
+        }
+
         return {
           svg: data.svg,
           message: data.message || 'Animation updated successfully!'

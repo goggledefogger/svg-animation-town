@@ -43,15 +43,41 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     onClipUpdate();
   };
 
-  // Navigate to animation editor with the prompt
+  // Navigate to animation editor with stored prompt
   const navigateToAnimationEditor = () => {
-    if (!prompt) return;
-    
-    // Store the prompt in session storage for the animation editor to pick up
-    sessionStorage.setItem('pending_prompt', prompt);
-    
-    // Navigate to the animation editor page
-    navigate('/');
+    if (!activeClipId) return;
+
+    const activeClip = getActiveClip();
+    if (!activeClip) return;
+
+    // Store prompt and clip ID for animation editor to use
+    sessionStorage.setItem('pending_prompt', activeClip.prompt || 'Create an animation');
+    localStorage.setItem('editing_clip_id', activeClip.id);
+
+    // Store the animation ID if it exists
+    if (activeClip.animationId) {
+      sessionStorage.setItem('load_animation_id', activeClip.animationId);
+      // Important: Flag that we're editing a clip from the movie editor
+      sessionStorage.setItem('editing_from_movie', 'true');
+
+      // If the clip has a provider setting, also pass that so the animation editor uses the same AI
+      if (activeClip.provider) {
+        sessionStorage.setItem('animation_provider', activeClip.provider);
+      }
+    } else if (activeClip.svgContent) {
+      // If there's no animation ID but we have SVG content, store it directly
+      sessionStorage.setItem('clip_svg_content', activeClip.svgContent);
+      // Important: Flag that we're editing a clip from the movie editor
+      sessionStorage.setItem('editing_from_movie', 'true');
+
+      // If the clip has a provider setting, also pass that
+      if (activeClip.provider) {
+        sessionStorage.setItem('animation_provider', activeClip.provider);
+      }
+    }
+
+    // Navigate to animation editor
+    navigate('/animation-editor');
   };
 
   // If no clip is selected, show a placeholder

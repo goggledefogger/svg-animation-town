@@ -1,26 +1,15 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 interface MessageInputProps {
   onSubmit: (text: string) => void;
   isProcessing: boolean;
-  pendingPrompt?: string | null;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing, pendingPrompt }) => {
+const MessageInput: React.FC<MessageInputProps> = ({ onSubmit, isProcessing }) => {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [isTouched, setIsTouched] = useState(false);
-
-  // Set input value when pendingPrompt changes
-  useEffect(() => {
-    if (pendingPrompt) {
-      setInputValue(pendingPrompt);
-      // Focus the input if possible but don't auto-submit
-      // The parent component (ChatInterface) will handle auto-submission
-      inputRef.current?.focus();
-    }
-  }, [pendingPrompt]);
 
   // Handle submit
   const handleSubmit = (e: React.FormEvent) => {

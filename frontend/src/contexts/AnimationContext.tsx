@@ -277,7 +277,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
             if (animation && animation.svg) {
               console.log(`Animation loaded from server by ID: ${nameOrId}`);
-              setSvgContent(animation.svg);
+              setSvgContentWithBroadcast(animation.svg, 'load-animation-by-id');
 
               // Update chat history if available
               if (animation.chatHistory) {
@@ -316,7 +316,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             const serverAnimation = await AnimationStorageApi.getAnimation(localData.id);
 
             if (serverAnimation && serverAnimation.svg) {
-              setSvgContent(serverAnimation.svg);
+              setSvgContentWithBroadcast(serverAnimation.svg, 'load-animation-by-server');
               console.log(`Animation loaded from server: ${nameOrId} (${localData.id})`);
 
               // Update chat history if available
@@ -347,7 +347,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
         // If server load fails or there's no server ID, use local cache
         if (localData) {
-          setSvgContent(localData.svg);
+          setSvgContentWithBroadcast(localData.svg, 'load-animation-from-local');
           console.log(`Animation loaded from local cache: ${nameOrId}`);
 
           // Update chat history if available
@@ -389,7 +389,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const getSavedAnimations = useCallback(async (): Promise<any[]> => {
     // Check if we have a valid cache and it's not expired
     const now = Date.now();
-    if (animationListCache.current && 
+    if (animationListCache.current &&
         now - animationListCache.current.timestamp < CACHE_EXPIRATION) {
       return animationListCache.current.animations;
     }
@@ -402,13 +402,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
       if (forceRefresh) {
         sessionStorage.removeItem('force_server_refresh');
-        
+
         // Cache the result
         animationListCache.current = {
           timestamp: now,
           animations: serverAnimations
         };
-        
+
         return serverAnimations;
       }
 
@@ -427,7 +427,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         // Create a map of server animations by ID for deduplication
         const serverAnimationsById = new Map();
         const serverAnimationsByName = new Map();
-        
+
         serverAnimations.forEach(anim => {
           serverAnimationsById.set(anim.id, anim);
           serverAnimationsByName.set(anim.name, anim);
@@ -439,23 +439,23 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           if (localAnim.id && !localAnim.id.startsWith('local-') && serverAnimationsById.has(localAnim.id)) {
             return false;
           }
-          
+
           // If an animation with this name already exists on the server, it's also a duplicate
           if (serverAnimationsByName.has(localAnim.name)) {
             return false;
           }
-          
+
           return true;
         });
 
         const combinedResults = [...serverAnimations, ...uniqueLocalAnimations];
-        
+
         // Cache the result
         animationListCache.current = {
           timestamp: now,
           animations: combinedResults
         };
-        
+
         return combinedResults;
       } catch (localError) {
         // Cache the server results
@@ -463,7 +463,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           timestamp: now,
           animations: serverAnimations
         };
-        
+
         return serverAnimations;
       }
     } catch (error) {
@@ -478,13 +478,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           name: name,
           timestamp: savedAnimations[name].timestamp || new Date().toISOString()
         }));
-        
+
         // Cache the result
         animationListCache.current = {
           timestamp: now,
           animations: localResults
         };
-        
+
         return localResults;
       } catch (localError) {
         return [];
@@ -539,7 +539,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         const result = await AnimationApi.generate(prompt, aiProvider);
         console.log('Generated animation result');
-        setSvgContent(result.svg);
+
+        // Set the SVG content with broadcast
+        setSvgContentWithBroadcast(result.svg, 'new-animation');
 
         // If animation has an ID from backend, store it in chat history for reference
         if (result.animationId) {
@@ -563,11 +565,90 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     return requestPromise;
   };
 
+  // Broadcast SVG content update to ensure all components are notified
+  const broadcastSvgUpdate = useCallback((source: string) => {
+    // Don't broadcast if there's no SVG content to display
+    if (!svgContent) {
+      console.log(`Skipping broadcast from ${source} - no SVG content available`);
+      return;
+    }
+
+    console.log(`Broadcasting SVG update from ${source}`);
+
+    // Dispatch event to force UI refresh after a small delay to ensure state has been updated
+    setTimeout(() => {
+      const updateEvent = new CustomEvent('animation-updated', {
+        detail: {
+          source,
+          timestamp: Date.now()
+        }
+      });
+      console.log(`Dispatching animation-updated event from ${source}`);
+      window.dispatchEvent(updateEvent);
+    }, 50);
+  }, [svgContent]);
+
+  // Enhanced setter for SVG content that also broadcasts updates
+  const setSvgContentWithBroadcast = useCallback((newContent: string | ((prev: string) => string), source = 'unknown') => {
+    // Log SVG content update
+    console.log(`Setting SVG content from ${source}`);
+
+    // When loading a clip's SVG content from the movie editor,
+    // ensure we make a clean copy to detach from original references
+    if (source.includes('load-animation') || source === 'movie-clip') {
+      if (typeof newContent === 'string') {
+        // Make a clean copy by adding a hidden timestamp comment to force the update
+        // This ensures the SVG content is completely new and not referencing the original
+        const cleanContent = addTimestampToSvg(newContent);
+        setSvgContent(cleanContent);
+
+        // Broadcast after ensuring state is updated
+        setTimeout(() => broadcastSvgUpdate(source), 50);
+        return;
+      }
+    }
+
+    if (typeof newContent === 'function') {
+      setSvgContent(prevContent => {
+        const result = newContent(prevContent);
+        // Only broadcast if we have actual content after the update
+        if (result && result.length > 0) {
+          // Use setTimeout to ensure state is updated before broadcasting
+          setTimeout(() => broadcastSvgUpdate(source), 0);
+        }
+        return result;
+      });
+    } else {
+      setSvgContent(newContent);
+      // Only broadcast if we have actual content
+      if (newContent && typeof newContent === 'string' && newContent.length > 0) {
+        // Use setTimeout to ensure state is updated before broadcasting
+        setTimeout(() => broadcastSvgUpdate(source), 0);
+      }
+    }
+  }, [broadcastSvgUpdate]);
+
+  // Helper function to add timestamp to SVG content to force updates
+  const addTimestampToSvg = (content: string): string => {
+    if (!content || !content.includes('</svg>')) return content;
+
+    const timestamp = Date.now();
+    const comment = `<!-- timestamp: ${timestamp} -->`;
+
+    // Add timestamp comment before closing SVG tag
+    return content.replace('</svg>', `${comment}</svg>`);
+  };
+
   // Update the current animation from a prompt
   const updateAnimationFromPrompt = async (prompt: string): Promise<string> => {
     if (!svgContent) {
       return generateAnimationFromPrompt(prompt);
     }
+
+    // Store the original SVG so we can compare if it changed
+    const originalSvg = svgContent;
+    console.log('Updating existing animation with prompt:', prompt);
+    console.log('Original SVG length:', originalSvg.length);
 
     // Create a request ID to track this specific request
     const requestId = `update-${prompt.substring(0, 20)}`;
@@ -579,14 +660,44 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       return animationRequestsInProgress.current.get(requestId)!;
     }
 
-    console.log('Updating animation with prompt:', prompt);
+    console.log('Sending update request to API');
 
     // Create a promise for this request
     const requestPromise = (async () => {
       try {
-        const result = await AnimationApi.update(prompt, svgContent, aiProvider);
-        console.log('Updated animation result');
-        setSvgContent(result.svg);
+        const result = await AnimationApi.update(prompt, originalSvg, aiProvider);
+        console.log('Received updated animation result from API');
+
+        // Check if the SVG actually changed
+        const svgChanged = result.svg !== originalSvg;
+        console.log('SVG content changed:', svgChanged);
+
+        if (svgChanged) {
+          // Set the new SVG content with broadcast
+          setSvgContentWithBroadcast(result.svg, 'prompt-update');
+          console.log('SVG content updated and broadcast sent');
+
+          // To ensure all components update, dispatch an additional event
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('animation-updated', {
+              detail: {
+                source: 'force-update-after-prompt',
+                timestamp: Date.now()
+              }
+            }));
+            console.log('Forced animation update event dispatched');
+          }, 300);
+        } else {
+          console.warn('SVG content did not change after update. This may indicate the API did not modify the SVG.');
+          // Force a re-render even if the content is the same
+          setSvgContent(prevContent => {
+            // Add a timestamp comment to force React to see this as new content
+            const timestampComment = `<!-- Updated ${Date.now()} -->`;
+            return prevContent.replace('</svg>', `${timestampComment}</svg>`);
+          });
+          console.log('Added timestamp to force re-render');
+        }
+
         return result.message;
       } catch (error: any) {
         console.error('Error updating animation:', error);
@@ -902,13 +1013,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (parent) {
           // Create a deep clone of the SVG element
           const clone = svgRef.cloneNode(true) as SVGSVGElement;
-          
+
           // Replace the original with the clone
           parent.replaceChild(clone, svgRef);
-          
+
           // Update the ref to the new element
           setSvgRef(clone);
-          
+
           // Ensure playing state is true
           setPlaying(true);
         }
@@ -921,14 +1032,14 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (!prevContent) return prevContent;
         return prevContent + `<!-- reset-${Date.now()} -->`;
       });
-      
+
       setTimeout(() => {
         setSvgContent(prevContent => {
           if (!prevContent) return prevContent;
           return prevContent.replace(/<!-- reset-\d+ -->/g, '');
         });
       }, 50);
-      
+
       setPlaying(true);
     }
   }, [svgRef, setPlaying, setSvgContent, setSvgRef]);
@@ -988,7 +1099,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Check if this is a direct ID rather than a name (for server-only animations)
       const isUUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(name);
-      
+
       if (isUUID) {
         // If the name is actually a UUID, use it directly as the ID
         animationId = name;
@@ -1042,7 +1153,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       aiProvider,
       setAIProvider,
       setPlaying,
-      setSvgContent,
+      setSvgContent: setSvgContentWithBroadcast,
       setSvgRef,
       generateAnimationFromPrompt,
       updateAnimationFromPrompt,

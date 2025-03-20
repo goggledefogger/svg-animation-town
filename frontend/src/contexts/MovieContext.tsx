@@ -667,6 +667,23 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     </svg>`;
   };
 
+  // Set active clip and optionally fetch its animation
+  const updateActiveClipId = useCallback((id: string | null) => {
+    setActiveClipId(id);
+
+    // Broadcast clip change event to ensure all components are notified
+    const activeClip = id ? currentStoryboard.clips.find(clip => clip.id === id) : null;
+
+    window.dispatchEvent(new CustomEvent('clip-changed', {
+      detail: {
+        clipId: id,
+        svgContentAvailable: !!activeClip?.svgContent,
+        hasAnimationId: !!activeClip?.animationId,
+        timestamp: Date.now()
+      }
+    }));
+  }, [currentStoryboard.clips]);
+
   // Provide context values
   const contextValue: MovieContextType = {
     currentStoryboard,
@@ -685,7 +702,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     updateClip,
     removeClip,
     reorderClips,
-    setActiveClipId,
+    setActiveClipId: updateActiveClipId,
     getActiveClip,
     isPlaying,
     setIsPlaying,

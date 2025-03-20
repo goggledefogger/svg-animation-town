@@ -22,7 +22,6 @@ const DEFAULT_WELCOME_MESSAGE: Message = {
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [clipName, setClipName] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,10 +34,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     updateAnimationFromPrompt,
     saveAnimation,
     chatHistory,
-    setChatHistory
+    setChatHistory,
+    loadAnimation,
+    getSavedAnimations,
+    setAIProvider
   } = useAnimation();
 
-  const { saveCurrentAnimationAsClip } = useMovie();
+  const { saveCurrentAnimationAsClip, updateClip } = useMovie();
 
   // Initialize with pending clip name if provided
   useEffect(() => {
@@ -54,113 +56,86 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     }
   }, [chatHistory.length, setChatHistory]);
 
-  // Check for pending prompt from movie editor
-  useEffect(() => {
-    const storedPrompt = sessionStorage.getItem('pending_prompt');
-    if (storedPrompt) {
-      setPendingPrompt(storedPrompt);
-      // Clear the session storage to prevent it from being used again
-      sessionStorage.removeItem('pending_prompt');
-    }
-  }, []);
-
-  // Auto-submit the pending prompt
-  useEffect(() => {
-    // Only auto-submit if we have a pending prompt and we're not already processing
-    if (pendingPrompt && !isProcessing) {
-      // Define auto-submit logic directly in the effect
-      const autoSubmitPendingPrompt = () => {
-        if (!pendingPrompt.trim() || isProcessing) return;
-
-        const userMessage: Message = {
-          id: generateId(),
-          sender: 'user',
-          text: pendingPrompt,
-          timestamp: new Date()
-        };
-
-        setChatHistory(prevHistory => [...prevHistory, userMessage]);
-        setIsProcessing(true);
-
-        // Determine if this is a new animation or an update
-        const isUpdate = !!svgContent;
-
-        // Generate or update animation based on whether there is existing content
-        const apiPromise = isUpdate
-          ? updateAnimationFromPrompt(pendingPrompt)
-          : generateAnimationFromPrompt(pendingPrompt);
-
-        apiPromise.then(responseMessage => {
-          // Process response similar to handleSubmit
-          const userFriendlyMessage = responseMessage.split(/Here's the (updated )?SVG:|\n\n###|\n###|You can directly insert/)[0].trim();
-
-          const aiMessage: Message = {
-            id: generateId(),
-            sender: 'ai',
-            text: userFriendlyMessage,
-            timestamp: new Date()
-          };
-
-          setChatHistory(prevHistory => [...prevHistory, aiMessage]);
-          setIsProcessing(false);
-        }).catch(error => {
-          // Handle error
-          const errorMessage: Message = {
-            id: generateId(),
-            sender: 'ai',
-            text: 'Sorry, I encountered an error while processing your request. Please try again.',
-            timestamp: new Date()
-          };
-
-          setChatHistory(prevHistory => [...prevHistory, errorMessage]);
-          setIsProcessing(false);
-          console.error('Error processing animation:', error);
-        });
-
-        // Clear the pending prompt after starting the request
-        setPendingPrompt(null);
-      };
-
-      // Use a small timeout to ensure proper rendering cycle
-      const timeoutId = setTimeout(autoSubmitPendingPrompt, 50);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [pendingPrompt, isProcessing, svgContent, generateAnimationFromPrompt, updateAnimationFromPrompt, setChatHistory]);
-
   // Reset chat to initial state
   const resetChat = () => {
     setChatHistory([DEFAULT_WELCOME_MESSAGE]);
     setIsProcessing(false);
-    setPendingPrompt(null);
   };
 
-  // Listen for animation reset event
+  // Check for animation load event and set chat history from stored animation data
   useEffect(() => {
-    const handleAnimationReset = () => {
-      resetChat();
-    };
-
     const handleAnimationLoaded = (event: Event) => {
       const customEvent = event as CustomEvent;
       const loadedChatHistory = customEvent.detail?.chatHistory;
 
-      if (loadedChatHistory && Array.isArray(loadedChatHistory)) {
+      console.log('Animation loaded event received');
+
+      // Function to check if chat history is valid and non-empty
+      const isValidChatHistory = (history: any): boolean => {
+        return history && Array.isArray(history) && history.length > 0 &&
+          // Make sure at least one message is from the user (not just the welcome message)
+          history.some(msg => msg.sender === 'user');
+      };
+
+      if (isValidChatHistory(loadedChatHistory)) {
         // Set the loaded chat history
         setChatHistory(loadedChatHistory);
+        console.log('Setting chat history from loaded animation:', loadedChatHistory.length, 'messages');
       } else {
-        // If no chat history, set default welcome message
-        resetChat();
+        console.log('No valid chat history found in loaded animation');
+
+        // The animation doesn't have valid chat history, check if there's a pending prompt
+        const storedPrompt = sessionStorage.getItem('pending_prompt');
+        const clipId = localStorage.getItem('editing_clip_id');
+
+        if (storedPrompt) {
+          console.log('Found pending prompt:', storedPrompt);
+
+          // Create new messages for the stored prompt
+          const userMessage: Message = {
+            id: generateId(),
+            sender: 'user',
+            text: storedPrompt,
+            timestamp: new Date()
+          };
+
+          // Add a simulated AI response to show that this prompt generated the current animation
+          const aiMessage: Message = {
+            id: generateId(),
+            sender: 'ai',
+            text: clipId
+              ? `I created this animation based on your prompt for the movie clip. You can see it in the preview above. Let me know if you want me to modify it!`
+              : `I created this animation based on your prompt. You can see it in the preview above. Let me know if you want me to modify it!`,
+            timestamp: new Date(new Date().getTime() + 1000) // 1 second after to maintain chronological order
+          };
+
+          // Set the new chat history
+          setChatHistory([userMessage, aiMessage]);
+          console.log('Created new chat history from pending prompt');
+
+          // Clear the session storage to prevent it from being used again
+          sessionStorage.removeItem('pending_prompt');
+          localStorage.removeItem('editing_clip_id');
+        } else {
+          // If no chat history and no pending prompt, set default welcome message
+          setChatHistory([DEFAULT_WELCOME_MESSAGE]);
+          console.log('Setting default welcome message');
+        }
       }
     };
 
-    window.addEventListener('animation-reset', handleAnimationReset);
+    const handleAnimationReset = () => {
+      resetChat();
+    };
+
     window.addEventListener('animation-loaded', handleAnimationLoaded);
+    window.addEventListener('animation-reset', handleAnimationReset);
 
     return () => {
-      window.removeEventListener('animation-reset', handleAnimationReset);
       window.removeEventListener('animation-loaded', handleAnimationLoaded);
+      window.removeEventListener('animation-reset', handleAnimationReset);
     };
-  }, [setChatHistory]);
+  }, [setChatHistory, resetChat]);
 
   // Scroll to bottom of chat
   const scrollToBottom = () => {
@@ -174,6 +149,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   // Handle form submission
   const handleSubmit = async (text: string) => {
     if (!text.trim() || isProcessing) return;
+
+    // Log current SVG state before update
+    console.log('Before update - SVG content exists:', !!svgContent,
+               svgContent ? `length: ${svgContent.length}` : '');
 
     const userMessage: Message = {
       id: generateId(),
@@ -191,11 +170,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
       const isUpdate = !!svgContent;
       let responseMessage: string;
 
+      console.log('Submitting prompt to', isUpdate ? 'update' : 'generate', 'animation:', text);
+
       // Generate or update animation based on whether there is existing content
       if (isUpdate) {
+        // Store starting content for comparison
+        const startingSvgContent = svgContent;
+
+        // Do the update
         responseMessage = await updateAnimationFromPrompt(text);
+
+        // Verify the update worked by checking if the SVG changed
+        console.log('After update - Current SVG length:', svgContent?.length || 0);
+        if (svgContent === startingSvgContent) {
+          console.warn('SVG content did not change after update operation - this may indicate a problem');
+        } else {
+          console.log('SVG content was successfully updated');
+        }
       } else {
         responseMessage = await generateAnimationFromPrompt(text);
+        console.log('New animation was successfully generated');
       }
 
       // Extract only the user-friendly part of the message
@@ -213,14 +207,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
       const finalMessages = [...updatedMessages, aiMessage];
       setChatHistory(finalMessages);
 
-      // No need to manually store in sessionStorage anymore
-      // as AnimationContext handles this automatically
+      console.log('Chat message processed successfully');
     } catch (error) {
-      // Handle error
+      console.error('Error processing chat message:', error);
+
+      // Handle error with more details
       const errorMessage: Message = {
         id: generateId(),
         sender: 'ai',
-        text: 'Sorry, I encountered an error while processing your request. Please try again.',
+        text: `Sorry, I encountered an error while ${svgContent ? 'updating' : 'generating'} the animation: ${error instanceof Error ? error.message : 'Unknown error'}. Please try again.`,
         timestamp: new Date()
       };
       setChatHistory([...updatedMessages, errorMessage]);
@@ -230,16 +225,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   };
 
   // Handle saving to Movie Editor
-  const handleSaveToMovieEditor = () => {
-    // If we have a pending clip name from the movie editor, use that
-    if (pendingClipName) {
+  const handleSaveToMovieEditor = async () => {
+    // Check if we're editing an existing clip
+    const editingClipId = localStorage.getItem('editing_clip_id');
+
+    if (editingClipId && svgContent) {
+      // We're editing an existing clip, so update it with the new SVG content
+      console.log('Updating existing clip with ID:', editingClipId);
+
+      try {
+        // First save the animation to the server to get a permanent ID
+        // This ensures the clip references a saved animation for future loading
+        const animationName = `clip-${editingClipId}-${Date.now()}`;
+        await saveAnimation(animationName, chatHistory);
+
+        // Find saved animation to get its ID
+        const animations = await getSavedAnimations();
+        const savedAnimation = animations.find((a: { name: string; id: string }) => a.name === animationName);
+
+        // Update the clip with the new content, chat history, and animation ID
+        updateClip(editingClipId, {
+          svgContent,
+          chatHistory,
+          // Add animation ID if we have one
+          ...(savedAnimation ? { animationId: savedAnimation.id } : {})
+        });
+
+        console.log('Clip updated successfully with new animation content');
+      } catch (error) {
+        console.error('Error saving animation for clip:', error);
+        // Still update the clip with SVG content even if saving to server fails
+        updateClip(editingClipId, {
+          svgContent,
+          chatHistory
+        });
+      }
+
+      // Clear the editing state
+      localStorage.removeItem('editing_clip_id');
+      sessionStorage.removeItem('editing_from_movie');
+
+      // Navigate back to movie editor
+      navigate('/movie-editor');
+    }
+    // If we have a pending clip name from the movie editor but not an editing ID,
+    // this is a new clip being created from the movie editor
+    else if (pendingClipName) {
       const clipId = saveCurrentAnimationAsClip(pendingClipName);
       if (clipId) {
         // Navigate back to movie editor with the new clip
         navigate('/movie-editor');
       }
-    } else {
-      // Otherwise show the save modal to enter a name
+    }
+    // Otherwise, this is a standalone animation we want to save as a new clip
+    else {
+      // Show the save modal to enter a name
       setClipName('');
       setShowSaveModal(true);
     }
@@ -256,6 +296,91 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
       setShowSaveModal(false);
     }
   };
+
+  // Check for animation ID to load when navigating from a clip
+  useEffect(() => {
+    const loadAnimationId = sessionStorage.getItem('load_animation_id');
+    const isEditingFromMovie = sessionStorage.getItem('editing_from_movie') === 'true';
+    const storedProvider = sessionStorage.getItem('animation_provider') as 'openai' | 'claude' | null;
+
+    // If a specific AI provider was requested, set it
+    if (storedProvider) {
+      console.log(`Setting AI provider to: ${storedProvider}`);
+      setAIProvider(storedProvider);
+    }
+
+    if (loadAnimationId) {
+      console.log(`Loading animation with ID: ${loadAnimationId} (from movie editor: ${isEditingFromMovie})`);
+
+      // Load the animation using the context function
+      const loadAnimationFromId = async () => {
+        try {
+          // Use the loadAnimation function from the animation context
+          const result = await loadAnimation(loadAnimationId);
+          if (result) {
+            console.log(`Animation loaded successfully`);
+
+            // If editing from movie editor, force a broadcast update
+            // to ensure the content is completely detached from original
+            if (isEditingFromMovie) {
+              setTimeout(() => {
+                console.log('Editing from movie, forcing update broadcast');
+                window.dispatchEvent(new CustomEvent('animation-updated', {
+                  detail: {
+                    source: 'movie-clip-edit',
+                    timestamp: Date.now()
+                  }
+                }));
+              }, 300);
+            }
+
+            // If there's a pending prompt but the animation already has chat history,
+            // we want to keep the existing chat history rather than replace it
+            const storedPrompt = sessionStorage.getItem('pending_prompt');
+            if (storedPrompt && result.chatHistory && result.chatHistory.length > 0) {
+              console.log('Animation has existing chat history, keeping it instead of creating new from prompt');
+            }
+          } else {
+            console.error(`Failed to load animation with ID: ${loadAnimationId}`);
+
+            // If we couldn't load the animation but have a prompt, let the animation loaded event handler create chat history
+            console.log('Will try to create chat history from pending prompt if available');
+          }
+        } catch (error) {
+          console.error(`Error loading animation: ${error}`);
+        } finally {
+          // Clear the storage to prevent reloading
+          sessionStorage.removeItem('load_animation_id');
+          sessionStorage.removeItem('editing_from_movie');
+        }
+      };
+
+      loadAnimationFromId();
+    } else {
+      // Check if there's direct SVG content from a clip without animation ID
+      const clipSvgContent = sessionStorage.getItem('clip_svg_content');
+      if (clipSvgContent && isEditingFromMovie) {
+        console.log('Loading clip SVG content directly from sessionStorage');
+        // Set the SVG content directly
+        setSvgContent(clipSvgContent);
+
+        // Force a broadcast update
+        setTimeout(() => {
+          console.log('Direct SVG content from movie clip, forcing update broadcast');
+          window.dispatchEvent(new CustomEvent('animation-updated', {
+            detail: {
+              source: 'movie-clip-edit-direct',
+              timestamp: Date.now()
+            }
+          }));
+        }, 300);
+
+        // Clear the storage
+        sessionStorage.removeItem('clip_svg_content');
+        sessionStorage.removeItem('editing_from_movie');
+      }
+    }
+  }, [loadAnimation, setSvgContent, setAIProvider]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -315,7 +440,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
         <MessageInput
           onSubmit={handleSubmit}
           isProcessing={isProcessing}
-          pendingPrompt={pendingPrompt}
         />
       </div>
 
