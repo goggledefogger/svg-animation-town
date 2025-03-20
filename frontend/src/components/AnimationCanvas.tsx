@@ -4,8 +4,16 @@ import { useMovie } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 import { MovieStorageApi } from '../services/api';
 
-const AnimationCanvas: React.FC = () => {
-  const { svgContent, setSvgContent } = useAnimation();
+interface AnimationCanvasProps {
+  svgContent?: string;
+  style?: React.CSSProperties;
+}
+
+const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
+  svgContent: propSvgContent,
+  style
+}) => {
+  const { svgContent: contextSvgContent, setSvgContent } = useAnimation();
   const { currentStoryboard, activeClipId, getActiveClip, updateClip } = useMovie();
   const setSvgRef = useSvgRef();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,8 +30,13 @@ const AnimationCanvas: React.FC = () => {
   // Get the current active clip's SVG content
   const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
 
-  // Effect to handle active clip changes
+  // Use the prop svgContent if provided, otherwise use the context or active clip
+  const svgContent = propSvgContent || contextSvgContent;
+
+  // Effect to handle active clip changes - only run if no explicit prop was provided
   useEffect(() => {
+    if (propSvgContent) return; // Skip if prop was provided
+
     const activeClip = getActiveClip();
     console.log('Active clip changed:', activeClip?.name);
 
@@ -68,7 +81,7 @@ const AnimationCanvas: React.FC = () => {
     } else {
       setSvgContent('');
     }
-  }, [getActiveClip, setSvgContent, updateClip]);
+  }, [getActiveClip, setSvgContent, updateClip, propSvgContent]);
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = (message: string): string => {
@@ -86,8 +99,8 @@ const AnimationCanvas: React.FC = () => {
     </svg>`;
   };
 
-  // Determine which SVG content to use - prefer active clip, fall back to animation context
-  const displaySvgContent = activeClipSvgContent || svgContent;
+  // Determine which SVG content to use - prefer prop, then active clip, then animation context
+  const displaySvgContent = propSvgContent || activeClipSvgContent || contextSvgContent;
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -242,48 +255,30 @@ const AnimationCanvas: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className={`relative flex-1 bg-black/30 rounded-lg overflow-hidden flex items-center justify-center ${
-        isLoading ? 'animate-pulse-subtle' : ''
-      }`}
+      className="relative flex-1 bg-black/30 rounded-lg overflow-hidden flex items-center justify-center"
       style={{
         touchAction: 'pan-x pan-y',
-        minHeight: '260px',
-        height: '100%'
+        minHeight: '200px',
+        height: '100%',
+        width: '100%',
+        ...style // Merge in any additional styles passed as props
       }}
     >
-      {/* Loading overlay */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-black/20 z-10 flex items-center justify-center pointer-events-none">
-          <div className="relative">
-            {/* Pulsing loading indicator */}
-            <svg className="w-20 h-20 animate-spin-slow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M50,10 C40,25 20,40 15,60 C25,55 35,55 50,70 C65,55 75,55 85,60 C80,40 60,25 50,10"
-                fill="none"
-                stroke="#ffdf00"
-                strokeWidth="2"
-                strokeDasharray="240"
-                strokeDashoffset="0"
-                className="animate-dash-offset-300"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-4 h-4 bg-bat-yellow rounded-full animate-ping"></div>
-            </div>
-          </div>
-        </div>
+      {/* Empty state or loading indicator */}
+      {showEmptyState && (
+        <EmptyState
+          loading={isLoading}
+          showMessage={!isLoading}
+          svgContent={displaySvgContent}
+        />
       )}
 
-      {/* Always render both, but control visibility with CSS */}
-      <div className={showEmptyState ? 'block' : 'hidden'}>
-        <EmptyState />
-      </div>
+      {/* SVG container with overflow handling */}
       <div
         ref={svgContainerRef}
-        className={`absolute inset-0 flex items-center justify-center overflow-hidden ${showEmptyState ? 'hidden' : 'block'} ${
+        className={`w-full h-full flex items-center justify-center ${
           isLoading ? 'opacity-40 transition-opacity duration-300' : 'opacity-100'
         }`}
-        style={{ maxHeight: '100%', maxWidth: '100%' }}
         data-testid="svg-container"
       />
     </div>

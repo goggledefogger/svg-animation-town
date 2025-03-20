@@ -921,141 +921,56 @@ const MovieEditorPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen h-mobile-screen overflow-hidden">
-      {/* Use the shared Header component instead of custom header */}
+    <div className="flex flex-col h-screen overflow-hidden bg-gotham-black text-white">
+      {/* Header */}
       <Header
-        storyboardName={currentStoryboard.name || 'New Movie'}
-        onGenerate={() => setShowStoryboardGeneratorModal(true)}
-        onSave={() => setShowSaveModal(true)}
+        onExport={() => handleExport('svg')}
+        onSave={handleSave}
         onLoad={() => setShowLoadModal(true)}
-        onExport={() => setShowExportModal(true)}
+        onGenerate={() => setShowStoryboardGeneratorModal(true)}
+        storyboardName={currentStoryboard.name}
         onReset={resetApplication}
       />
 
-      {/* Main content area */}
+      {/* Main content area with flex layout */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        {/* Left panel - Storyboard (hidden on mobile, will appear below) */}
-        <div className="hidden md:block md:w-1/4 border-r border-gray-700 bg-gotham-black p-4 flex flex-col">
-          <h2 className="text-lg font-semibold mb-2">Storyboard</h2>
-          <div className="text-xs text-gray-500 mb-3">
-            {currentStoryboard.clips.length} clips available
-          </div>
-          <div className="h-[calc(100%-80px)]">
-            <StoryboardPanel
-              clips={currentStoryboard.clips}
-              activeClipId={activeClipId}
-              onClipSelect={handleClipSelect}
-              onAddClip={handleAddClip}
-              storyboard={currentStoryboard}
-            />
-          </div>
-        </div>
-
-        {/* Center content - Animation Preview and Mobile Panels */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Center panel - Animation Preview */}
-          <div className="flex-grow p-4 flex flex-col">
-            <AnimationCanvas />
-            <AnimationControls />
-          </div>
-
-          {/* Mobile Only - Horizontally scrolling StoryboardPanel */}
-          <div className="md:hidden bg-gotham-black border-t border-gray-700 p-4">
-            <div className="flex items-baseline mb-2">
-              <h2 className="text-lg font-semibold">Storyboard</h2>
-              {currentStoryboard.generationStatus && (
-                <div className="ml-2 text-xs text-gray-400">
-                  {currentStoryboard.generationStatus.completedScenes}/{currentStoryboard.generationStatus.totalScenes} generated
-                </div>
-              )}
-            </div>
-            <div className="overflow-x-auto pb-4 relative">
-              <div className="inline-flex space-x-3 min-w-full">
-                <StoryboardPanel
-                  clips={currentStoryboard.clips}
-                  activeClipId={activeClipId}
-                  onClipSelect={handleClipSelect}
-                  onAddClip={handleAddClip}
-                  storyboard={currentStoryboard}
-                />
+        {/* Animation view and controls - take less space on mobile */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:h-full md:max-h-full">
+          {activeClipId ? (
+            <>
+              <div className="flex-1 h-full flex items-center justify-center">
+                <AnimationCanvas />
+              </div>
+              <AnimationControls />
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full bg-gray-900">
+              <div className="text-center">
+                <p className="text-lg text-gray-400 mb-4">No clip selected</p>
+                <button
+                  className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700"
+                  onClick={handleAddClip}
+                >
+                  Add your first clip
+                </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right panel - Clip Editor */}
-        <div className="hidden md:block md:w-1/4 border-l border-gray-700 bg-gotham-black p-4 overflow-y-auto">
-          <h2 className="text-lg font-semibold mb-4">Clip Editor</h2>
-          <ClipEditor onClipUpdate={() => {
-            // This will be called when a clip is updated
-            console.log('Clip updated successfully');
-          }} />
+        {/* Storyboard panel - taller on mobile */}
+        <div className="md:w-80 h-64 md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-l border-gray-700">
+          <StoryboardPanel
+            clips={currentStoryboard.clips}
+            activeClipId={activeClipId}
+            onClipSelect={handleClipSelect}
+            onAddClip={handleAddClip}
+            storyboard={currentStoryboard}
+          />
         </div>
       </div>
 
-      {/* Mobile - Floating Clip Editor Button */}
-      <div className="md:hidden fixed bottom-16 right-4 z-50">
-        <button
-          className="bg-bat-yellow text-black rounded-full p-3 shadow-lg"
-          onClick={() => setShowMobileClipEditor(true)}
-          aria-label="Edit Clip"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Mobile - Clip Editor Modal */}
-      <ConfirmationModal
-        isOpen={showMobileClipEditor}
-        title="Edit Clip"
-        message={
-          <div className="mt-2">
-            {activeClipId ? (
-              <ClipEditor onClipUpdate={() => {
-                console.log('Clip updated successfully');
-                setShowMobileClipEditor(false);
-              }} />
-            ) : (
-              <div className="text-gray-400 text-center p-4">
-                Select a clip to edit its properties
-              </div>
-            )}
-          </div>
-        }
-        confirmText="Close"
-        cancelText={undefined}
-        onConfirm={() => setShowMobileClipEditor(false)}
-        onCancel={() => setShowMobileClipEditor(false)}
-      />
-
-      {/* Save Modal */}
-      <ConfirmationModal
-        isOpen={showSaveModal}
-        title="Save Storyboard"
-        message={
-          <div className="mt-2">
-            <label htmlFor="storyboardName" className="block text-sm font-medium text-gray-300">
-              Storyboard Name
-            </label>
-            <input
-              type="text"
-              id="storyboardName"
-              className="input"
-              placeholder="Enter a name for your storyboard"
-              value={storyboardName}
-              onChange={(e) => setStoryboardName(e.target.value)}
-              autoFocus
-            />
-          </div>
-        }
-        confirmText="Save"
-        cancelText="Cancel"
-        onConfirm={handleSave}
-        onCancel={() => setShowSaveModal(false)}
-      />
-
+      {/* Modals */}
       {/* StoryboardGenerator Modal */}
       <StoryboardGeneratorModal
         isOpen={showStoryboardGeneratorModal}
@@ -1110,7 +1025,7 @@ const MovieEditorPage: React.FC = () => {
         showSpinner={true}
       />
 
-      {/* Add Error Modal */}
+      {/* Error Modal */}
       <ConfirmationModal
         isOpen={showErrorModal}
         title="Storyboard Generation Error"
@@ -1133,6 +1048,32 @@ const MovieEditorPage: React.FC = () => {
         onCancel={() => setShowErrorModal(false)}
       />
 
+      {/* Save Modal */}
+      <ConfirmationModal
+        isOpen={showSaveModal}
+        title="Save Storyboard"
+        message={
+          <div className="mt-2">
+            <label htmlFor="storyboardName" className="block text-sm font-medium text-gray-300">
+              Storyboard Name
+            </label>
+            <input
+              type="text"
+              id="storyboardName"
+              className="input"
+              placeholder="Enter a name for your storyboard"
+              value={storyboardName}
+              onChange={(e) => setStoryboardName(e.target.value)}
+              autoFocus
+            />
+          </div>
+        }
+        confirmText="Save"
+        cancelText="Cancel"
+        onConfirm={handleSave}
+        onCancel={() => setShowSaveModal(false)}
+      />
+
       {/* Load Storyboard Modal */}
       <ConfirmationModal
         isOpen={showLoadModal}
@@ -1144,30 +1085,28 @@ const MovieEditorPage: React.FC = () => {
             </p>
             <div className="max-h-96 overflow-y-auto">
               {(() => {
-                // Use state to store the fetched storyboards
+                // Use state to track loaded storyboards
                 const [loadedStoryboards, setLoadedStoryboards] = useState<Storyboard[]>([]);
-                const [isLoading, setIsLoading] = useState(false);
+                const [isLoadingStoryboards, setIsLoadingStoryboards] = useState(false);
                 const [loadError, setLoadError] = useState<string | null>(null);
 
-                // When modal opens, fetch storyboards
+                // Load storyboards when modal opens
                 useEffect(() => {
                   if (showLoadModal) {
-                    setIsLoading(true);
-                    setLoadError(null);
+                    setIsLoadingStoryboards(true);
 
-                    // Fetch storyboards
                     const fetchStoryboards = async () => {
                       try {
-                        // Get IDs from context
+                        // Get list of storyboard IDs
                         const storyboardIds = await getSavedStoryboards();
 
-                        // Fetch full storyboard details
+                        // Fetch details for each storyboard
                         const storyboardsData: Storyboard[] = [];
                         for (const id of storyboardIds) {
                           try {
                             const storyboard = await MovieStorageApi.getMovie(id);
                             if (storyboard) {
-                              storyboardsData.push(storyboard);
+                              storyboardsData.push(storyboard as Storyboard);
                             }
                           } catch (err) {
                             console.error(`Error fetching storyboard ${id}:`, err);
@@ -1180,34 +1119,34 @@ const MovieEditorPage: React.FC = () => {
                         );
 
                         setLoadedStoryboards(storyboardsData);
-                      } catch (error) {
-                        console.error('Error fetching storyboards:', error);
+                      } catch (err) {
+                        console.error('Error loading storyboards:', err);
                         setLoadError('Failed to load storyboards');
                       } finally {
-                        setIsLoading(false);
+                        setIsLoadingStoryboards(false);
                       }
                     };
 
                     fetchStoryboards();
                   }
-                }, [showLoadModal]); // Remove savedStoryboards from dependencies
+                }, [showLoadModal]);
 
-                // Display loading state
-                if (isLoading) {
+                // Show loading state
+                if (isLoadingStoryboards) {
                   return <p className="text-gray-400">Loading storyboards...</p>;
                 }
 
-                // Display error state
+                // Show error
                 if (loadError) {
                   return <p className="text-red-400">{loadError}</p>;
                 }
 
-                // Display empty state
+                // Show empty state
                 if (loadedStoryboards.length === 0) {
                   return <p className="text-gray-400">No saved storyboards found.</p>;
                 }
 
-                // Display storyboards list
+                // Show list of storyboards
                 return loadedStoryboards.map((storyboard) => (
                   <div
                     key={storyboard.id}

@@ -3,9 +3,25 @@ import { useAnimation } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const AnimationControls: React.FC = () => {
+interface AnimationControlsProps {
+  isPlaying?: boolean;
+  onPlayPause?: () => void;
+  currentTime?: number;
+  duration?: number;
+  onSeek?: (newPosition: number) => void;
+  onDurationChange?: (newDuration: number) => void;
+}
+
+const AnimationControls: React.FC<AnimationControlsProps> = ({
+  isPlaying: propIsPlaying,
+  onPlayPause,
+  currentTime,
+  duration,
+  onSeek,
+  onDurationChange
+}) => {
   const { playing, pauseAnimations, resumeAnimations, resetAnimations, svgContent, playbackSpeed, setPlaybackSpeed } = useAnimation();
-  const { activeClipId, getActiveClip, isPlaying, setIsPlaying, setCurrentPlaybackPosition } = useMovie();
+  const { activeClipId, getActiveClip, isPlaying: movieIsPlaying, setIsPlaying, setCurrentPlaybackPosition } = useMovie();
   const [showSpeedOptions, setShowSpeedOptions] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -13,29 +29,38 @@ const AnimationControls: React.FC = () => {
   // Get the active clip
   const activeClip = activeClipId ? getActiveClip() : null;
 
+  // Determine effective playback state - props take precedence over context
+  const effectiveIsPlaying = propIsPlaying !== undefined ? propIsPlaying : movieIsPlaying || playing;
+
   // Determine if we should show controls based on either svgContent or activeClip
   const hasContent = svgContent || activeClip?.svgContent;
-  
+
   // Check if we're in the animation editor (path '/')
   const isAnimationEditor = location.pathname === '/';
 
   // Keep animation context and movie context playback in sync
   useEffect(() => {
+    // Skip if we're controlled by props
+    if (propIsPlaying !== undefined || onPlayPause) return;
+
     // When active clip is playing/paused, sync with animation context
     if (activeClipId) {
-      if (isPlaying && !playing) {
+      if (movieIsPlaying && !playing) {
         resumeAnimations();
-      } else if (!isPlaying && playing) {
+      } else if (!movieIsPlaying && playing) {
         pauseAnimations();
       }
     }
-  }, [isPlaying, playing, activeClipId, resumeAnimations, pauseAnimations]);
+  }, [movieIsPlaying, playing, activeClipId, resumeAnimations, pauseAnimations, propIsPlaying, onPlayPause]);
 
-  // Toggle play/pause - use movie context if we have an active clip
+  // Toggle play/pause - use props if provided, otherwise use context
   const togglePlayback = () => {
-    if (activeClipId) {
+    if (onPlayPause) {
+      // Use prop handler if provided
+      onPlayPause();
+    } else if (activeClipId) {
       // Using movie playback controls
-      setIsPlaying(!isPlaying);
+      setIsPlaying(!movieIsPlaying);
     } else {
       // Using animation playback controls
       if (playing) {
@@ -48,11 +73,16 @@ const AnimationControls: React.FC = () => {
 
   // Reset animation
   const handleReset = () => {
-    resetAnimations();
+    if (onSeek) {
+      // Use prop handler if provided
+      onSeek(0);
+    } else {
+      resetAnimations();
 
-    // Also reset clip position if we have an active clip
-    if (activeClipId) {
-      setCurrentPlaybackPosition(0);
+      // Also reset clip position if we have an active clip
+      if (activeClipId) {
+        setCurrentPlaybackPosition(0);
+      }
     }
   };
 
@@ -76,9 +106,9 @@ const AnimationControls: React.FC = () => {
         <button
           className="text-white hover:text-bat-yellow p-1 rounded focus:outline-none"
           onClick={togglePlayback}
-          aria-label={playing || isPlaying ? 'Pause' : 'Play'}
+          aria-label={effectiveIsPlaying ? 'Pause' : 'Play'}
         >
-          {playing || isPlaying ? (
+          {effectiveIsPlaying ? (
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -111,7 +141,7 @@ const AnimationControls: React.FC = () => {
             Return to Movie Editor
           </button>
         )}
-        
+
         <div className="relative ml-2">
           <button
             className="text-white hover:text-bat-yellow p-1 rounded focus:outline-none"
