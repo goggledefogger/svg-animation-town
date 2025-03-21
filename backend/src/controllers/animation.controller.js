@@ -101,6 +101,8 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
   }
 
   try {
+    let llmResponse;
+
     // Override the default provider if one is specified in the request
     if (provider && (provider === 'openai' || provider === 'claude')) {
       // Temporarily override the configured provider
@@ -108,32 +110,63 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
       config.aiProvider = provider;
 
       // Call the AI service to update the animation
-      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
+      llmResponse = await AIService.updateAnimation(prompt, currentSvg);
 
       // Restore the original provider
       config.aiProvider = originalProvider;
-
-      // Extract SVG and text from the response
-      const { svg, text } = extractSvgAndText(llmResponse);
-
-      return res.status(200).json({
-        success: true,
-        svg,
-        message: text
-      });
     } else {
       // Use the default provider configured in the system
-      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
-
-      // Extract SVG and text from the response
-      const { svg, text } = extractSvgAndText(llmResponse);
-
-      return res.status(200).json({
-        success: true,
-        svg,
-        message: text
-      });
+      llmResponse = await AIService.updateAnimation(prompt, currentSvg);
     }
+
+    // Extract SVG and text from the response
+    const { svg, text } = extractSvgAndText(llmResponse);
+
+    // Generate a name for the animation based on the prompt
+    let animationName = prompt.trim();
+    if (animationName.length > 40) {
+      animationName = animationName.substring(0, 40) + '...';
+    }
+
+    // Create a simple chat history for the animation
+    const chatHistory = [
+      {
+        id: uuidv4(),
+        sender: 'user',
+        text: prompt,
+        timestamp: new Date().toISOString()
+      },
+      {
+        id: uuidv4(),
+        sender: 'ai',
+        text: text || 'Animation updated successfully',
+        timestamp: new Date().toISOString()
+      }
+    ];
+
+    // Save the updated animation to storage
+    const timestamp = new Date().toISOString();
+    const animationId = await storageService.saveAnimation(animationName, {
+      svg,
+      chatHistory,
+      timestamp
+    });
+
+    // Log detailed information about the updated animation
+    console.log(`Animation updated with ID: ${animationId}`, {
+      nameLength: animationName.length,
+      svgLength: svg.length,
+      provider: provider || config.aiProvider,
+      timestamp
+    });
+
+    // Return the SVG, message, and the animation ID
+    return res.status(200).json({
+      success: true,
+      svg,
+      message: text,
+      animationId
+    });
   } catch (error) {
     console.error('Error updating animation:', error);
     throw new ServiceUnavailableError(`Failed to update animation: ${error.message}`);
