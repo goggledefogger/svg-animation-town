@@ -45,18 +45,20 @@ export const MovieApi = {
   generateStoryboard: async (
     prompt: string,
     provider: 'openai' | 'claude' = 'openai',
-    numScenes?: number
+    numScenes?: number,
+    includeEmojis?: boolean
   ): Promise<StoryboardResponse> => {
     console.log('Generating storyboard with prompt:', prompt);
     console.log('Using AI provider:', provider);
     console.log('Number of scenes:', numScenes ? numScenes : 'Auto');
+    console.log('Include emojis:', includeEmojis ? 'Yes' : 'No');
 
     try {
       const data = await fetchApi<any>(
         '/movie/generate-storyboard',
         {
           method: 'POST',
-          body: JSON.stringify({ prompt, provider, numScenes }),
+          body: JSON.stringify({ prompt, provider, numScenes, includeEmojis }),
         }
       );
 

@@ -11,7 +11,7 @@ const { v4: uuidv4 } = require('uuid');
  * Generate a new animation based on a text prompt
  */
 exports.generateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, provider } = req.body;
+  const { prompt, provider, includeEmojis } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
@@ -27,13 +27,15 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       config.aiProvider = provider;
 
       // Call the AI service to generate the animation
-      llmResponse = await AIService.generateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`);
+      const emojiPrompt = includeEmojis ? ' Include emojis and other interesting visual characters or symbols of various sizes.' : '';
+      llmResponse = await AIService.generateAnimation(`${prompt}${emojiPrompt}`);
 
       // Restore the original provider
       config.aiProvider = originalProvider;
     } else {
       // Use the default provider configured in the system
-      llmResponse = await AIService.generateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`);
+      const emojiPrompt = includeEmojis ? ' Include emojis and other interesting visual characters or symbols of various sizes.' : '';
+      llmResponse = await AIService.generateAnimation(`${prompt}${emojiPrompt}`);
     }
 
     // Extract SVG and text from the response
@@ -94,7 +96,7 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
  * Update an existing animation based on a text prompt
  */
 exports.updateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, currentSvg, provider } = req.body;
+  const { prompt, currentSvg, provider, includeEmojis } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
@@ -108,7 +110,8 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
       config.aiProvider = provider;
 
       // Call the AI service to update the animation
-      const llmResponse = await AIService.updateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`, currentSvg);
+      const emojiPrompt = includeEmojis ? ' Include emojis and other interesting visual characters or symbols of various sizes.' : '';
+      const llmResponse = await AIService.updateAnimation(`${prompt}${emojiPrompt}`, currentSvg);
 
       // Restore the original provider
       config.aiProvider = originalProvider;
@@ -123,7 +126,8 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
       });
     } else {
       // Use the default provider configured in the system
-      const llmResponse = await AIService.updateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`, currentSvg);
+      const emojiPrompt = includeEmojis ? ' Include emojis and other interesting visual characters or symbols of various sizes.' : '';
+      const llmResponse = await AIService.updateAnimation(`${prompt}${emojiPrompt}`, currentSvg);
 
       // Extract SVG and text from the response
       const { svg, text } = extractSvgAndText(llmResponse);

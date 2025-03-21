@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 interface StoryboardGeneratorModalProps {
   isOpen: boolean;
   onCancel: () => void;
-  onGenerate: (prompt: string, provider: 'openai' | 'claude', numScenes?: number) => void;
+  onGenerate: (prompt: string, provider: 'openai' | 'claude', numScenes?: number, includeEmojis?: boolean) => void;
   isLoading: boolean;
 }
 
@@ -16,6 +16,7 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
   const [prompt, setPrompt] = useState('');
   const [provider, setProvider] = useState<'openai' | 'claude'>('openai');
   const [numScenes, setNumScenes] = useState<'auto' | number>('auto');
+  const [includeEmojis, setIncludeEmojis] = useState(false);
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
   const [scenesDropdownOpen, setScenesDropdownOpen] = useState(false);
   const providerDropdownRef = useRef<HTMLDivElement>(null);
@@ -45,7 +46,8 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
       onGenerate(
         prompt.trim(),
         provider,
-        numScenes === 'auto' ? undefined : numScenes
+        numScenes === 'auto' ? undefined : numScenes,
+        includeEmojis
       );
     }
   };
@@ -232,6 +234,20 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="includeEmojis" className="block text-sm font-medium text-gray-300 mb-2">
+              Include Emojis
+            </label>
+            <input
+              id="includeEmojis"
+              type="checkbox"
+              className="w-4 h-4 text-bat-yellow bg-gray-700 border-gray-600 rounded focus:ring-bat-yellow"
+              checked={includeEmojis}
+              onChange={(e) => setIncludeEmojis(e.target.checked)}
+              disabled={isLoading}
+            />
           </div>
 
           <div className="flex justify-end space-x-2">

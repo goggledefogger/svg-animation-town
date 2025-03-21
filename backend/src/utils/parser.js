@@ -77,6 +77,9 @@ exports.extractSvgAndText = (responseText) => {
       svg = addMissingAttributes(svg);
     }
 
+    // Ensure proper handling of emojis in the extracted SVG content
+    svg = processEmojis(svg);
+
     return { svg, text };
   } catch (error) {
     console.error('Error parsing LLM response:', error);
@@ -137,6 +140,33 @@ function createErrorSvg(errorMessage) {
       ${errorMessage}
     </text>
   </svg>`;
+}
+
+/**
+ * Process emojis and special characters in the SVG content
+ *
+ * @param {string} svg - The SVG string to process
+ * @returns {string} - The processed SVG string
+ */
+function processEmojis(svg) {
+  // Create a DOM parser to parse the SVG content
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+  // Find all text elements in the SVG
+  const textElements = doc.querySelectorAll('text');
+
+  // Ensure proper rendering of emojis in the text elements
+  textElements.forEach(textElement => {
+    const fontFamily = textElement.getAttribute('font-family');
+    if (!fontFamily || !fontFamily.includes('Segoe UI Emoji')) {
+      textElement.setAttribute('font-family', `${fontFamily || 'Arial'}, 'Segoe UI Emoji', 'Noto Color Emoji'`);
+    }
+  });
+
+  // Serialize the modified SVG back to a string
+  const serializer = new XMLSerializer();
+  return serializer.serializeToString(doc);
 }
 
 /**
