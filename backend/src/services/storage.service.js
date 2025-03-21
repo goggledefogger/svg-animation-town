@@ -51,6 +51,10 @@ class StorageService {
       };
 
       await fs.writeFile(filePath, JSON.stringify(animationData, null, 2));
+      
+      // Update the movie with the new animation
+      await this.updateMovieWithAnimation(id, animationData);
+
       return id;
     } catch (error) {
       console.error('Error saving animation:', error);
@@ -332,6 +336,44 @@ class StorageService {
     } catch (error) {
       console.error(`STORAGE: Error getting animation ${animationId} for clip:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Update movie with new animation data
+   * @param {string} animationId - Animation ID
+   * @param {Object} animationData - Animation data
+   */
+  async updateMovieWithAnimation(animationId, animationData) {
+    try {
+      // List all movies
+      const movies = await this.listMovies();
+
+      // Iterate through each movie to find and update the relevant clip
+      for (const movie of movies) {
+        let updated = false;
+
+        // Check if the movie has clips
+        if (movie.clips && Array.isArray(movie.clips)) {
+          for (const clip of movie.clips) {
+            if (clip.animationId === animationId) {
+              // Update the clip with the new animation data
+              clip.svg = animationData.svg;
+              clip.chatHistory = animationData.chatHistory;
+              clip.timestamp = animationData.timestamp;
+              updated = true;
+            }
+          }
+        }
+
+        // Save the updated movie if any clip was updated
+        if (updated) {
+          await this.saveMovie(movie);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating movie with animation:', error);
+      throw error;
     }
   }
 }
