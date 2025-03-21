@@ -27,13 +27,13 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       config.aiProvider = provider;
 
       // Call the AI service to generate the animation
-      llmResponse = await AIService.generateAnimation(prompt);
+      llmResponse = await AIService.generateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`);
 
       // Restore the original provider
       config.aiProvider = originalProvider;
     } else {
       // Use the default provider configured in the system
-      llmResponse = await AIService.generateAnimation(prompt);
+      llmResponse = await AIService.generateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`);
     }
 
     // Extract SVG and text from the response
@@ -108,7 +108,7 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
       config.aiProvider = provider;
 
       // Call the AI service to update the animation
-      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
+      const llmResponse = await AIService.updateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`, currentSvg);
 
       // Restore the original provider
       config.aiProvider = originalProvider;
@@ -123,7 +123,7 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
       });
     } else {
       // Use the default provider configured in the system
-      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
+      const llmResponse = await AIService.updateAnimation(`${prompt} Include emojis and other interesting visual characters or symbols.`, currentSvg);
 
       // Extract SVG and text from the response
       const { svg, text } = extractSvgAndText(llmResponse);
