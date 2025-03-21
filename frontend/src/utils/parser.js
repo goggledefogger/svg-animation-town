@@ -143,6 +143,58 @@ function createErrorSvg(errorMessage) {
 }
 
 /**
+ * Add missing required attributes to an SVG
+ *
+ * @param {string} svg - The SVG string to fix
+ * @returns {string} - The fixed SVG string
+ */
+function addMissingAttributes(svg) {
+  let result = svg;
+
+  // Add xmlns if missing
+  if (!svg.includes('xmlns=')) {
+    result = result.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+
+  // Add viewBox if missing
+  if (!svg.includes('viewBox=')) {
+    result = result.replace('<svg', '<svg viewBox="0 0 800 600"');
+  }
+
+  // Add width and height if missing
+  if (!svg.includes('width=')) {
+    result = result.replace('<svg', '<svg width="800"');
+  }
+
+  if (!svg.includes('height=')) {
+    result = result.replace('<svg', '<svg height="600"');
+  }
+
+  return result;
+}
+
+/**
+ * Create a simple error SVG to display when there's a problem
+ *
+ * @param {string} errorMessage - The error message to display
+ * @returns {string} - SVG code for an error indicator
+ */
+function createErrorSvg(errorMessage) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+    <rect width="800" height="600" fill="#1a1a2e" />
+    <circle cx="400" cy="250" r="60" fill="#ff4040" />
+    <rect x="390" y="200" width="20" height="60" fill="white" />
+    <circle cx="400" cy="290" r="10" fill="white" />
+    <text x="400" y="400" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+      Animation Error
+    </text>
+    <text x="400" y="440" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle">
+      ${errorMessage}
+    </text>
+  </svg>`;
+}
+
+/**
  * Process emojis and special characters in the SVG content
  *
  * @param {string} svg - The SVG string to process

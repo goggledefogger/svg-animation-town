@@ -188,6 +188,15 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
       svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
     }
+
+    // Ensure proper rendering of emojis in the SVG content
+    const textElements = svgElement.querySelectorAll('text');
+    textElements.forEach(textElement => {
+      const fontFamily = textElement.getAttribute('font-family');
+      if (!fontFamily || !fontFamily.includes('Segoe UI Emoji')) {
+        textElement.setAttribute('font-family', `${fontFamily || 'Arial'}, 'Segoe UI Emoji', 'Noto Color Emoji'`);
+      }
+    });
   }, [setSvgRef]);
 
   // Function to handle animation updates
