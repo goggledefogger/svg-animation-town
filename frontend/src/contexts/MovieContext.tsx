@@ -4,6 +4,21 @@ import { Message } from './AnimationContext';
 import { StoryboardResponse, StoryboardScene } from '../services/movie.api';
 import { AnimationApi, MovieStorageApi } from '../services/api';
 
+// For server API calls that need different types than the frontend
+// We need this because the server API expects ISO strings for dates
+interface ServerStoryboard extends Omit<Storyboard, 'createdAt' | 'updatedAt' | 'generationStatus'> {
+  createdAt: string;
+  updatedAt: string;
+  generationStatus?: {
+    inProgress: boolean;
+    totalScenes?: number;
+    completedScenes?: number;
+    startedAt?: string;
+    completedAt?: string;
+    error?: string;
+  };
+}
+
 // Define movie clip interface
 export interface MovieClip {
   id: string;
@@ -101,6 +116,9 @@ interface MovieContextType {
 
   // Storyboard generation
   createStoryboardFromResponse: (storyboardResponse: StoryboardResponse) => Promise<Storyboard>;
+
+  // Movie completion status validation
+  validateMovieCompletionStatus: (movieId: string) => Promise<boolean>;
 }
 
 // Create context
@@ -310,6 +328,35 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
               updatedAt: new Date(serverStoryboard.updatedAt)
             };
 
+            // Correct storyboard status if needed - if it's marked as in progress but actually complete
+            if (storyboard.generationStatus?.inProgress) {
+              const totalExpectedScenes = storyboard.generationStatus.totalScenes || 0;
+              const actualClips = storyboard.clips?.length || 0;
+
+              // If clips count meets or exceeds expected scenes, mark as complete
+              if (actualClips > 0 && (totalExpectedScenes === 0 || actualClips >= totalExpectedScenes)) {
+                console.log(`Loaded storyboard appears complete: ${actualClips} clips (expected ${totalExpectedScenes}). Fixing status.`);
+
+                storyboard.generationStatus = {
+                  ...storyboard.generationStatus,
+                  inProgress: false,
+                  completedAt: new Date(),
+                  completedScenes: actualClips
+                };
+
+                // Save the corrected status back to the server
+                MovieStorageApi.saveMovie(storyboard).catch(err => {
+                  console.error('Error saving corrected storyboard status:', err);
+                });
+              }
+            }
+
+            // Ensure clips array is always defined
+            if (!storyboard.clips) {
+              console.warn('Storyboard has no clips array, initializing as empty array');
+              storyboard.clips = [];
+            }
+
             setCurrentStoryboard(storyboard);
             setActiveClipId(storyboard.clips.length > 0 ? storyboard.clips[0].id : null);
 
@@ -348,6 +395,35 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Convert date strings back to Date objects
       storyboard.createdAt = new Date(storyboard.createdAt);
       storyboard.updatedAt = new Date(storyboard.updatedAt);
+
+      // Correct storyboard status if needed - if it's marked as in progress but actually complete
+      if (storyboard.generationStatus?.inProgress) {
+        const totalExpectedScenes = storyboard.generationStatus.totalScenes || 0;
+        const actualClips = storyboard.clips?.length || 0;
+
+        // If clips count meets or exceeds expected scenes, mark as complete
+        if (actualClips > 0 && (totalExpectedScenes === 0 || actualClips >= totalExpectedScenes)) {
+          console.log(`Loaded storyboard appears complete: ${actualClips} clips (expected ${totalExpectedScenes}). Fixing status.`);
+
+          storyboard.generationStatus = {
+            ...storyboard.generationStatus,
+            inProgress: false,
+            completedAt: new Date(),
+            completedScenes: actualClips
+          };
+
+          // Save the corrected status back to the server
+          MovieStorageApi.saveMovie(storyboard).catch(err => {
+            console.error('Error saving corrected storyboard status:', err);
+          });
+        }
+      }
+
+      // Ensure clips array is always defined
+      if (!storyboard.clips) {
+        console.warn('Storyboard has no clips array, initializing as empty array');
+        storyboard.clips = [];
+      }
 
       setCurrentStoryboard(storyboard);
       setActiveClipId(storyboard.clips.length > 0 ? storyboard.clips[0].id : null);
@@ -684,6 +760,106 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     }));
   }, [currentStoryboard.clips]);
 
+  // Helper function to prepare storyboard for API
+  const prepareStoryboardForApi = (storyboard: Storyboard): any => {
+    // Create a copy to modify
+    const prepared: any = { ...storyboard };
+
+    // Convert dates to ISO strings
+    if (prepared.createdAt instanceof Date) {
+      prepared.createdAt = prepared.createdAt.toISOString();
+    }
+
+    if (prepared.updatedAt instanceof Date) {
+      prepared.updatedAt = prepared.updatedAt.toISOString();
+    }
+
+    // Handle generationStatus
+    if (prepared.generationStatus) {
+      const status = { ...prepared.generationStatus };
+
+      if (status.startedAt instanceof Date) {
+        status.startedAt = status.startedAt.toISOString();
+      }
+
+      if (status.completedAt instanceof Date) {
+        status.completedAt = status.completedAt.toISOString();
+      }
+
+      prepared.generationStatus = status;
+    }
+
+    return prepared;
+  };
+
+  // Check movie completion status and validate against clips
+  const validateMovieCompletionStatus = useCallback(async (movieId: string): Promise<boolean> => {
+    try {
+      console.log(`Validating completion status for movie ${movieId}...`);
+
+      // Load the latest version from the server
+      const serverStoryboard = await MovieStorageApi.getMovie(movieId);
+
+      if (!serverStoryboard) {
+        console.error(`Movie ${movieId} not found on server during validation`);
+        return false;
+      }
+
+      // Check if already marked as complete - nothing to do
+      if (!serverStoryboard.generationStatus?.inProgress) {
+        console.log(`Movie ${movieId} is already marked as complete, no validation needed`);
+        return true;
+      }
+
+      // Count clips and compare to expected scenes
+      const clipCount = serverStoryboard.clips?.length || 0;
+      const expectedScenes = serverStoryboard.generationStatus?.totalScenes || 0;
+
+      console.log(`Movie ${movieId} has ${clipCount} clips out of ${expectedScenes} expected scenes`);
+
+      // If we have clips meeting/exceeding the expected count, but status is still "in progress"
+      if (clipCount > 0 && (expectedScenes === 0 || clipCount >= expectedScenes)) {
+        console.log(`Movie ${movieId} appears complete but is marked in-progress. Fixing...`);
+
+        // Create an updated storyboard for the API
+        const updatedServerStoryboard = {
+          ...serverStoryboard,
+          generationStatus: {
+            ...serverStoryboard.generationStatus,
+            inProgress: false,
+            completedScenes: clipCount,
+            completedAt: new Date().toISOString()
+          }
+        };
+
+        // Save using our helper that properly prepares the storyboard for API
+        await MovieStorageApi.saveMovie(updatedServerStoryboard);
+        console.log(`Successfully updated movie ${movieId} status to complete`);
+
+        // Only update local state if this is the current storyboard
+        if (currentStoryboard.id === movieId) {
+          console.log('Updating current storyboard with completed status');
+          setCurrentStoryboard(prevState => ({
+            ...prevState,
+            generationStatus: {
+              ...prevState.generationStatus!,
+              inProgress: false,
+              completedScenes: clipCount,
+              completedAt: new Date()
+            }
+          }));
+        }
+
+        return true;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`Error validating movie ${movieId} completion status:`, error);
+      return false;
+    }
+  }, [currentStoryboard.id]);
+
   // Provide context values
   const contextValue: MovieContextType = {
     currentStoryboard,
@@ -709,7 +885,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     currentPlaybackPosition,
     setCurrentPlaybackPosition,
     exportStoryboard,
-    createStoryboardFromResponse
+    createStoryboardFromResponse,
+    validateMovieCompletionStatus,
   };
 
   return (

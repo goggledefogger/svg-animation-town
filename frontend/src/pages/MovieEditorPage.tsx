@@ -252,42 +252,75 @@ const MovieEditorPage: React.FC = () => {
 
         // Check if there's a current storyboard that's incomplete
         if (currentStoryboard?.generationStatus?.inProgress) {
-          console.log('Found incomplete storyboard generation:', currentStoryboard.id);
+          console.log('Found storyboard marked as in progress:', currentStoryboard.id);
 
-          // Show a confirmation to the user
-          const shouldResume = window.confirm(
-            `It looks like you have an incomplete movie generation "${currentStoryboard.name}". Would you like to resume where you left off?`
-          );
+          // Check if the storyboard is actually complete by comparing clip count to total scenes
+          const totalExpectedScenes = currentStoryboard.generationStatus.totalScenes || 0;
+          const actualClips = currentStoryboard.clips?.length || 0;
 
-          if (shouldResume) {
-            console.log('Resuming generation for storyboard:', currentStoryboard.id);
-            // Show the generating clips modal
-            modalManager.setShowGeneratingClipsModal(true);
-            storyboardGenerator.setIsGenerating(true);
+          // Consider a storyboard complete if:
+          // 1. It has clips AND
+          // 2. Either the clip count matches/exceeds totalScenes OR totalScenes is not specified
+          if (actualClips > 0 && (totalExpectedScenes === 0 || actualClips >= totalExpectedScenes)) {
+            console.log(`Storyboard appears complete: ${actualClips} clips generated (expected ${totalExpectedScenes}). Marking as complete.`);
 
-            // Determine which AI provider was being used
-            const aiProvider = currentStoryboard.aiProvider || 'openai';
+            // Mark the storyboard as complete
+            setCurrentStoryboard(prevStoryboard => {
+              const finalStoryboard = {
+                ...prevStoryboard,
+                updatedAt: new Date(),
+                generationStatus: {
+                  ...prevStoryboard.generationStatus!,
+                  inProgress: false,
+                  completedAt: new Date(),
+                  completedScenes: actualClips
+                }
+              };
 
-            // Resume the generation process - simulating the storyboard response
-            // We need to create a faux storyboard response from the existing storyboard
-            const resumeStoryboardResponse = {
-              title: currentStoryboard.name,
-              description: currentStoryboard.description || '',
-              scenes: [] as StoryboardScene[] // Properly typed as StoryboardScene[]
-            };
+              // Save the updated status to the server
+              MovieStorageApi.saveMovie(finalStoryboard).catch(err => {
+                console.error('Error saving completed storyboard status:', err);
+              });
 
-            // If we have the original scenes data stored, use it
-            if (currentStoryboard.originalScenes) {
-              resumeStoryboardResponse.scenes = currentStoryboard.originalScenes;
-            } else {
-              // Without original scenes, we can only infer from clips
-              // This is a fallback and may not work perfectly
-              console.warn('No original scenes data found, using limited resume capability');
-            }
+              return finalStoryboard;
+            });
 
-            // Resume from the last completed scene
-            await storyboardGenerator.resumeStoryboardGeneration(currentStoryboard, resumeStoryboardResponse, aiProvider);
+            return;
           }
+
+          // If it has some clips but not all expected scenes, it's genuinely incomplete
+          if (actualClips > 0 && actualClips < totalExpectedScenes) {
+            console.log(`Storyboard is partially complete: ${actualClips}/${totalExpectedScenes} clips. Will resume generation.`);
+          }
+
+          // No user prompt - automatically resume in the background
+          console.log('Automatically resuming generation for storyboard:', currentStoryboard.id);
+          // Show the generating clips modal
+          modalManager.setShowGeneratingClipsModal(true);
+          storyboardGenerator.setIsGenerating(true);
+
+          // Determine which AI provider was being used
+          const aiProvider = currentStoryboard.aiProvider || 'openai';
+
+          // Resume the generation process - simulating the storyboard response
+          // We need to create a faux storyboard response from the existing storyboard
+          const resumeStoryboardResponse = {
+            title: currentStoryboard.name,
+            description: currentStoryboard.description || '',
+            scenes: [] as StoryboardScene[] // Properly typed as StoryboardScene[]
+          };
+
+          // If we have the original scenes data stored, use it
+          if (currentStoryboard.originalScenes) {
+            resumeStoryboardResponse.scenes = currentStoryboard.originalScenes;
+          } else {
+            // Without original scenes, we can only infer from clips
+            // This is a fallback and may not work perfectly
+            console.warn('No original scenes data found, using limited resume capability');
+          }
+
+          // Resume from the last completed scene
+          await storyboardGenerator.resumeStoryboardGeneration(currentStoryboard, resumeStoryboardResponse, aiProvider);
         }
       } catch (error) {
         console.error('Error checking for incomplete generations:', error);
@@ -444,7 +477,7 @@ const MovieEditorPage: React.FC = () => {
                 }
               </p>
               <p className="text-center mt-2 text-sm text-gray-400">
-                This may take a few minutes. Please don't close this window.
+                Generation is automatically saved as it progresses.
               </p>
               {storyboardGenerator.generationProgress.resumedFrom && (
                 <p className="text-center mt-2 text-sm text-yellow-400">

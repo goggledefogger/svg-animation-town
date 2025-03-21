@@ -51,9 +51,9 @@ class StorageService {
       };
 
       await fs.writeFile(filePath, JSON.stringify(animationData, null, 2));
-      
-      // Update the movie with the new animation
-      await this.updateMovieWithAnimation(id, animationData);
+
+      // After saving, update any movie's generation status that references this animation
+      await this.updateMovieGenerationStatus(id);
 
       return id;
     } catch (error) {
@@ -159,6 +159,24 @@ class StorageService {
         if (generationStatus.completedAt instanceof Date) {
           generationStatus.completedAt = generationStatus.completedAt.toISOString();
         }
+
+        // Automatically determine completion status based on clips vs expected scenes
+        if (storyboard.clips && Array.isArray(storyboard.clips) && generationStatus.inProgress) {
+          const actualClips = storyboard.clips.length;
+          const totalExpectedScenes = generationStatus.totalScenes || 0;
+
+          // If we have clips and either meet/exceed the expected count or there's no expected count
+          if (actualClips > 0 && (totalExpectedScenes === 0 || actualClips >= totalExpectedScenes)) {
+            console.log(`Movie ${id}: Auto-marking as complete (${actualClips}/${totalExpectedScenes} scenes)`);
+            generationStatus.inProgress = false;
+            generationStatus.completedAt = generationStatus.completedAt || new Date().toISOString();
+            generationStatus.completedScenes = actualClips;
+          } else if (actualClips > 0) {
+            // Update the completed count if we have some clips but not all
+            console.log(`Movie ${id}: Updating progress (${actualClips}/${totalExpectedScenes} scenes)`);
+            generationStatus.completedScenes = actualClips;
+          }
+        }
       }
 
       // Process clips to store only references to animations, not the full SVG content
@@ -235,6 +253,23 @@ class StorageService {
 
       const data = await fs.readFile(filePath, 'utf8');
       const movie = JSON.parse(data);
+
+      // Ensure generation status accuracy before returning to frontend
+      if (movie.generationStatus && movie.generationStatus.inProgress) {
+        const actualClips = movie.clips?.length || 0;
+        const totalExpectedScenes = movie.generationStatus.totalScenes || 0;
+
+        // If we have clips and either meet/exceed the expected count or there's no expected count
+        if (actualClips > 0 && (totalExpectedScenes === 0 || actualClips >= totalExpectedScenes)) {
+          console.log(`Movie ${id}: Marked as complete on retrieval (${actualClips}/${totalExpectedScenes} scenes)`);
+          movie.generationStatus.inProgress = false;
+          movie.generationStatus.completedAt = movie.generationStatus.completedAt || new Date().toISOString();
+          movie.generationStatus.completedScenes = actualClips;
+
+          // Save the corrected status back to the file
+          await this.saveMovie(movie);
+        }
+      }
 
       return movie;
     } catch (error) {
@@ -374,6 +409,74 @@ class StorageService {
     } catch (error) {
       console.error('Error updating movie with animation:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Update movie generation status when a new animation is saved
+   * @param {string} animationId - The ID of the animation that was just saved
+   */
+  async updateMovieGenerationStatus(animationId) {
+    try {
+      console.log(`Checking for movies containing animation ID: ${animationId}`);
+      // List all movies
+      const movies = await this.listMovies();
+      let updatedMovieCount = 0;
+
+      // Find movies that contain this animation ID
+      for (const movieMeta of movies) {
+        try {
+          // Load the full movie data
+          const movie = await this.getMovie(movieMeta.id);
+
+          if (!movie || !movie.clips || !Array.isArray(movie.clips)) {
+            continue;
+          }
+
+          // Check if this movie contains the animation
+          const matchingClipIndex = movie.clips.findIndex(clip => clip.animationId === animationId);
+          const hasAnimation = matchingClipIndex !== -1;
+
+          if (hasAnimation) {
+            console.log(`Found movie ${movie.id} (${movie.name || 'Unnamed'}) containing animation ${animationId}`);
+            console.log(`Movie generation status: inProgress=${movie.generationStatus?.inProgress}, totalScenes=${movie.generationStatus?.totalScenes || 0}`);
+
+            if (movie.generationStatus) {
+              // Count how many clips have animation IDs
+              const completedClips = movie.clips.filter(clip => clip.animationId).length;
+              const totalScenes = movie.generationStatus.totalScenes || movie.clips.length;
+
+              console.log(`Movie ${movie.id} has ${completedClips}/${totalScenes} completed scenes`);
+
+              // Update the generation status
+              if (completedClips > 0) {
+                movie.generationStatus.completedScenes = completedClips;
+
+                // If we've completed all scenes, mark as complete
+                if (completedClips >= totalScenes) {
+                  movie.generationStatus.inProgress = false;
+                  movie.generationStatus.completedAt = new Date().toISOString();
+                  console.log(`Movie ${movie.id} generation marked as COMPLETE (${completedClips}/${totalScenes} scenes)`);
+                } else {
+                  console.log(`Movie ${movie.id} generation progress updated (${completedClips}/${totalScenes} scenes) - still IN PROGRESS`);
+                }
+
+                // Save the updated movie
+                await this.saveMovie(movie);
+                updatedMovieCount++;
+              }
+            } else {
+              console.log(`Movie ${movie.id} has no generation status, cannot update`);
+            }
+          }
+        } catch (movieError) {
+          console.error(`Error processing movie ${movieMeta.id}:`, movieError);
+        }
+      }
+
+      console.log(`Updated ${updatedMovieCount} movies with animation ${animationId}`);
+    } catch (error) {
+      console.error('Error updating movie generation status:', error);
     }
   }
 }

@@ -33,7 +33,8 @@ export function useStoryboardGenerator(
     currentStoryboard,
     setCurrentStoryboard,
     addClip,
-    setActiveClipId
+    setActiveClipId,
+    validateMovieCompletionStatus
   } = useMovie();
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -70,6 +71,20 @@ export function useStoryboardGenerator(
     try {
       // Reset any previous errors
       setGenerationError(null);
+
+      // Check if we already have a storyboard with clips
+      if (currentStoryboard?.clips?.length > 0) {
+        // Show user confirmation dialog before proceeding
+        const confirmGenerate = window.confirm(
+          `This will create a new storyboard and replace the current one that has ${currentStoryboard.clips.length} clips. Are you sure you want to continue?`
+        );
+
+        // If user cancels, abort generation
+        if (!confirmGenerate) {
+          console.log('User cancelled storyboard generation');
+          return;
+        }
+      }
 
       // First set loading state for the initial storyboard generation
       setIsGenerating(true);
@@ -123,9 +138,42 @@ export function useStoryboardGenerator(
     console.log('Resuming storyboard generation from scene:', storyboard.generationStatus?.completedScenes || 0);
 
     try {
+      // First validate the completion status by checking with the server
+      // This will fix any discrepancy where the movie is actually complete but status hasn't been updated
+      await validateMovieCompletionStatus(storyboard.id);
+
+      // Get the latest storyboard with possibly updated status
+      const refreshedStoryboard = await MovieStorageApi.getMovie(storyboard.id);
+
+      if (!refreshedStoryboard) {
+        throw new Error('Could not refresh storyboard status before resuming');
+      }
+
+      // If the storyboard is now marked as complete, we don't need to resume
+      if (refreshedStoryboard.generationStatus && !refreshedStoryboard.generationStatus.inProgress) {
+        console.log('Storyboard is already complete - no need to resume generation');
+
+        // Update local state to match the server to ensure UI is in sync
+        setCurrentStoryboard({
+          ...refreshedStoryboard,
+          createdAt: new Date(refreshedStoryboard.createdAt),
+          updatedAt: new Date(refreshedStoryboard.updatedAt),
+          generationStatus: {
+            ...refreshedStoryboard.generationStatus,
+            startedAt: refreshedStoryboard.generationStatus.startedAt ? new Date(refreshedStoryboard.generationStatus.startedAt) : undefined,
+            completedAt: refreshedStoryboard.generationStatus.completedAt ? new Date(refreshedStoryboard.generationStatus.completedAt) : undefined
+          }
+        });
+
+        // Reset UI state
+        setIsGenerating(false);
+        setShowGeneratingClipsModal(false);
+        return;
+      }
+
       // Start from where we left off - use the actual number of clips as the source of truth
       // for what scenes have been completed
-      const completedScenesFromClips = storyboard.clips?.length || 0;
+      const completedScenesFromClips = refreshedStoryboard.clips?.length || 0;
 
       // Use clip count as the definitive measure of what's been completed
       let startSceneIndex = completedScenesFromClips;
@@ -145,24 +193,16 @@ export function useStoryboardGenerator(
       if (remainingScenes.length === 0) {
         console.log('No remaining scenes to generate, marking as complete');
 
-        // Update status to completed
-        setCurrentStoryboard(prevStoryboard => {
-          const finalStoryboard = {
-            ...prevStoryboard,
-            updatedAt: new Date(),
-            generationStatus: {
-              ...prevStoryboard.generationStatus!,
-              inProgress: false,
-              completedAt: new Date()
-            }
-          };
-
-          MovieStorageApi.saveMovie(finalStoryboard).catch(err => {
-            console.error('Error in final storyboard save:', err);
-          });
-
-          return finalStoryboard;
-        });
+        // Update status to completed in local state only
+        setCurrentStoryboard(prevStoryboard => ({
+          ...prevStoryboard,
+          updatedAt: new Date(),
+          generationStatus: {
+            ...prevStoryboard.generationStatus!,
+            inProgress: false,
+            completedAt: new Date()
+          }
+        }));
 
         setIsGenerating(false);
         setShowGeneratingClipsModal(false);
@@ -178,11 +218,7 @@ export function useStoryboardGenerator(
       // Process the remaining scenes
       await processStoryboard(resumedResponse, aiProvider, startSceneIndex);
     } catch (error) {
-      console.error('Error resuming storyboard generation:', error);
-      setGenerationError(error instanceof Error ? error.message : 'Unknown error resuming generation');
-      setShowErrorModal(true);
-      setIsGenerating(false);
-      setShowGeneratingClipsModal(false);
+      handleGenerationError(error);
     }
   };
 
@@ -223,6 +259,33 @@ export function useStoryboardGenerator(
           completedScenes: 0
         }
       };
+
+      // Set the initial storyboard and save it to the server right away
+      setCurrentStoryboard(newStoryboard);
+      setShowGeneratingClipsModal(true);
+
+      // Initialize the progress with the total count and starting point but no completed scenes yet
+      updateGenerationProgress(
+        null, // null indicates initialization rather than completion
+        storyboard.scenes.length,
+        startingSceneIndex > 0 ? startingSceneIndex : undefined
+      );
+
+      // Save the initial storyboard to the server using direct API call
+      console.log('Saving initial storyboard to server...');
+      try {
+        // Use direct API call to avoid stale state issues
+        const result = await MovieStorageApi.saveMovie(newStoryboard);
+        console.log(`Initial storyboard saved to server with ID: ${result.id}`);
+
+        // CRITICAL: Store the server-assigned ID if different
+        if (result.id !== storyboardId) {
+          console.log(`Server assigned different ID: ${result.id} (original: ${storyboardId})`);
+          newStoryboard.id = result.id;
+        }
+      } catch (error) {
+        console.error('Error saving initial storyboard:', error);
+      }
     } else {
       // We're resuming an existing storyboard
       storyboardId = currentStoryboard!.id;
@@ -244,46 +307,25 @@ export function useStoryboardGenerator(
       if (!newStoryboard.originalScenes) {
         newStoryboard.originalScenes = storyboard.scenes;
       }
-    }
 
-    try {
-      // Set the initial storyboard and save it to the server right away
+      // Set the storyboard in local state
       setCurrentStoryboard(newStoryboard);
       setShowGeneratingClipsModal(true);
 
-      // Initialize the progress with the total count and starting point but no completed scenes yet
+      // Initialize the progress with the total count and starting point
       updateGenerationProgress(
-        null, // null indicates initialization rather than completion
+        startingSceneIndex,
         storyboard.scenes.length,
         startingSceneIndex > 0 ? startingSceneIndex : undefined
       );
+    }
 
-      // Save the initial storyboard to the server using direct API call
-      console.log('Saving initial/resumed storyboard to server...');
-      try {
-        // Use direct API call to avoid stale state issues
-        const result = await MovieStorageApi.saveMovie(newStoryboard);
-        console.log(`Initial/resumed storyboard saved to server with ID: ${result.id}`);
-
-        // CRITICAL: Store the server-assigned ID if different
-        if (result.id !== storyboardId) {
-          console.log(`Server assigned different ID: ${result.id} (original: ${storyboardId})`);
-          newStoryboard.id = result.id;
-        }
-      } catch (error) {
-        console.error('Error saving initial/resumed storyboard:', error);
-      }
-
+    try {
       // Track any scene generation errors
       const errors: { sceneIndex: number, error: string }[] = [];
 
       // Track successful clips locally to avoid state timing issues
       let successfulClipsCount = 0;
-
-      // Process scenes in parallel with appropriate concurrency
-      // For OpenAI we limit concurrency on the client side
-      // For Claude we let the server's rate limiter handle it completely
-      const totalScenes = storyboard.scenes.length;
 
       // Create an array to track which scenes have been processed to avoid duplicates
       const processedScenes = new Set<number>();
@@ -306,7 +348,7 @@ export function useStoryboardGenerator(
         processedScenes.add(absoluteSceneIndex);
 
         try {
-          console.log(`Generating SVG for scene ${absoluteSceneIndex+1}/${startingSceneIndex + totalScenes}: ${scene.id || 'Untitled'}`);
+          console.log(`Generating SVG for scene ${absoluteSceneIndex+1}/${startingSceneIndex + storyboard.scenes.length}: ${scene.id || 'Untitled'}`);
           console.log(`Prompt: ${scene.svgPrompt.substring(0, 100)}${scene.svgPrompt.length > 100 ? '...' : ''}`);
 
           // Generate SVG for this scene, with error handling for mobile timeouts
@@ -322,7 +364,7 @@ export function useStoryboardGenerator(
               // Only update progress counter when scene is actually completed
               updateGenerationProgress(
                 absoluteSceneIndex, // Pass the completed scene index
-                startingSceneIndex + totalScenes,
+                startingSceneIndex + storyboard.scenes.length,
                 startingSceneIndex > 0 ? startingSceneIndex : undefined
               );
 
@@ -369,7 +411,7 @@ export function useStoryboardGenerator(
                 provider: aiProvider
               };
 
-              // Update the storyboard with the new clip and updated generation status
+              // Update the storyboard with the new clip - but don't save to backend since that happens automatically
               setCurrentStoryboard(prevStoryboard => {
                 // Create a deep copy of the existing clips to avoid reference issues
                 const existingClips = JSON.parse(JSON.stringify(prevStoryboard.clips || []));
@@ -393,29 +435,21 @@ export function useStoryboardGenerator(
                   console.warn(`Adding clip #${absoluteSceneIndex+1} with missing animationId`);
                 }
 
-                const updatedStoryboard = {
+                // Only update local state, backend will be updated when animation is saved
+                return {
                   ...prevStoryboard,
                   clips: [...existingClips, clipToAdd],
                   updatedAt: new Date(),
                   generationStatus: {
                     ...prevStoryboard.generationStatus!,
-                    // IMPORTANT: Only update completedScenes AFTER successful generation
+                    // IMPORTANT: Only update local UI state, backend handles the actual progress tracking
                     completedScenes: absoluteSceneIndex + 1
                   }
                 };
-
-                // CRITICAL FIX: Save the storyboard directly with the updated clips
-                // We need to save the storyboard directly using the updated object, not the React state
-                MovieStorageApi.saveMovie(updatedStoryboard)
-                  .catch(err => {
-                    console.error('Error saving storyboard after adding clip:', err);
-                  });
-
-                // Increment our local counter for successful clips
-                successfulClipsCount++;
-
-                return updatedStoryboard;
               });
+
+              // Increment our local counter for successful clips
+              successfulClipsCount++;
 
               // Success report with minimal information
               console.log(`Generated scene ${absoluteSceneIndex+1}: ${sceneName}`);
@@ -466,9 +500,15 @@ export function useStoryboardGenerator(
         await Promise.all(scenePromises.map(promiseFn => promiseFn()));
       }
 
-      // Create final copy of storyboard with current state
+      // Report final status with errors if any
+      console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
+      if (errors.length > 0) {
+        console.error(`Encountered ${errors.length} errors during generation`);
+      }
+
+      // When generation is complete, mark as not in progress in local state
       setCurrentStoryboard(prevStoryboard => {
-        const finalStoryboard: Storyboard = {
+        return {
           ...prevStoryboard,
           updatedAt: new Date(),
           generationStatus: {
@@ -477,34 +517,7 @@ export function useStoryboardGenerator(
             completedAt: new Date()
           }
         };
-
-        // Explicitly log the final state to verify clips are present
-        console.log(`Finalizing storyboard ${finalStoryboard.id} with ${finalStoryboard.clips.length} clips`);
-
-        // Save the final storyboard and ensure we preserve the current ID
-        MovieStorageApi.saveMovie(finalStoryboard)
-          .then(result => {
-            // Log the saved state
-            console.log(`Final storyboard saved with ID: ${result.id} (original: ${finalStoryboard.id})`);
-
-            // If server assigned a different ID, update our reference but keep all clips
-            if (result.id !== finalStoryboard.id) {
-              console.log(`Server assigned different ID - updating reference only`);
-              finalStoryboard.id = result.id;
-            }
-          })
-          .catch(saveError => {
-            console.error('Failed to save final storyboard:', saveError);
-          });
-
-        return finalStoryboard;
       });
-
-      // Report final status with errors if any
-      console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
-      if (errors.length > 0) {
-        console.error(`Encountered ${errors.length} errors during generation`);
-      }
 
       // IMPORTANT: Reset UI state after successful generation
       setShowGeneratingClipsModal(false);
@@ -520,29 +533,17 @@ export function useStoryboardGenerator(
   const handleGenerationError = (error: unknown) => {
     console.error('Error processing storyboard:', error);
 
-    // Update status to indicate failure but mark inProgress false
-    setCurrentStoryboard(prevStoryboard => {
-      const errorStoryboard = {
-        ...prevStoryboard,
-        updatedAt: new Date(),
-        generationStatus: {
-          ...prevStoryboard.generationStatus!,
-          inProgress: false, // Critical: Mark as not in progress even if it failed
-          completedAt: new Date(),
-          error: error instanceof Error ? error.message : 'Unknown error during generation'
-        }
-      };
-
-      // Direct save of error state using the same ID to prevent creating a new file
-      console.log(`Saving error state for storyboard with ID ${errorStoryboard.id}`);
-      MovieStorageApi.saveMovie(errorStoryboard).then(result => {
-        console.log(`Error state saved with ID: ${result.id}`);
-      }).catch(err => {
-        console.error('Error saving storyboard error state:', err);
-      });
-
-      return errorStoryboard;
-    });
+    // Update local state to reflect error
+    setCurrentStoryboard(prevStoryboard => ({
+      ...prevStoryboard,
+      updatedAt: new Date(),
+      generationStatus: {
+        ...prevStoryboard.generationStatus!,
+        inProgress: false, // Critical: Mark as not in progress even if it failed
+        completedAt: new Date(),
+        error: error instanceof Error ? error.message : 'Unknown error during generation'
+      }
+    }));
 
     // Extract the error message
     const errorMsg = error instanceof Error ? error.message : 'Unknown error processing storyboard';

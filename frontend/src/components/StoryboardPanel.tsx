@@ -153,7 +153,26 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
       for (const clip of clipsToLoad) {
         try {
           console.log(`Loading thumbnail for clip: ${clip.name} (ID: ${clip.animationId})`);
-          const animation = await MovieStorageApi.getClipAnimation(clip.animationId!);
+
+          // Try up to 3 times to load the animation
+          let animation = null;
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          while (!animation && attempts < maxAttempts) {
+            attempts++;
+            try {
+              animation = await MovieStorageApi.getClipAnimation(clip.animationId!);
+              if (!animation || !animation.svg) {
+                throw new Error('Animation data incomplete');
+              }
+            } catch (err) {
+              console.error(`Attempt ${attempts}/${maxAttempts} failed loading animation ${clip.animationId}:`, err);
+              if (attempts >= maxAttempts) throw err;
+              // Wait a short time before retry
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          }
 
           if (animation && animation.svg) {
             // Update our thumbnail cache
@@ -165,14 +184,14 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
             // Set a placeholder for failed loads
             setClipThumbnails(prev => ({
               ...prev,
-              [clip.id]: createPlaceholderSvg("No content")
+              [clip.id]: createPlaceholderSvg("Animation content missing")
             }));
           }
         } catch (error) {
           console.error(`Error loading thumbnail for clip ${clip.id}:`, error);
           setClipThumbnails(prev => ({
             ...prev,
-            [clip.id]: createPlaceholderSvg("Load error")
+            [clip.id]: createPlaceholderSvg(`Failed to load: ${error instanceof Error ? error.message : 'Unknown error'}`)
           }));
         } finally {
           // Mark this clip as done loading
