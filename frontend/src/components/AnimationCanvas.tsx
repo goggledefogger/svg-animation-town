@@ -84,56 +84,65 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     const activeClip = getActiveClip();
     console.log('Active clip changed:', activeClip?.name);
 
-    if (activeClip) {
-      if (activeClip.svgContent) {
-        // If we have SVG content, update the display directly
-        console.log('Updating SVG display with content length:', activeClip.svgContent.length);
-        setSvgContent(activeClip.svgContent);
-      } else if (activeClip.animationId) {
-        // If no SVG content but we have an animation ID, fetch it from server
-        console.log('Fetching animation content for ID:', activeClip.animationId);
-        setIsLoading(true);
-
-        // Fetch the animation using the ID
-        MovieStorageApi.getClipAnimation(activeClip.animationId)
-          .then(animation => {
-            if (animation && animation.svg) {
-              console.log('Retrieved animation SVG from server');
-              setSvgContent(animation.svg);
-
-              // Optionally update the clip in the storyboard with the SVG content
-              updateClip(activeClip.id, { svgContent: animation.svg });
-            } else {
-              console.error('No SVG content found in animation');
-              // Create a placeholder SVG
-              setSvgContent(createPlaceholderSvg('No animation content found'));
-            }
-          })
-          .catch(error => {
-            console.error('Error fetching animation:', error);
-            // Create a placeholder SVG with error message
-            setSvgContent(createPlaceholderSvg(`Error loading animation: ${error.message}`));
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
-      } else {
-        // Neither SVG content nor animation ID available
-        console.warn('Clip has no SVG content or animation ID');
-        setSvgContent(createPlaceholderSvg('No animation content available'));
-      }
-    } else {
-      // Don't clear content if we already have context SVG content loaded from elsewhere
-      // This prevents clearing content when loading animations directly
+    // Prevent unnecessary state updates if there's no active clip
+    if (!activeClip) {
+      // Only clear content if we don't have existing context content
       if (!contextSvgContent) {
         console.log('No active clip and no existing content, clearing display');
         setSvgContent('');
-      } else {
-        console.log('No active clip but keeping existing content from context:',
-                   contextSvgContent.length > 50 ? contextSvgContent.substring(0, 50) + '...' : contextSvgContent);
       }
+      return;
     }
-  }, [getActiveClip, setSvgContent, updateClip, propSvgContent, contextSvgContent]);
+
+    // Don't reload content unnecessarily if the SVG content is already loaded
+    if (activeClip.svgContent && displaySvgContent === activeClip.svgContent) {
+      console.log('Skipping reload, content already matches active clip');
+      return;
+    }
+
+    if (activeClip.svgContent) {
+      // If we have SVG content, update the display directly
+      console.log('Updating SVG display with content length:', activeClip.svgContent.length);
+      // Set loading state before updating to prevent flashes
+      setIsLoading(true);
+      setSvgContent(activeClip.svgContent);
+      // Use setTimeout to give DOM time to update before removing loading state
+      setTimeout(() => setIsLoading(false), 100);
+    } else if (activeClip.animationId) {
+      // If no SVG content but we have an animation ID, fetch it from server
+      console.log('Fetching animation content for ID:', activeClip.animationId);
+      setIsLoading(true);
+
+      // Fetch the animation using the ID
+      MovieStorageApi.getClipAnimation(activeClip.animationId)
+        .then(animation => {
+          if (animation && animation.svg) {
+            console.log('Retrieved animation SVG from server');
+            setSvgContent(animation.svg);
+
+            // Optionally update the clip in the storyboard with the SVG content
+            updateClip(activeClip.id, { svgContent: animation.svg });
+          } else {
+            console.error('No SVG content found in animation');
+            // Create a placeholder SVG
+            setSvgContent(createPlaceholderSvg('No animation content found'));
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching animation:', error);
+          // Create a placeholder SVG with error message
+          setSvgContent(createPlaceholderSvg(`Error loading animation: ${error.message}`));
+        })
+        .finally(() => {
+          // Add slight delay before removing loading state to prevent flickering
+          setTimeout(() => setIsLoading(false), 100);
+        });
+    } else {
+      // Neither SVG content nor animation ID available
+      console.warn('Clip has no SVG content or animation ID');
+      setSvgContent(createPlaceholderSvg('No animation content available'));
+    }
+  }, [getActiveClip, setSvgContent, updateClip, propSvgContent, contextSvgContent, displaySvgContent]);
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = (message: string): string => {
@@ -172,6 +181,10 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // We'll set both width/height and viewBox to control boundaries
     svgElement.setAttribute('width', '100%');
     svgElement.setAttribute('height', '100%');
+
+    // Add max-width to ensure SVG doesn't overflow on mobile
+    svgElement.style.maxWidth = '100%';
+    svgElement.style.boxSizing = 'border-box';
 
     // Preserve aspect ratio and ensure proper scaling
     svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -238,8 +251,10 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // This prevents stale content from persisting
       svgContainerRef.current.innerHTML = '';
 
-      // Force content update by directly setting innerHTML after a brief delay
-      // This ensures we break any stale references
+      // Force content update by directly setting innerHTML after a delay
+      // Use a longer delay on mobile to reduce flickering
+      const delay = window.innerWidth < 768 ? 100 : 10;
+
       setTimeout(() => {
         if (svgContainerRef.current) {
           svgContainerRef.current.innerHTML = displaySvgContent;
@@ -249,8 +264,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           if (svgElement) {
             console.log('AnimationCanvas: Found and setting up SVG element');
             setupSvgElement(svgElement as SVGSVGElement);
-            // SVG was found and setup, hide the empty state
-            setShowEmptyState(false);
+
+            // Add a slight delay before hiding empty state to reduce flickering
+            setTimeout(() => {
+              setShowEmptyState(false);
+            }, 50);
 
             // Dispatch a "confirmation" event that the SVG is now visible
             window.dispatchEvent(new CustomEvent('svg-displayed', {
@@ -262,7 +280,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
             setShowEmptyState(!hasMessageBeenSent);
           }
         }
-      }, 10);
+      }, delay);
     } else {
       // No SVG content, show the empty state only if no message has been sent
       setShowEmptyState(!hasMessageBeenSent || !isLoading);
@@ -422,34 +440,28 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     };
   }, [displaySvgContent, setupSvgElement]);
 
+  // Main render function
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 bg-black/30 rounded-lg overflow-hidden flex items-center justify-center"
-      style={{
-        touchAction: 'pan-x pan-y',
-        minHeight: '200px',
-        height: '100%',
-        width: '100%',
-        ...style // Merge in any additional styles passed as props
-      }}
+      className="w-full h-full max-w-full overflow-hidden flex items-center justify-center"
+      style={{...style}}
     >
-      {/* Empty state or loading indicator */}
-      {showEmptyState && (
-        <EmptyState
-          loading={isLoading}
-          showMessage={!isLoading}
-          svgContent={displaySvgContent}
-        />
-      )}
+      <div
+        className={`absolute inset-0 transition-opacity duration-300 ${showEmptyState ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      >
+        <EmptyState loading={isLoading} />
+      </div>
 
-      {/* SVG container with overflow handling */}
       <div
         ref={svgContainerRef}
-        className={`w-full h-full flex items-center justify-center ${
-          isLoading ? 'opacity-40 transition-opacity duration-300' : 'opacity-100'
-        }`}
         data-testid="svg-container"
+        className={`w-full h-full max-w-full flex items-center justify-center overflow-hidden transition-opacity duration-300 ${showEmptyState ? 'opacity-0' : 'opacity-100'}`}
+        style={{
+          position: 'relative',
+          maxWidth: '100vw',
+          boxSizing: 'border-box'
+        }}
       />
     </div>
   );
