@@ -361,7 +361,7 @@ const MovieEditorPage: React.FC = () => {
         {/* Main content area with flex layout */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Storyboard panel - on the left (desktop) or bottom (mobile) */}
-          <div className="md:w-80 h-64 md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-r border-gray-700 order-2 md:order-1">
+          <div className="md:w-80 h-auto max-h-[40vh] min-h-[200px] md:max-h-none md:h-auto flex-shrink-0 overflow-hidden border-t md:border-t-0 md:border-r border-gray-700 order-2 md:order-1 mb-[30px] md:mb-0 bg-gray-900">
             <StoryboardPanel
               clips={currentStoryboard.clips}
               activeClipId={activeClipId}
@@ -374,7 +374,7 @@ const MovieEditorPage: React.FC = () => {
           </div>
 
           {/* Middle section - Animation view and controls */}
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden md:h-full md:max-h-full order-1 md:order-2">
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden h-[calc(100vh-var(--header-height)-var(--storyboard-height,40vh)-30px)] md:h-full md:max-h-full order-1 md:order-2">
             {activeClipId ? (
               <>
                 <div className="flex-1 h-full flex items-center justify-center">

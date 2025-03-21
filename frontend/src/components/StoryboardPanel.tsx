@@ -282,69 +282,52 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   }
 
   return (
-    <div className="grid grid-rows-[auto_1fr_auto] h-full">
-      {/* Top section */}
-      <div className="p-2">
-        {/* Generation status - desktop only */}
-        {hasGenerationStatus && (
-          <div className="hidden md:block bg-gray-800 rounded-md mb-2 p-2">
-            {isGenerating ? (
-              <div>
-                <div className="text-sm font-medium mb-1">
-                  Generating storyboard: {Math.floor(displayCount)}/{totalScenes} scenes
-                </div>
-                <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-green-500 h-full rounded-full transition-all duration-300"
-                    style={{ width: `${displayProgress}%` }}
-                  ></div>
-                </div>
+    <div className="flex flex-col h-full">
+      {/* Top section with generation status */}
+      {hasGenerationStatus && (
+        <div className="hidden md:block bg-gray-800 rounded-md m-2 p-2 flex-shrink-0">
+          {isGenerating ? (
+            <div>
+              <div className="text-sm font-medium mb-1">
+                Generating storyboard: {Math.floor(displayCount)}/{totalScenes} scenes
               </div>
-            ) : (
-              <div className="text-sm">
-                {completedScenes > 0 ?
-                  `Generated ${Math.floor(completedScenes)}/${totalScenes} scenes` :
-                  'Ready to generate'}
+              <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-green-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${displayProgress}%` }}
+                ></div>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Animation selector */}
-        {showClipSelector && (
-          <div className="relative z-10">
-            <AnimationList
-              title="Add a Clip"
-              onSelectAnimation={handleSelectExistingAnimation}
-              onClose={() => setShowClipSelector(false)}
-              showThumbnails={true}
-              maxHeight="max-h-64"
-              containerClassName="bg-gray-800 rounded-md p-3 border border-gray-700 w-full overflow-hidden absolute top-0 left-0 right-0"
-              transformAnimations={getAnimationsWithCreateOption}
-              renderSpecialItem={renderSpecialItem}
-            />
-          </div>
-        )}
-      </div>
+            </div>
+          ) : (
+            <div className="text-sm">
+              {completedScenes > 0 ?
+                `Generated ${Math.floor(completedScenes)}/${totalScenes} scenes` :
+                'Ready to generate'}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Middle section - scrollable clips */}
-      <div className="overflow-auto">
+      <div className="flex-1 overflow-auto">
         {/* No clips message */}
         {clips.length === 0 ? (
-          <div className="flex flex-col items-center justify-center border border-dashed border-gray-600 rounded-lg p-4 h-32 m-2">
-            <p className="text-gray-400 text-center">No clips in storyboard</p>
-            <p className="text-gray-400 text-center text-sm mt-1">Use the button below to add your first clip</p>
+          <div className="flex flex-col items-center justify-center h-full py-4 px-3">
+            <div className="border border-dashed border-gray-600 rounded-lg p-4 w-full flex flex-col items-center justify-center">
+              <p className="text-gray-400 text-center">No clips in storyboard</p>
+              <p className="text-gray-400 text-center text-sm mt-1">Use the button below to add your first clip</p>
+            </div>
           </div>
         ) : (
           /* Clips with responsive layout: horizontal on mobile, vertical on desktop */
-          <div className="flex md:flex-col md:space-y-3 space-x-3 md:space-x-0 p-2 w-max md:w-full pb-1">
+          <div className="flex flex-nowrap md:flex-col md:space-y-2 space-x-3 md:space-x-0 px-3 py-2 overflow-x-auto md:w-full">
             {clips
               .sort((a, b) => a.order - b.order)
               .map((clip) => (
                 <div
                   key={clip.id}
-                  className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all flex-shrink-0 md:w-full w-60
-                    ${clip.id === activeClipId ? 'ring-2 ring-bat-yellow' : 'hover:border-gray-500'}
+                  className={`border border-gray-700 rounded-lg overflow-hidden cursor-pointer transition-all flex-shrink-0 md:w-full w-52
+                    ${clip.id === activeClipId ? 'ring-2 ring-bat-yellow shadow-md' : 'hover:border-gray-500'}
                   `}
                   onClick={() => onClipSelect(clip.id)}
                 >
@@ -383,15 +366,33 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         )}
       </div>
 
-      {/* Bottom section - more compact on mobile */}
-      <div className="p-2 md:p-2 pb-1 pt-1">
+      {/* Bottom section - Add a Clip button with safety margin for mobile */}
+      <div className="px-3 py-3 pb-6 md:pb-4 mt-auto flex-shrink-0 bg-gotham-black border-t border-gray-800">
         <button
-          className="w-full btn btn-sm btn-primary"
+          className="w-full bg-bat-yellow text-black py-3 rounded-md font-medium text-sm"
           onClick={() => setShowClipSelector(true)}
         >
           Add a Clip
         </button>
       </div>
+
+      {/* Animation selector modal */}
+      {showClipSelector && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-11/12 max-w-lg shadow-xl">
+            <AnimationList
+              title="Add a Clip"
+              onSelectAnimation={handleSelectExistingAnimation}
+              onClose={() => setShowClipSelector(false)}
+              showThumbnails={true}
+              maxHeight="max-h-72"
+              containerClassName="overflow-hidden w-full"
+              transformAnimations={getAnimationsWithCreateOption}
+              renderSpecialItem={renderSpecialItem}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
