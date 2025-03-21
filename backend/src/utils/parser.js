@@ -1,4 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
+const { JSDOM } = require('jsdom');
 
 /**
  * Extract SVG code and explanatory text from the LLM response
@@ -149,12 +150,12 @@ function createErrorSvg(errorMessage) {
  * @returns {string} - The processed SVG string
  */
 function processEmojis(svg) {
-  // Create a DOM parser to parse the SVG content
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(svg, 'image/svg+xml');
+  // Create a virtual DOM using JSDOM for Node.js environment
+  const dom = new JSDOM(`<!DOCTYPE html><html><body>${svg}</body></html>`);
+  const document = dom.window.document;
 
   // Find all text elements in the SVG
-  const textElements = doc.querySelectorAll('text');
+  const textElements = document.querySelectorAll('text');
 
   // Ensure proper rendering of emojis in the text elements
   textElements.forEach(textElement => {
@@ -164,9 +165,9 @@ function processEmojis(svg) {
     }
   });
 
-  // Serialize the modified SVG back to a string
-  const serializer = new XMLSerializer();
-  return serializer.serializeToString(doc);
+  // Get the processed SVG from the DOM
+  const svgElement = document.body.firstChild;
+  return svgElement ? svgElement.outerHTML : svg;
 }
 
 /**
