@@ -175,17 +175,25 @@ export function useStoryboardGenerator(
 
       // Skip already completed scenes
       const remainingScenes = storyboardResponse.scenes.slice(startSceneIndex);
-
-      // Log existing clips to help with debugging
-      console.log('Existing clips:', storyboard.clips.map(clip => ({
-        id: clip.id,
-        name: clip.name,
-        hasPrompt: !!clip.prompt,
-        hasAnimationId: !!clip.animationId
-      })));
-
-      // If no scenes left, just mark as complete
-      if (remainingScenes.length === 0) {
+      
+      // Create a map of existing clip orders to detect which scenes already have clips
+      const existingClipOrders = new Set(storyboard.clips.map(clip => clip.order));
+      console.log('Existing clip orders:', Array.from(existingClipOrders));
+      
+      // Check for scenes that need to be regenerated because they're missing
+      const scenesNeedingGeneration = remainingScenes.filter((_, index) => {
+        const absoluteIndex = index + startSceneIndex;
+        const hasExistingClip = existingClipOrders.has(absoluteIndex);
+        if (hasExistingClip) {
+          console.log(`Scene at index ${absoluteIndex} already has a clip, skipping`);
+        }
+        return !hasExistingClip; // Only keep scenes without existing clips
+      });
+      
+      console.log(`After filtering: ${scenesNeedingGeneration.length} of ${remainingScenes.length} scenes need generation`);
+      
+      // If no scenes left to generate, just mark as complete
+      if (scenesNeedingGeneration.length === 0) {
         console.log('No remaining scenes to generate, marking as complete');
 
         // Update status to completed
@@ -213,12 +221,12 @@ export function useStoryboardGenerator(
         return;
       }
 
-      console.log(`Found ${remainingScenes.length} remaining scenes to generate`);
+      console.log(`Found ${scenesNeedingGeneration.length} remaining scenes to generate`);
 
       // Create modified response with only remaining scenes
       const resumedResponse = {
         ...storyboardResponse,
-        scenes: remainingScenes
+        scenes: scenesNeedingGeneration
       };
 
       // Process the remaining scenes - pass true for isResuming
@@ -263,6 +271,37 @@ export function useStoryboardGenerator(
     isResuming = false
   ) => {
     console.log('Beginning storyboard generation...');
+    
+    // CRITICAL FIX: If there are no scenes to process, bail out early
+    if (!storyboard.scenes || storyboard.scenes.length === 0) {
+      console.log('No scenes to process, skipping generation');
+      
+      // If we're resuming, just mark the storyboard as complete
+      if (isResuming && currentStoryboard) {
+        setCurrentStoryboard(prevStoryboard => {
+          const completedStoryboard = {
+            ...prevStoryboard,
+            updatedAt: new Date(),
+            generationStatus: {
+              ...prevStoryboard.generationStatus!,
+              inProgress: false,
+              completedAt: new Date()
+            }
+          };
+          
+          // Save the completed storyboard
+          MovieStorageApi.saveMovie(completedStoryboard)
+            .catch(err => console.error('Error saving completed storyboard:', err));
+            
+          return completedStoryboard;
+        });
+      }
+      
+      // Hide modals and reset state
+      setShowGeneratingClipsModal(false);
+      setIsGenerating(false);
+      return;
+    }
 
     // If we're starting from the beginning, create a new storyboard
     let storyboardId: string;
@@ -295,16 +334,26 @@ export function useStoryboardGenerator(
       // We're resuming an existing storyboard or continuing from a non-zero index
       if (isResuming) {
         console.log(`Continuing with existing storyboard ID: ${currentStoryboard!.id} (resume operation)`);
+        console.log(`Preserving ${currentStoryboard!.clips.length} existing clips`);
       } else {
         console.log(`Continuing from scene ${startingSceneIndex} with storyboard ID: ${currentStoryboard!.id}`);
       }
       
       storyboardId = currentStoryboard!.id;
 
-      // Use the current storyboard as starting point
+      // CRITICAL FIX: We need to make a deep copy of existing clips to ensure we preserve them
+      const existingClips = currentStoryboard!.clips ? 
+        JSON.parse(JSON.stringify(currentStoryboard!.clips)) : [];
+      
+      // Log the existing clips we're preserving (important for debugging)
+      console.log(`Preserving ${existingClips.length} existing clips during resume/continue`);
+      
+      // Use the current storyboard as starting point - WITH the existing clips
       newStoryboard = {
         ...currentStoryboard!,
         updatedAt: new Date(),
+        // CRITICAL: Ensure we preserve the existing clips
+        clips: existingClips,
         generationStatus: {
           ...currentStoryboard!.generationStatus!,
           inProgress: true,
@@ -374,6 +423,22 @@ export function useStoryboardGenerator(
         // Skip if already processed to prevent duplicate processing
         if (processedScenes.has(absoluteSceneIndex)) {
           console.log(`Scene ${absoluteSceneIndex+1} already processed, skipping`);
+          return;
+        }
+        
+        // CRITICAL FIX: Check if this scene already has a clip with matching order
+        // This prevents regenerating existing clips during resume
+        const existingClipWithOrder = newStoryboard.clips.find(clip => clip.order === absoluteSceneIndex);
+        if (existingClipWithOrder) {
+          console.log(`Scene ${absoluteSceneIndex+1} already has existing clip '${existingClipWithOrder.name}', skipping generation`);
+          // Mark as processed to prevent further attempts
+          processedScenes.add(absoluteSceneIndex);
+          // Update progress to include this pre-existing clip
+          updateGenerationProgress(
+            absoluteSceneIndex,
+            startingSceneIndex + totalScenes,
+            startingSceneIndex > 0 ? startingSceneIndex : undefined
+          );
           return;
         }
 
