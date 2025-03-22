@@ -11,6 +11,13 @@ const movieStorageController = require('../controllers/movie.storage.controller'
 router.post('/generate-storyboard', movieController.generateStoryboard);
 
 /**
+ * @route POST /api/movie/generate-scene
+ * @desc Generate a scene animation with movie context
+ * @access Public
+ */
+router.post('/generate-scene', movieController.generateScene);
+
+/**
  * Movie storage endpoints
  */
 router.post('/save', movieStorageController.saveMovie);

@@ -154,39 +154,69 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     }
   };
 
-  // Get list of saved storyboard IDs, combining server and local storage
+  /**
+   * Get saved storyboards from the server
+   */
   const getSavedStoryboards = useCallback(async () => {
     try {
-      // Get storyboards from server
-      let storyboardIds: string[] = [];
+      // Try to fetch from server first
+      let updatedSavedStoryboards: Record<string, Storyboard> = {};
+      
       try {
+        console.log('Fetching storyboards from server...');
         const serverStoryboards = await MovieStorageApi.listMovies();
-        storyboardIds = serverStoryboards.map(sb => sb.id);
-
+        
+        console.log(`Received ${serverStoryboards.length} storyboards from server`);
+        
+        // Convert to record format
+        updatedSavedStoryboards = serverStoryboards.reduce((acc, storyboard) => {
+          acc[storyboard.id] = storyboard;
+          return acc;
+        }, {} as Record<string, Storyboard>);
+        
         // Check for force refresh flag and clear it if present
         const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
         if (forceRefresh) {
           sessionStorage.removeItem('force_server_refresh');
           console.log('Forced server refresh requested - using server data only for movies');
-          setSavedStoryboards(storyboardIds);
-          return storyboardIds;
+          const serverIds = serverStoryboards.map(sb => sb.id);
+          setSavedStoryboards(serverIds);
+          return serverIds;
         }
-      } catch (serverError) {
-        console.warn('Error getting storyboards from server:', serverError);
+      } catch (error) {
+        console.error('Error fetching storyboards from server:', error);
+        // Will fall back to localStorage
       }
 
-      // Also include storyboards from local storage
+      // Also try to get from localStorage as fallback or to merge with server data
       try {
         const localIds = getSavedStoryboardsFromStorage();
-
-        storyboardIds = [...new Set([...storyboardIds, ...localIds])];
+        
+        // Get local storyboards data
+        const localStoryboards = JSON.parse(localStorage.getItem(STORYBOARD_STORAGE_KEY) || '{}');
+        
+        // Merge local and server storyboards
+        const mergedStoryboards = { ...updatedSavedStoryboards };
+        
+        // Add local storyboards that aren't in the server data
+        localIds.forEach(id => {
+          if (!mergedStoryboards[id] && localStoryboards[id]) {
+            mergedStoryboards[id] = localStoryboards[id];
+          }
+        });
+        
+        // Update saved storyboards list with merged IDs
+        const mergedIds = Object.keys(mergedStoryboards);
+        setSavedStoryboards(mergedIds);
+        
+        return mergedIds;
       } catch (localError) {
         console.error('Error getting storyboards from local storage:', localError);
       }
-
-      // Always update the state with the latest combined list
-      setSavedStoryboards(storyboardIds);
-      return storyboardIds;
+      
+      // If we get here, there was an error with both server and local storage
+      // Return an empty array to maintain the return type
+      return [];
     } catch (error) {
       console.error('Error getting saved storyboards:', error);
       return [];
@@ -310,8 +340,21 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
               updatedAt: new Date(serverStoryboard.updatedAt)
             };
 
+            // Check if we have clips data
+            if (!storyboard.clips || storyboard.clips.length === 0) {
+              // Important warning to help debugging
+              console.warn(`Storyboard "${storyboard.name}" loaded with 0 clips despite having ${storyboard.generationStatus?.completedScenes || 0} completed scenes.`);
+            }
+
             setCurrentStoryboard(storyboard);
-            setActiveClipId(storyboard.clips.length > 0 ? storyboard.clips[0].id : null);
+            
+            // Find the first clip by order
+            if (storyboard.clips && storyboard.clips.length > 0) {
+              const sortedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
+              setActiveClipId(sortedClips[0].id);
+            } else {
+              setActiveClipId(null);
+            }
 
             console.log(`Loaded storyboard from server: ${storyboard.name}`);
             return true;

@@ -32,22 +32,28 @@ class StorageService {
 
   /**
    * Save animation data
-   * @param {string} name - Animation name
-   * @param {Object} data - Animation data (SVG content and optional chat history)
+   * @param {Object} animation - Animation object containing id, name, svg content and optional chat history
    * @returns {Promise<string>} The ID of the saved animation
    */
-  async saveAnimation(name, data) {
+  async saveAnimation(animation) {
     try {
-      const id = data.id || uuidv4();
+      if (!animation) {
+        throw new Error('Animation object is required');
+      }
+      
+      // Ensure animation has an ID
+      const id = animation.id || uuidv4();
       const filename = `${id}.json`;
       const filePath = path.join(ANIMATIONS_DIR, filename);
 
+      // Create standardized animation data
       const animationData = {
         id,
-        name,
-        svg: data.svg,
-        chatHistory: data.chatHistory || [],
-        timestamp: data.timestamp || new Date().toISOString()
+        name: animation.name || 'Untitled Animation',
+        svg: animation.svg,
+        chatHistory: animation.chatHistory || [],
+        provider: animation.provider,
+        timestamp: animation.createdAt || new Date().toISOString()
       };
 
       await fs.writeFile(filePath, JSON.stringify(animationData, null, 2));

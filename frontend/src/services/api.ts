@@ -222,7 +222,6 @@ export const AnimationApi = {
   /**
    * Generate a new SVG animation with movie context data
    * This will allow the backend to update the movie JSON file directly
-   * NOTE: This is not yet implemented on the backend - logging only for now
    */
   generateWithMovieContext: async (
     prompt: string,
@@ -234,37 +233,87 @@ export const AnimationApi = {
       sceneDuration?: number;
       sceneDescription?: string;
     }
-  ): Promise<{ svg: string; message: string; animationId?: string }> => {
-    // Log that we're using the movie context version (for debugging)
-    console.log(`Generating animation with movie context using ${provider}`, {
-      storyboardId: movieContext.storyboardId,
-      sceneIndex: movieContext.sceneIndex,
-      sceneCount: movieContext.sceneCount
-    });
-    
+  ): Promise<{ 
+    svg: string; 
+    message: string; 
+    animationId?: string;
+    movieUpdateStatus?: {
+      storyboardId: string;
+      clipId: string;
+      sceneIndex: number;
+      completedScenes: number;
+      totalScenes: number;
+      inProgress: boolean;
+    }
+  }> => {
     try {
-      // TODO: When backend endpoint is implemented, use this instead:
-      // const data = await fetchApi<any>(
-      //   '/movie/generate-scene',
-      //   {
-      //     method: 'POST',
-      //     body: JSON.stringify({ 
-      //       prompt, 
-      //       provider,
-      //       movieContext 
-      //     }),
-      //   }
-      // );
+      // Set a longer timeout for movie generation
+      const timeoutMs = parseInt(import.meta.env.VITE_REQUEST_TIMEOUT_MS || '300000', 10);
       
-      // For now, just use the regular generate endpoint
-      // but log that we would have sent movie context
-      console.log('[MOVIE-CONTEXT] Would send storyboard context to backend for automatic updates');
+      // Use an AbortController to allow cancellation if it takes too long
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.log(`Request timeout of ${timeoutMs/1000} seconds reached, aborting generation`);
+        controller.abort();
+      }, timeoutMs);
       
-      // Call the regular generate method
-      return await AnimationApi.generate(prompt, provider);
+      try {
+        // Call the API with timeout protection and movie context
+        const data = await fetchApi<any>(
+          '/movie/generate-scene',
+          {
+            method: 'POST',
+            body: JSON.stringify({ 
+              prompt, 
+              provider,
+              movieContext 
+            }),
+            signal: controller.signal
+          }
+        );
+        
+        // Clear the timeout
+        clearTimeout(timeoutId);
+        
+        // Handle the response
+        if (data.svg) {
+          return {
+            svg: data.svg,
+            message: data.message || 'Animation created successfully!',
+            animationId: data.animationId,
+            movieUpdateStatus: data.movieUpdateStatus,
+          };
+        } else {
+          throw new Error('Invalid response: missing SVG content');
+        }
+      } catch (fetchError) {
+        // Clear the timeout if there was an error
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
     } catch (error) {
       console.error('Error generating animation with movie context:', error);
-      throw error;
+      
+      // Create a fallback error SVG
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+        <rect width="800" height="600" fill="#1a1a2e" />
+        <circle cx="400" cy="200" r="50" fill="#e63946" />
+        <text x="400" y="320" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+          Error Generating Animation
+        </text>
+        <text x="400" y="360" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
+          ${errorMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+        </text>
+        <text x="400" y="400" font-family="Arial" font-size="14" fill="#999999" text-anchor="middle">
+          Please try again with a different prompt
+        </text>
+      </svg>`;
+
+      return {
+        svg: errorSvg,
+        message: `Error: ${errorMessage}`
+      };
     }
   },
 
@@ -546,11 +595,38 @@ export const MovieStorageApi = {
    */
   getMovie: async (id: string): Promise<Storyboard | null> => {
     try {
+      console.log(`Fetching movie with ID: ${id} from server`);
       const data = await fetchApi<any>(`/movie/${id}`);
 
       if (data.success && data.movie) {
+        // Log details about the loaded storyboard, specifically focusing on clips
+        console.log(`Successfully loaded movie '${data.movie.name}' (ID: ${id}) from server`);
+        console.log(`Movie clip data:`, {
+          clipCount: data.movie.clips?.length || 0,
+          hasClips: Array.isArray(data.movie.clips) && data.movie.clips.length > 0,
+          clipDetails: Array.isArray(data.movie.clips) ? 
+            data.movie.clips.map((clip: any, index: number) => ({
+              index,
+              id: clip.id,
+              name: clip.name,
+              hasContent: !!clip.svgContent,
+              contentLength: clip.svgContent?.length || 0,
+              hasAnimationId: !!clip.animationId,
+              order: clip.order
+            })) : 'No clips'
+        });
+        
+        // If no clips found, this might be a server-side issue
+        if (!data.movie.clips || data.movie.clips.length === 0) {
+          console.warn(`Movie '${data.movie.name}' has no clips. This might indicate a server-side issue.`);
+          if (data.movie.generationStatus?.completedScenes > 0) {
+            console.warn(`Generation status shows ${data.movie.generationStatus.completedScenes} completed scenes but no clips found!`);
+          }
+        }
+        
         return data.movie;
       } else {
+        console.error(`Invalid response when loading movie ${id}:`, data);
         throw new Error('Invalid response from server');
       }
     } catch (error) {

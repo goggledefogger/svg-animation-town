@@ -19,6 +19,14 @@ interface AnimationGenerateResponse {
   svg: string;
   message: string;
   animationId?: string;
+  movieUpdateStatus?: {
+    storyboardId: string;
+    clipId: string;
+    sceneIndex: number;
+    completedScenes: number;
+    totalScenes: number;
+    inProgress: boolean;
+  };
 }
 
 /**
@@ -123,42 +131,22 @@ export function useStoryboardGenerator(
     console.log('Resuming storyboard generation from scene:', storyboard.generationStatus?.completedScenes || 0);
 
     try {
-      // Add detailed debugging information
-      console.log('Resume details:', {
-        storyboardId: storyboard.id,
-        name: storyboard.name,
-        clipCount: storyboard.clips?.length || 0,
-        hasOriginalScenes: !!storyboard.originalScenes,
-        originalScenesCount: storyboard.originalScenes?.length || 0,
-        responseSceneCount: storyboardResponse.scenes?.length || 0,
-        generationStatus: storyboard.generationStatus
-      });
-      
-      // FUTURE BACKEND-ASSISTED MOVIE GENERATION:
-      // In the future, we could have a backend endpoint to handle resuming generation
-      // This would let the server track state and avoid synchronization issues
-      console.log('[MOVIE-CONTEXT] In the future, resuming would be handled by the backend');
-      console.log('[MOVIE-CONTEXT] Backend would receive:', {
-        storyboardId: storyboard.id,
-        aiProvider,
-        resumeFromScene: storyboard.clips?.length || 0
-      });
-
-      // Start from where we left off - use the actual number of clips as the source of truth
-      // for what scenes have been completed
-      const completedScenesFromClips = storyboard.clips?.length || 0;
-      const officialCompletedCount = storyboard.generationStatus?.completedScenes || 0;
-
-      // Log any discrepancy between clip count and completed scene count
-      if (completedScenesFromClips !== officialCompletedCount) {
-        console.warn(`Discrepancy detected: ${completedScenesFromClips} clips vs ${officialCompletedCount} recorded completed scenes`);
+      // Ensure we have clips array
+      if (!storyboard.clips) {
+        storyboard.clips = [];
       }
-
-      // Always use clip count as the definitive measure of what's been completed
-      let startSceneIndex = completedScenesFromClips;
-
-      console.log(`Resume calculation: Found ${completedScenesFromClips} existing clips`);
-      console.log(`Will resume from scene index ${startSceneIndex}`);
+      
+      // Get a list of orders from existing clips to avoid regenerating them
+      const existingClipOrders = new Set(storyboard.clips.map(clip => clip.order));
+      
+      // Calculate the next scene index to generate based on existing clips
+      let startSceneIndex = 0;
+      
+      // If we have existing clips, find the highest order + 1
+      if (storyboard.clips.length > 0) {
+        const highestOrder = Math.max(...Array.from(existingClipOrders));
+        startSceneIndex = highestOrder + 1;
+      }
 
       // Validate scenes are available
       if (!storyboardResponse.scenes || storyboardResponse.scenes.length === 0) {
@@ -168,7 +156,6 @@ export function useStoryboardGenerator(
       // Verify scene data is complete
       storyboardResponse.scenes.forEach((scene, idx) => {
         if (!scene.svgPrompt) {
-          console.error(`Scene at index ${idx} is missing svgPrompt`, scene);
           throw new Error(`Invalid scene data at index ${idx}: missing svgPrompt`);
         }
       });
@@ -176,21 +163,12 @@ export function useStoryboardGenerator(
       // Skip already completed scenes
       const remainingScenes = storyboardResponse.scenes.slice(startSceneIndex);
       
-      // Create a map of existing clip orders to detect which scenes already have clips
-      const existingClipOrders = new Set(storyboard.clips.map(clip => clip.order));
-      console.log('Existing clip orders:', Array.from(existingClipOrders));
-      
-      // Check for scenes that need to be regenerated because they're missing
+      // Filter scenes that still need generation
       const scenesNeedingGeneration = remainingScenes.filter((_, index) => {
         const absoluteIndex = index + startSceneIndex;
         const hasExistingClip = existingClipOrders.has(absoluteIndex);
-        if (hasExistingClip) {
-          console.log(`Scene at index ${absoluteIndex} already has a clip, skipping`);
-        }
         return !hasExistingClip; // Only keep scenes without existing clips
       });
-      
-      console.log(`After filtering: ${scenesNeedingGeneration.length} of ${remainingScenes.length} scenes need generation`);
       
       // If no scenes left to generate, just mark as complete
       if (scenesNeedingGeneration.length === 0) {
@@ -208,7 +186,7 @@ export function useStoryboardGenerator(
             }
           };
 
-          // Force a save of the final state
+          // Save the final state
           MovieStorageApi.saveMovie(finalStoryboard).catch(err => {
             console.error('Error in final storyboard save:', err);
           });
@@ -422,18 +400,13 @@ export function useStoryboardGenerator(
 
         // Skip if already processed to prevent duplicate processing
         if (processedScenes.has(absoluteSceneIndex)) {
-          console.log(`Scene ${absoluteSceneIndex+1} already processed, skipping`);
           return;
         }
         
-        // CRITICAL FIX: Check if this scene already has a clip with matching order
-        // This prevents regenerating existing clips during resume
+        // Skip if this scene already has a clip with matching order
         const existingClipWithOrder = newStoryboard.clips.find(clip => clip.order === absoluteSceneIndex);
         if (existingClipWithOrder) {
-          console.log(`Scene ${absoluteSceneIndex+1} already has existing clip '${existingClipWithOrder.name}', skipping generation`);
-          // Mark as processed to prevent further attempts
           processedScenes.add(absoluteSceneIndex);
-          // Update progress to include this pre-existing clip
           updateGenerationProgress(
             absoluteSceneIndex,
             startingSceneIndex + totalScenes,
@@ -446,162 +419,92 @@ export function useStoryboardGenerator(
 
         try {
           console.log(`Generating SVG for scene ${absoluteSceneIndex+1}/${startingSceneIndex + totalScenes}: ${scene.id || 'Untitled'}`);
-          console.log(`Prompt: ${scene.svgPrompt.substring(0, 100)}${scene.svgPrompt.length > 100 ? '...' : ''}`);
+          
+          // Prepare movie context for backend request
+          const movieContext = {
+            storyboardId: newStoryboard.id,
+            sceneIndex: absoluteSceneIndex,
+            sceneCount: storyboard.scenes.length,
+            sceneDuration: scene.duration || 5,
+            sceneDescription: scene.description || ''
+          };
 
-          // Generate SVG for this scene, with error handling for mobile timeouts
+          // Use backend-assisted generation - this will handle updating the movie JSON
           let result: AnimationGenerateResponse | null = null;
           let retryCount = 0;
           const maxRetries = 1; // One retry attempt
 
           while (retryCount <= maxRetries && !result) {
             try {
-              // Generate without a manual timeout promise - rely on the API's built-in timeout
-              // result = await AnimationApi.generate(scene.svgPrompt, aiProvider);
-              
-              // FUTURE BACKEND-ASSISTED MOVIE GENERATION:
-              // Instead of directly calling generate, we'll log diagnostic info
-              // and prepare for the backend-assisted version
-              console.log('[MOVIE-CONTEXT] Preparing to generate scene with movie context');
-              
-              // This is where we would use the movie context version when ready
-              // For now, just log that we would use it and continue with regular generate
-              const movieContext = {
-                storyboardId: newStoryboard.id,
-                sceneIndex: absoluteSceneIndex,
-                sceneCount: storyboard.scenes.length,
-                sceneDuration: scene.duration || 5,
-                sceneDescription: scene.description || ''
-              };
-              console.log('[MOVIE-CONTEXT] Movie context for scene generation:', movieContext);
-              
-              // Use the regular generate for now, but in future we would use:
-              result = await AnimationApi.generate(scene.svgPrompt, aiProvider);
-              // result = await AnimationApi.generateWithMovieContext(
-              //   scene.svgPrompt,
-              //   aiProvider,
-              //   movieContext
-              // );
-
-              // Verify the generated SVG is valid
-              if (!result || !result.svg || !result.svg.includes('<svg')) {
-                throw new Error(`Invalid SVG generated for scene ${absoluteSceneIndex+1}`);
-              }
-
-              // Only update progress counter when scene is actually completed
-              updateGenerationProgress(
-                absoluteSceneIndex, // Pass the completed scene index
-                startingSceneIndex + totalScenes,
-                startingSceneIndex > 0 ? startingSceneIndex : undefined
+              // Generate with movie context to enable backend-assisted generation
+              result = await AnimationApi.generateWithMovieContext(
+                scene.svgPrompt,
+                aiProvider,
+                movieContext
               );
 
-              // Create chat history for this scene
-              const chatHistory = [{
-                id: uuidv4(),
-                sender: 'user' as 'user',
-                text: scene.svgPrompt,
-                timestamp: new Date()
-              }, {
-                id: uuidv4(),
-                sender: 'ai' as 'ai',
-                text: result.message,
-                timestamp: new Date()
-              }];
-
-              // Get the scene name
-              const sceneName = `Scene ${absoluteSceneIndex + 1}: ${scene.description || 'Untitled'}`;
-
-              // Detailed animation ID logging only for missing IDs
-              if (!result.animationId) {
-                console.warn(`No animation ID returned for scene ${absoluteSceneIndex+1}`);
-              } else {
-                console.log(`Generated animation ID for scene ${absoluteSceneIndex+1}: ${result.animationId}`);
-              }
-
-              // Add this scene to the storyboard
-              const newClip: MovieClip = {
-                id: uuidv4(),
-                name: sceneName,
-                svgContent: result.svg,
-                duration: scene.duration || 5,
-                order: absoluteSceneIndex,
-                prompt: scene.svgPrompt,
-                chatHistory,
-                // Add a timestamp to track when this was created
-                createdAt: new Date(),
-                // Store the animation ID (which might be undefined)
-                animationId: result.animationId,
-                // Store the provider used to generate this clip
-                provider: aiProvider
-              };
-
-              // Update the storyboard with the new clip and updated generation status
-              setCurrentStoryboard(prevStoryboard => {
-                try {
-                  // Create a deep copy of the existing clips to avoid reference issues
-                  const existingClips = JSON.parse(JSON.stringify(prevStoryboard.clips || []));
-
-                  // Check if this clip already exists by order
-                  const exists = existingClips.some((clip: MovieClip) => clip.order === absoluteSceneIndex);
-                  if (exists) {
-                    console.warn(`Clip with order ${absoluteSceneIndex} already exists, not adding duplicate`);
+              // Check if the backend successfully updated the movie JSON
+              if (result && result.movieUpdateStatus) {
+                // For backend-assisted generation, use the server's information to update local state
+                const { sceneIndex, completedScenes, totalScenes, clipId } = result.movieUpdateStatus;
+                
+                // Update progress to reflect the server's state
+                updateGenerationProgress(
+                  sceneIndex,
+                  totalScenes,
+                  startingSceneIndex > 0 ? startingSceneIndex : undefined
+                );
+                
+                // Create a clip object for local state only - the backend already saved it
+                const newClip = {
+                  id: clipId,
+                  name: `Scene ${absoluteSceneIndex + 1}${scene.description ? ': ' + scene.description : ''}`,
+                  svgContent: result.svg,
+                  duration: scene.duration || 5,
+                  order: absoluteSceneIndex,
+                  prompt: scene.svgPrompt,
+                  chatHistory: [{
+                    id: uuidv4(),
+                    sender: 'user' as 'user',
+                    text: scene.svgPrompt,
+                    timestamp: new Date()
+                  }, {
+                    id: uuidv4(),
+                    sender: 'ai' as 'ai',
+                    text: result.message,
+                    timestamp: new Date()
+                  }],
+                  animationId: result.animationId,
+                  createdAt: new Date(),
+                  provider: aiProvider
+                };
+                
+                // Update frontend state to match backend state
+                setCurrentStoryboard(prevStoryboard => {
+                  const clipExists = prevStoryboard.clips.some(c => c.order === absoluteSceneIndex);
+                  
+                  if (clipExists) {
                     return prevStoryboard;
                   }
-
-                  // Important: Create a fresh newClip object to ensure all properties are correctly serialized
-                  const clipToAdd = {
-                    id: newClip.id,
-                    name: newClip.name,
-                    svgContent: newClip.svgContent,
-                    duration: newClip.duration,
-                    order: newClip.order,
-                    prompt: newClip.prompt || "",
-                    chatHistory: newClip.chatHistory || [],
-                    createdAt: newClip.createdAt,
-                    provider: newClip.provider,
-                    // Store the animation ID with detailed logging if missing
-                    animationId: result?.animationId
-                  };
-
-                  if (!result?.animationId) {
-                    console.warn(`Adding clip #${absoluteSceneIndex+1} with missing animationId`);
-                  }
-
-                  const updatedStoryboard = {
+                  
+                  const updatedClips = [...prevStoryboard.clips, newClip];
+                  updatedClips.sort((a, b) => a.order - b.order);
+                  
+                  return {
                     ...prevStoryboard,
-                    clips: [...existingClips, clipToAdd],
+                    clips: updatedClips,
                     updatedAt: new Date(),
                     generationStatus: {
                       ...prevStoryboard.generationStatus!,
-                      // IMPORTANT: Only update completedScenes AFTER successful generation
-                      completedScenes: Math.max(prevStoryboard.generationStatus?.completedScenes || 0, absoluteSceneIndex + 1)
+                      completedScenes: completedScenes,
+                      inProgress: result?.movieUpdateStatus?.inProgress ?? prevStoryboard.generationStatus!.inProgress
                     }
                   };
-
-                  // Log the update
-                  console.log(`Updated storyboard with clip #${absoluteSceneIndex+1}, now has ${updatedStoryboard.clips.length} clips`);
-
-                  // CRITICAL FIX: Save the storyboard directly with the updated clips
-                  // We need to save the storyboard directly using the updated object, not the React state
-                  MovieStorageApi.saveMovie(updatedStoryboard)
-                    .then(result => {
-                      console.log(`Saved storyboard after adding clip #${absoluteSceneIndex+1}, server ID: ${result.id}`);
-                    })
-                    .catch(err => {
-                      console.error(`Error saving storyboard after adding clip #${absoluteSceneIndex+1}:`, err);
-                    });
-
-                  // Increment our local counter for successful clips
-                  successfulClipsCount++;
-
-                  return updatedStoryboard;
-                } catch (updateError) {
-                  console.error(`Error updating storyboard with clip #${absoluteSceneIndex+1}:`, updateError);
-                  return prevStoryboard;
-                }
-              });
-
-              // Success report with minimal information
-              console.log(`Generated scene ${absoluteSceneIndex+1}: ${sceneName}`);
+                });
+                
+                successfulClipsCount++;
+                return;
+              }
             } catch (sceneError) {
               // Handle errors for this specific scene
               console.error(`Error generating scene ${absoluteSceneIndex+1}:`, sceneError);
@@ -615,11 +518,9 @@ export function useStoryboardGenerator(
 
               // If we've exhausted retries, continue to the next scene
               if (retryCount > maxRetries) {
-                console.warn(`Failed to generate scene ${absoluteSceneIndex+1} after ${maxRetries} retries, continuing to next scene`);
-                
                 // Update storyboard to reflect the error for this scene
                 setCurrentStoryboard(prevStoryboard => {
-                  const updatedStoryboard = {
+                  return {
                     ...prevStoryboard,
                     updatedAt: new Date(),
                     generationStatus: {
@@ -627,11 +528,91 @@ export function useStoryboardGenerator(
                       error: `Failed to generate scene ${absoluteSceneIndex+1}: ${sceneError instanceof Error ? sceneError.message : String(sceneError)}`
                     }
                   };
-                  return updatedStoryboard;
                 });
               }
             }
           }
+
+          // If we got here, the backend didn't properly update the movie, fall back to regular generate
+          if (!result || !result.svg || !result.svg.includes('<svg')) {
+            throw new Error(`Invalid SVG generated for scene ${absoluteSceneIndex+1}`);
+          }
+
+          // Continue with the fallback approach - create clip and save it ourselves
+          updateGenerationProgress(
+            absoluteSceneIndex,
+            startingSceneIndex + totalScenes,
+            startingSceneIndex > 0 ? startingSceneIndex : undefined
+          );
+
+          const chatHistory = [{
+            id: uuidv4(),
+            sender: 'user' as 'user',
+            text: scene.svgPrompt,
+            timestamp: new Date()
+          }, {
+            id: uuidv4(),
+            sender: 'ai' as 'ai',
+            text: result.message,
+            timestamp: new Date()
+          }];
+
+          const sceneName = `Scene ${absoluteSceneIndex + 1}: ${scene.description || 'Untitled'}`;
+
+          const newClip: MovieClip = {
+            id: uuidv4(),
+            name: sceneName,
+            svgContent: result.svg,
+            duration: scene.duration || 5,
+            order: absoluteSceneIndex,
+            prompt: scene.svgPrompt,
+            chatHistory,
+            createdAt: new Date(),
+            animationId: result.animationId,
+            provider: aiProvider
+          };
+
+          // Update the storyboard with the new clip
+          setCurrentStoryboard(prevStoryboard => {
+            const existingClips = JSON.parse(JSON.stringify(prevStoryboard.clips || []));
+            const exists = existingClips.some((clip: MovieClip) => clip.order === absoluteSceneIndex);
+            
+            if (exists) {
+              return prevStoryboard;
+            }
+
+            const clipToAdd = {
+              id: newClip.id,
+              name: newClip.name,
+              svgContent: newClip.svgContent,
+              duration: newClip.duration,
+              order: newClip.order,
+              prompt: newClip.prompt || "",
+              chatHistory: newClip.chatHistory || [],
+              createdAt: newClip.createdAt,
+              provider: newClip.provider,
+              animationId: result?.animationId
+            };
+
+            const updatedStoryboard = {
+              ...prevStoryboard,
+              clips: [...existingClips, clipToAdd],
+              updatedAt: new Date(),
+              generationStatus: {
+                ...prevStoryboard.generationStatus!,
+                completedScenes: Math.max(prevStoryboard.generationStatus?.completedScenes || 0, absoluteSceneIndex + 1)
+              }
+            };
+
+            // Save the storyboard via the API to ensure the backend has the updated clips
+            MovieStorageApi.saveMovie(updatedStoryboard)
+              .catch(err => {
+                console.error(`Error saving storyboard:`, err);
+              });
+
+            successfulClipsCount++;
+            return updatedStoryboard;
+          });
         } catch (sceneError) {
           // Handle any other errors for this scene
           console.error(`Unhandled error for scene ${absoluteSceneIndex+1}:`, sceneError);
