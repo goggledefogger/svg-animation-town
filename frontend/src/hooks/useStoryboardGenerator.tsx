@@ -29,6 +29,18 @@ interface AnimationGenerateResponse {
   };
 }
 
+type GenerationStatus = {
+  inProgress: boolean;
+  totalScenes: number;
+  completedScenes: number;
+  startingFromScene?: number;
+};
+
+type SceneGenerationError = {
+  sceneIndex: number;
+  error: string;
+};
+
 /**
  * Hook for managing storyboard generation
  */
@@ -349,17 +361,10 @@ export function useStoryboardGenerator(
     }
 
     try {
-      // Set the initial storyboard and save it to the server right away
+      // Set current storyboard and show generating clips modal
       setCurrentStoryboard(newStoryboard);
       setShowGeneratingClipsModal(true);
-
-      // Initialize the progress with the total count and starting point but no completed scenes yet
-      updateGenerationProgress(
-        null, // null indicates initialization rather than completion
-        storyboard.scenes.length,
-        startingSceneIndex > 0 ? startingSceneIndex : undefined
-      );
-
+      
       // Save the initial storyboard to the server using direct API call
       console.log('Saving initial/resumed storyboard to server...');
       try {
@@ -376,8 +381,8 @@ export function useStoryboardGenerator(
         console.error('Error saving initial/resumed storyboard:', error);
       }
 
-      // Track any scene generation errors
-      const errors: { sceneIndex: number, error: string }[] = [];
+      // Track scene generation errors
+      const errors: SceneGenerationError[] = [];
 
       // Track successful clips locally to avoid state timing issues
       let successfulClipsCount = 0;
@@ -388,6 +393,13 @@ export function useStoryboardGenerator(
       const totalScenes = storyboard.scenes.length;
       // If we're resuming and have originalSceneCount, use that for total scene count
       const totalScenesForProgress = (storyboard as any).originalSceneCount || totalScenes;
+
+      // Update the initial progress with the correct total
+      updateGenerationProgress(
+        null, // null indicates initialization rather than completion
+        totalScenesForProgress, // Use the consistent total count for progress
+        startingSceneIndex > 0 ? startingSceneIndex : undefined
+      );
 
       // Create an array to track which scenes have been processed to avoid duplicates
       const processedScenes = new Set<number>();
@@ -413,9 +425,10 @@ export function useStoryboardGenerator(
           processedScenes.add(absoluteSceneIndex);
           updateGenerationProgress(
             absoluteSceneIndex,
-            startingSceneIndex + totalScenesForProgress,
+            totalScenesForProgress,
             startingSceneIndex > 0 ? startingSceneIndex : undefined
           );
+          successfulClipsCount++;
           return;
         }
 
@@ -494,7 +507,7 @@ export function useStoryboardGenerator(
                   const updatedClips = [...prevStoryboard.clips, newClip];
                   updatedClips.sort((a, b) => a.order - b.order);
                   
-                  return {
+                  const updatedStoryboard = {
                     ...prevStoryboard,
                     clips: updatedClips,
                     updatedAt: new Date(),
@@ -504,9 +517,17 @@ export function useStoryboardGenerator(
                       inProgress: result?.movieUpdateStatus?.inProgress ?? prevStoryboard.generationStatus!.inProgress
                     }
                   };
+
+                  // Save the storyboard via the API to ensure the backend has the updated clips
+                  MovieStorageApi.saveMovie(updatedStoryboard)
+                    .catch(err => {
+                      console.error(`Error saving storyboard:`, err);
+                    });
+
+                  successfulClipsCount++;
+                  return updatedStoryboard;
                 });
                 
-                successfulClipsCount++;
                 return;
               }
             } catch (sceneError) {
@@ -545,7 +566,7 @@ export function useStoryboardGenerator(
           // Continue with the fallback approach - create clip and save it ourselves
           updateGenerationProgress(
             absoluteSceneIndex,
-            startingSceneIndex + totalScenesForProgress,
+            totalScenesForProgress,
             startingSceneIndex > 0 ? startingSceneIndex : undefined
           );
 
@@ -681,7 +702,7 @@ export function useStoryboardGenerator(
         return finalStoryboard;
       });
 
-      // Report final status with errors if any
+      // Log completion success
       console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
       if (errors.length > 0) {
         console.error(`Encountered ${errors.length} errors during generation`);
