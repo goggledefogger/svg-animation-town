@@ -53,16 +53,24 @@ const AnimationEditor = () => {
     <div className="flex flex-col h-screen h-mobile-screen overflow-hidden">
       <Header />
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        {/* Main content area with simplified layout */}
-        <div className="flex flex-col h-[calc(100vh-64px)] h-mobile-screen-minus-header md:flex-row md:overflow-hidden">
-          {/* Animation container with smooth transitions - using max-h for proper responsiveness when chat is open */}
-          <div className={`relative flex items-center justify-center flex-1 md:w-2/3 overflow-hidden transition-all duration-300 ease-in-out ${showChat ? 'max-h-[calc(100vh-64px-280px)]' : 'h-[calc(100vh-64px)]'}`}>
-            <AnimationCanvas style={{ borderRadius: '12px', transition: 'all 0.3s ease-in-out' }} />
-          </div>
+        {/* Main content area with proper flex layout */}
+        <div className="flex flex-col md:flex-row flex-1 h-full w-full overflow-hidden">
+          {/* Animation container */}
+          <div className={`relative flex flex-col items-center justify-between flex-auto md:flex-1 md:w-2/3 overflow-hidden ${
+            showChat
+              ? 'h-[calc(100vh-64px-280px)] md:h-full' // Mobile: account for header + chat height, Desktop: full height
+              : 'h-[calc(100vh-64px)] md:h-full'        // Mobile: account for header only, Desktop: full height
+          }`}>
+            {/* Animation content wrapper - takes available space minus controls */}
+            <div className={`flex-1 w-full flex items-center justify-center overflow-hidden
+              pb-16 md:pb-20 ${showChat ? 'max-h-[calc(100vh-64px-280px)]' : ''} md:max-h-[calc(100vh-64px-60px)]`}>
+              <AnimationCanvas style={{ borderRadius: '12px', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+            </div>
 
-          {/* Controls overlay */}
-          <div className="absolute bottom-2 left-2 right-2 md:bottom-4 md:left-4 md:right-4 z-10">
-            <AnimationControls />
+            {/* Controls overlay - positioned at bottom with proper spacing */}
+            <div className="absolute bottom-2 left-2 right-2 md:bottom-4 md:left-4 md:right-4 z-10">
+              <AnimationControls />
+            </div>
           </div>
 
           {/* Chat section with smooth transitions */}
