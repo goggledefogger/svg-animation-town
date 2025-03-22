@@ -285,7 +285,16 @@ class StorageService {
       );
 
       // Filter out any nulls from errors
-      return movies.filter(Boolean);
+      const validMovies = movies.filter(Boolean);
+
+      // Sort by updatedAt in descending order (newest first)
+      validMovies.sort((a, b) => {
+        const dateA = new Date(a.updatedAt);
+        const dateB = new Date(b.updatedAt);
+        return dateB - dateA; // Descending order (newest first)
+      });
+
+      return validMovies;
     } catch (error) {
       console.error('Error listing movies:', error);
       throw error;
