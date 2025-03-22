@@ -204,7 +204,9 @@ export function useStoryboardGenerator(
       // Create modified response with only remaining scenes
       const resumedResponse = {
         ...storyboardResponse,
-        scenes: scenesNeedingGeneration
+        scenes: scenesNeedingGeneration,
+        // Keep original scene count for correct progress display
+        originalSceneCount: storyboardResponse.scenes.length
       };
 
       // Process the remaining scenes - pass true for isResuming
@@ -384,6 +386,8 @@ export function useStoryboardGenerator(
       // For OpenAI we limit concurrency on the client side
       // For Claude we let the server's rate limiter handle it completely
       const totalScenes = storyboard.scenes.length;
+      // If we're resuming and have originalSceneCount, use that for total scene count
+      const totalScenesForProgress = (storyboard as any).originalSceneCount || totalScenes;
 
       // Create an array to track which scenes have been processed to avoid duplicates
       const processedScenes = new Set<number>();
@@ -409,7 +413,7 @@ export function useStoryboardGenerator(
           processedScenes.add(absoluteSceneIndex);
           updateGenerationProgress(
             absoluteSceneIndex,
-            startingSceneIndex + totalScenes,
+            startingSceneIndex + totalScenesForProgress,
             startingSceneIndex > 0 ? startingSceneIndex : undefined
           );
           return;
@@ -418,13 +422,13 @@ export function useStoryboardGenerator(
         processedScenes.add(absoluteSceneIndex);
 
         try {
-          console.log(`Generating SVG for scene ${absoluteSceneIndex+1}/${startingSceneIndex + totalScenes}: ${scene.id || 'Untitled'}`);
+          console.log(`Generating SVG for scene ${absoluteSceneIndex+1}/${startingSceneIndex + totalScenesForProgress}: ${scene.id || 'Untitled'}`);
           
           // Prepare movie context for backend request
           const movieContext = {
             storyboardId: newStoryboard.id,
             sceneIndex: absoluteSceneIndex,
-            sceneCount: storyboard.scenes.length,
+            sceneCount: totalScenesForProgress,
             sceneDuration: scene.duration || 5,
             sceneDescription: scene.description || ''
           };
@@ -541,7 +545,7 @@ export function useStoryboardGenerator(
           // Continue with the fallback approach - create clip and save it ourselves
           updateGenerationProgress(
             absoluteSceneIndex,
-            startingSceneIndex + totalScenes,
+            startingSceneIndex + totalScenesForProgress,
             startingSceneIndex > 0 ? startingSceneIndex : undefined
           );
 

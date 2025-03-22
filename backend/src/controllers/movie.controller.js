@@ -160,16 +160,21 @@ exports.generateScene = asyncHandler(async (req, res) => {
         totalScenes: movieContext.sceneCount,
         completedScenes: 0
       };
+    } else {
+      // If the movie already has a generation status, preserve the original total scene count
+      // This ensures we maintain "7/7" instead of "7/1" when resuming
+      const totalScenes = Math.max(movie.generationStatus.totalScenes || 0, movieContext.sceneCount);
+      movie.generationStatus.totalScenes = totalScenes;
     }
     
     // Update completion count to match the highest order + 1
     const highestOrder = Math.max(...movie.clips.map(clip => clip.order), -1);
     movie.generationStatus.completedScenes = highestOrder + 1;
     
-    console.log(`Updated generation status: completed ${movie.generationStatus.completedScenes}/${movieContext.sceneCount} scenes`);
+    console.log(`Updated generation status: completed ${movie.generationStatus.completedScenes}/${movie.generationStatus.totalScenes} scenes`);
     
     // If we've generated all scenes, mark as complete
-    if (movie.generationStatus.completedScenes >= movieContext.sceneCount) {
+    if (movie.generationStatus.completedScenes >= movie.generationStatus.totalScenes) {
       movie.generationStatus.inProgress = false;
       movie.generationStatus.completedAt = new Date();
       console.log('All scenes completed, marked generation as complete');
@@ -193,7 +198,7 @@ exports.generateScene = asyncHandler(async (req, res) => {
         clipId: clipId,
         sceneIndex: movieContext.sceneIndex,
         completedScenes: movie.generationStatus.completedScenes,
-        totalScenes: movieContext.sceneCount,
+        totalScenes: movie.generationStatus.totalScenes,
         inProgress: movie.generationStatus.inProgress
       }
     });
