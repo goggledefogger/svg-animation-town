@@ -878,7 +878,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           showEmptyState || isLoading ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <EmptyState loading={isLoading} showMessage={false} />
+        <EmptyState loading={isLoading} />
       </div>
 
       {/* SVG container with automatic centering - fade out when loading */}
