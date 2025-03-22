@@ -133,6 +133,16 @@ export function useStoryboardGenerator(
         responseSceneCount: storyboardResponse.scenes?.length || 0,
         generationStatus: storyboard.generationStatus
       });
+      
+      // FUTURE BACKEND-ASSISTED MOVIE GENERATION:
+      // In the future, we could have a backend endpoint to handle resuming generation
+      // This would let the server track state and avoid synchronization issues
+      console.log('[MOVIE-CONTEXT] In the future, resuming would be handled by the backend');
+      console.log('[MOVIE-CONTEXT] Backend would receive:', {
+        storyboardId: storyboard.id,
+        aiProvider,
+        resumeFromScene: storyboard.clips?.length || 0
+      });
 
       // Start from where we left off - use the actual number of clips as the source of truth
       // for what scenes have been completed
@@ -375,7 +385,31 @@ export function useStoryboardGenerator(
           while (retryCount <= maxRetries && !result) {
             try {
               // Generate without a manual timeout promise - rely on the API's built-in timeout
+              // result = await AnimationApi.generate(scene.svgPrompt, aiProvider);
+              
+              // FUTURE BACKEND-ASSISTED MOVIE GENERATION:
+              // Instead of directly calling generate, we'll log diagnostic info
+              // and prepare for the backend-assisted version
+              console.log('[MOVIE-CONTEXT] Preparing to generate scene with movie context');
+              
+              // This is where we would use the movie context version when ready
+              // For now, just log that we would use it and continue with regular generate
+              const movieContext = {
+                storyboardId: newStoryboard.id,
+                sceneIndex: absoluteSceneIndex,
+                sceneCount: storyboard.scenes.length,
+                sceneDuration: scene.duration || 5,
+                sceneDescription: scene.description || ''
+              };
+              console.log('[MOVIE-CONTEXT] Movie context for scene generation:', movieContext);
+              
+              // Use the regular generate for now, but in future we would use:
               result = await AnimationApi.generate(scene.svgPrompt, aiProvider);
+              // result = await AnimationApi.generateWithMovieContext(
+              //   scene.svgPrompt,
+              //   aiProvider,
+              //   movieContext
+              // );
 
               // Verify the generated SVG is valid
               if (!result || !result.svg || !result.svg.includes('<svg')) {

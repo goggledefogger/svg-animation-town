@@ -218,6 +218,55 @@ export const AnimationApi = {
       };
     }
   },
+  
+  /**
+   * Generate a new SVG animation with movie context data
+   * This will allow the backend to update the movie JSON file directly
+   * NOTE: This is not yet implemented on the backend - logging only for now
+   */
+  generateWithMovieContext: async (
+    prompt: string,
+    provider: 'openai' | 'claude' = 'openai',
+    movieContext: {
+      storyboardId: string;
+      sceneIndex: number;
+      sceneCount: number;
+      sceneDuration?: number;
+      sceneDescription?: string;
+    }
+  ): Promise<{ svg: string; message: string; animationId?: string }> => {
+    // Log that we're using the movie context version (for debugging)
+    console.log(`Generating animation with movie context using ${provider}`, {
+      storyboardId: movieContext.storyboardId,
+      sceneIndex: movieContext.sceneIndex,
+      sceneCount: movieContext.sceneCount
+    });
+    
+    try {
+      // TODO: When backend endpoint is implemented, use this instead:
+      // const data = await fetchApi<any>(
+      //   '/movie/generate-scene',
+      //   {
+      //     method: 'POST',
+      //     body: JSON.stringify({ 
+      //       prompt, 
+      //       provider,
+      //       movieContext 
+      //     }),
+      //   }
+      // );
+      
+      // For now, just use the regular generate endpoint
+      // but log that we would have sent movie context
+      console.log('[MOVIE-CONTEXT] Would send storyboard context to backend for automatic updates');
+      
+      // Call the regular generate method
+      return await AnimationApi.generate(prompt, provider);
+    } catch (error) {
+      console.error('Error generating animation with movie context:', error);
+      throw error;
+    }
+  },
 
   /**
    * Update existing animation based on user prompt
