@@ -61,8 +61,7 @@ class StorageService {
 
       // Write the file with error handling
       try {
-        // Log the start of the save operation
-        console.log(`[STORAGE SAVE] Starting save of animation ${id}, SVG length: ${animation.svg?.length || 0}`);
+        console.log(`Saving animation ${id}, SVG length: ${animation.svg?.length || 0}`);
         
         // Use a more reliable write approach with fsync to ensure file is written to disk
         // First, write to a temporary file
@@ -79,7 +78,6 @@ class StorageService {
           try {
             // Force data to be flushed to the physical storage device
             await fileHandle.sync();
-            console.log(`[STORAGE SAVE] Successfully synced animation data for ${id} to disk`);
           } finally {
             // Always close the file handle
             await fileHandle.close();
@@ -87,13 +85,10 @@ class StorageService {
           
           // Move the temp file to the actual file (should be atomic on most systems)
           await fs.rename(tempFilePath, filePath);
-          
-          console.log(`[STORAGE SAVE] Successfully moved temp file to final location for ${id}`);
         } catch (syncError) {
-          console.error(`[STORAGE SAVE] Error syncing animation ${id}:`, syncError);
+          console.error(`Error syncing animation ${id}:`, syncError);
           // Fallback to basic write if sync fails
           await fs.writeFile(filePath, jsonData, 'utf8');
-          console.log(`[STORAGE SAVE] Fallback write completed for ${id}`);
         }
         
         // Verify the file was written correctly by reading it back
@@ -105,20 +100,18 @@ class StorageService {
           if (!parsedData || !parsedData.svg) {
             throw new Error('Verification failed: Animation written to disk lacks SVG content');
           }
-          
-          console.log(`[STORAGE SAVE] Animation ${id} successfully written and verified on disk`);
         } catch (verifyError) {
-          console.error(`[STORAGE SAVE] Failed to verify animation ${id} was properly saved:`, verifyError);
+          console.error(`Failed to verify animation ${id} was properly saved:`, verifyError);
           throw new Error(`Animation save verification failed: ${verifyError.message}`);
         }
       } catch (writeError) {
-        console.error(`[STORAGE SAVE] Failed to write animation ${id} to disk:`, writeError);
+        console.error(`Failed to write animation ${id} to disk:`, writeError);
         throw writeError;
       }
       
       return id;
     } catch (error) {
-      console.error('[STORAGE SAVE] Error saving animation:', error);
+      console.error('Error saving animation:', error);
       throw error;
     }
   }
@@ -133,29 +126,18 @@ class StorageService {
       throw new Error('Animation ID is required');
     }
     
-    const requestTime = new Date().toISOString();
-    console.log(`[STORAGE] ${requestTime}: Attempting to retrieve animation ${id}`);
-    
     try {
       const filePath = path.join(ANIMATIONS_DIR, `${id}.json`);
       
       // Check if file exists first
       try {
         const fileStats = await fs.stat(filePath);
-        console.log(`[STORAGE] ${requestTime}: Animation file for ${id} exists: ${JSON.stringify({
-          size: fileStats.size,
-          created: fileStats.birthtime,
-          modified: fileStats.mtime,
-          accessTime: fileStats.atime,
-          isFile: fileStats.isFile()
-        })}`);
       } catch (accessError) {
-        console.error(`[STORAGE] ${requestTime}: Animation file for ID ${id} does not exist or is not accessible: ${accessError.message}`);
+        console.error(`Animation file for ID ${id} does not exist or is not accessible: ${accessError.message}`);
         throw new Error(`Animation with ID ${id} not found`);
       }
       
       try {
-        console.log(`[STORAGE] ${requestTime}: Reading file for animation ${id}`);
         const data = await fs.readFile(filePath, 'utf8');
         
         try {
@@ -163,29 +145,28 @@ class StorageService {
           
           // Validate animation data
           if (!animation) {
-            console.error(`[STORAGE] ${requestTime}: Animation ${id} parsed but is null/undefined`);
+            console.error(`Animation ${id} parsed but is null/undefined`);
             throw new Error(`Animation ${id} exists but has invalid content (null/undefined)`);
           }
           
           if (!animation.svg) {
-            console.error(`[STORAGE] ${requestTime}: Animation ${id} exists but has no SVG content, keys: ${Object.keys(animation).join(', ')}`);
+            console.error(`Animation ${id} exists but has no SVG content, keys: ${Object.keys(animation).join(', ')}`);
             throw new Error(`Animation ${id} exists but has no SVG content`);
           }
           
-          console.log(`[STORAGE] ${requestTime}: Successfully retrieved animation ${id}, SVG length: ${animation.svg.length}`);
           return animation;
         } catch (parseError) {
-          console.error(`[STORAGE] ${requestTime}: Failed to parse JSON for animation ${id}: ${parseError.message}`);
+          console.error(`Failed to parse JSON for animation ${id}: ${parseError.message}`);
           throw parseError instanceof SyntaxError 
             ? new Error(`Animation ${id} contains invalid JSON: ${parseError.message}`)
             : parseError;
         }
       } catch (readError) {
-        console.error(`[STORAGE] ${requestTime}: Error reading animation file ${id}: ${readError.message}`);
+        console.error(`Error reading animation file ${id}: ${readError.message}`);
         throw readError;
       }
     } catch (error) {
-      console.error(`[STORAGE] ${requestTime}: Error getting animation ${id}: ${error.message}`);
+      console.error(`Error getting animation ${id}: ${error.message}`);
       throw error;
     }
   }
