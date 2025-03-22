@@ -20,6 +20,10 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const svgContainerRef = useRef<HTMLDivElement>(null);
   const currentSvgRef = useRef<SVGSVGElement | null>(null);
 
+  // Add render counter to track excessive renders
+  const renderCountRef = useRef(0);
+  console.log(`[RENDER TRACKING] AnimationCanvas render #${++renderCountRef.current} at ${new Date().toISOString()} - storyboardId: ${currentStoryboard?.id}, activeClipId: ${activeClipId}`);
+
   // Use a state variable to track whether we're showing the empty state or the SVG
   const [showEmptyState, setShowEmptyState] = useState(true);
   // Track loading state from API calls

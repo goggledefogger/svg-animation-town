@@ -169,8 +169,13 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
                     >
                       {firstClip && firstClip.svgContent ? (
                         <>
+                          {/* Log SVG content loading for debugging */}
                           {/* Using iframe for isolated SVG rendering */}
-                          <div className="absolute inset-0 flex items-center justify-center bg-white">
+                          <div className="absolute inset-0 flex items-center justify-center bg-white"
+                            ref={() => {
+                              console.log(`[IFRAME TRACKING] Loading SVG content for storyboard ${storyboard.name} (${storyboard.id}), content length: ${firstClip.svgContent.length}`);
+                            }}
+                          >
                             <iframe
                               srcDoc={firstClip.svgContent}
                               className="w-full h-full border-0"
