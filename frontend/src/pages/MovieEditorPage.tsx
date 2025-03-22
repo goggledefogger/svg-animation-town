@@ -121,7 +121,16 @@ const MovieEditorPage: React.FC = () => {
     fetchStoryboards();
   }, [loadStoryboard]);
 
-  // Check for movie ID in URL
+  // Add a new function to handle proper storyboard creation
+  const handleCreateNewStoryboard = useCallback(() => {
+    console.log('Creating new storyboard and resetting generation check flag');
+    // Clear the incomplete check flag to ensure it doesn't interfere with new storyboards
+    sessionStorage.removeItem('hasCheckedIncompleteGeneration');
+    // Create a new storyboard
+    createNewStoryboard();
+  }, [createNewStoryboard]);
+
+  // Update the URL parameter handling
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const movieId = urlParams.get('id');
@@ -134,22 +143,22 @@ const MovieEditorPage: React.FC = () => {
           if (!success) {
             console.error(`Failed to load movie with ID: ${movieId}`);
             alert(`Movie with ID "${movieId}" not found. Creating a new storyboard instead.`);
-            // Create new storyboard
-            createNewStoryboard();
+            // Create new storyboard with the reset function
+            handleCreateNewStoryboard();
           } else {
             modalManager.showToastNotification(`Storyboard loaded successfully!`);
           }
         } catch (error) {
           console.error(`Error loading movie with ID ${movieId}:`, error);
           alert(`Error loading movie: ${error instanceof Error ? error.message : 'Unknown error'}. Creating a new storyboard instead.`);
-          // Create new storyboard
-          createNewStoryboard();
+          // Create new storyboard with the reset function
+          handleCreateNewStoryboard();
         }
       };
 
       loadMovieFromUrl();
     }
-  }, [loadStoryboard, createNewStoryboard]);
+  }, [loadStoryboard, handleCreateNewStoryboard]);
 
   // Create a utility function to add an existing animation as a clip
   const addExistingAnimationAsClip = async (animationId: string, animationName: string) => {
@@ -250,9 +259,27 @@ const MovieEditorPage: React.FC = () => {
         // Only run this if we're not already generating something
         if (storyboardGenerator.isGenerating) return;
 
+        // Add sessionStorage flag to prevent infinite loop
+        const hasCheckedIncomplete = sessionStorage.getItem('hasCheckedIncompleteGeneration');
+        if (hasCheckedIncomplete === 'true') {
+          console.log('Already checked for incomplete generation this session, skipping check');
+          return;
+        }
+
+        console.log('Checking for incomplete storyboard generation...');
+        
         // Check if there's a current storyboard that's incomplete
         if (currentStoryboard?.generationStatus?.inProgress) {
-          console.log('Found incomplete storyboard generation:', currentStoryboard.id);
+          console.log('Found incomplete storyboard generation:', {
+            id: currentStoryboard.id,
+            name: currentStoryboard.name,
+            clipCount: currentStoryboard.clips.length,
+            hasOriginalScenes: !!currentStoryboard.originalScenes,
+            originalScenesCount: currentStoryboard.originalScenes?.length || 0
+          });
+
+          // Set the flag to prevent infinite loop
+          sessionStorage.setItem('hasCheckedIncompleteGeneration', 'true');
 
           // Show a confirmation to the user
           const shouldResume = window.confirm(
@@ -277,26 +304,111 @@ const MovieEditorPage: React.FC = () => {
             };
 
             // If we have the original scenes data stored, use it
-            if (currentStoryboard.originalScenes) {
+            if (currentStoryboard.originalScenes && currentStoryboard.originalScenes.length > 0) {
+              console.log('Using original scenes for resume:', currentStoryboard.originalScenes.length);
               resumeStoryboardResponse.scenes = currentStoryboard.originalScenes;
             } else {
-              // Without original scenes, we can only infer from clips
-              // This is a fallback and may not work perfectly
-              console.warn('No original scenes data found, using limited resume capability');
+              console.warn('No original scenes data found, attempting to reconstruct from clips');
+              
+              // Attempt to reconstruct scenes from existing clips
+              currentStoryboard.clips.forEach((clip, index) => {
+                // Only add if we have the necessary data
+                if (clip.prompt) {
+                  resumeStoryboardResponse.scenes.push({
+                    id: clip.id,
+                    description: clip.name,
+                    svgPrompt: clip.prompt,
+                    duration: clip.duration || 5,
+                    provider: aiProvider as 'openai' | 'claude'
+                  });
+                  console.log(`Reconstructed scene ${index + 1} from clip: ${clip.name}`);
+                }
+              });
+              
+              // If we still couldn't reconstruct any scenes, show an error
+              if (resumeStoryboardResponse.scenes.length === 0) {
+                console.error('Could not reconstruct scenes from existing clips');
+                modalManager.showToastNotification('Could not resume generation - missing scene data', 'error');
+                modalManager.setShowGeneratingClipsModal(false);
+                storyboardGenerator.setIsGenerating(false);
+                
+                // Clear the inProgress flag to prevent future attempts
+                const updatedStoryboard = {
+                  ...currentStoryboard,
+                  generationStatus: {
+                    ...currentStoryboard.generationStatus,
+                    inProgress: false,
+                    error: 'Missing scene data for resume'
+                  }
+                };
+                setCurrentStoryboard(updatedStoryboard);
+                saveStoryboard();
+                return;
+              }
             }
 
+            // Log the reconstructed response
+            console.log('Resuming with storyboard data:', {
+              title: resumeStoryboardResponse.title,
+              sceneCount: resumeStoryboardResponse.scenes.length
+            });
+
             // Resume from the last completed scene
-            await storyboardGenerator.resumeStoryboardGeneration(currentStoryboard, resumeStoryboardResponse, aiProvider);
+            try {
+              await storyboardGenerator.resumeStoryboardGeneration(currentStoryboard, resumeStoryboardResponse, aiProvider);
+            } catch (error) {
+              console.error('Error during resume generation:', error);
+              // Clear the inProgress flag to prevent future attempts
+              const updatedStoryboard = {
+                ...currentStoryboard,
+                generationStatus: {
+                  ...currentStoryboard.generationStatus,
+                  inProgress: false,
+                  error: error instanceof Error ? error.message : 'Unknown error during resume'
+                }
+              };
+              setCurrentStoryboard(updatedStoryboard);
+              saveStoryboard();
+              
+              modalManager.showToastNotification('Failed to resume generation', 'error');
+            } finally {
+              modalManager.setShowGeneratingClipsModal(false);
+              storyboardGenerator.setIsGenerating(false);
+            }
+          } else {
+            console.log('User declined to resume generation');
+            // User declined to resume - clear the inProgress flag
+            const updatedStoryboard = {
+              ...currentStoryboard,
+              generationStatus: {
+                ...currentStoryboard.generationStatus,
+                inProgress: false
+              }
+            };
+            setCurrentStoryboard(updatedStoryboard);
+            saveStoryboard();
           }
+        } else {
+          console.log('No incomplete storyboard generation found');
         }
       } catch (error) {
         console.error('Error checking for incomplete generations:', error);
+        // Set the flag to prevent infinite loop
+        sessionStorage.setItem('hasCheckedIncompleteGeneration', 'true');
       }
     };
 
     // Run the check when the component mounts
     checkIncompleteGenerations();
   }, [currentStoryboard, storyboardGenerator]);
+
+  // Add a reset function to clear the incomplete check flag when creating a new storyboard
+  useEffect(() => {
+    // Clear the incomplete check flag when creating a new storyboard
+    if (currentStoryboard && !currentStoryboard.generationStatus?.inProgress) {
+      sessionStorage.removeItem('hasCheckedIncompleteGeneration');
+    }
+  }, [currentStoryboard?.id]);
 
   // Function to reset application state
   const resetApplication = useCallback(() => {
@@ -314,6 +426,9 @@ const MovieEditorPage: React.FC = () => {
 
     // Reload the page to ensure a clean state
     window.location.reload();
+
+    // Clear sessionStorage flags
+    sessionStorage.removeItem('hasCheckedIncompleteGeneration');
   }, [createNewStoryboard]);
 
   const handleClipSelect = (clipId: string) => {
