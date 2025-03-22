@@ -177,9 +177,9 @@ exports.generateScene = asyncHandler(async (req, res) => {
       movie.generationStatus.totalScenes = totalScenes;
     }
     
-    // Update completion count to match the highest order + 1
-    const highestOrder = Math.max(...movie.clips.map(clip => clip.order), -1);
-    movie.generationStatus.completedScenes = highestOrder + 1;
+    // Update completion count based on the number of clips we have after this addition
+    // This ensures we count actual generated clips, not just the highest scene index
+    movie.generationStatus.completedScenes = movie.clips.length;
     
     console.log(`Updated generation status: completed ${movie.generationStatus.completedScenes}/${movie.generationStatus.totalScenes} scenes`);
     
