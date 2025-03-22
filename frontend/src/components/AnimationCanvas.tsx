@@ -9,6 +9,97 @@ interface AnimationCanvasProps {
   style?: React.CSSProperties;
 }
 
+// Custom hook to manage animation loading state
+const useAnimationLoader = (setSvgContent: (content: string) => void, createPlaceholderSvg: (message: string) => string) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const loadingTimeoutRef = useRef<number | null>(null);
+
+  // Start loading animation
+  const startLoading = useCallback(() => {
+    setIsLoading(true);
+
+    // Clear any existing timeout
+    if (loadingTimeoutRef.current !== null) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+  }, []);
+
+  // End loading with delay
+  const endLoading = useCallback((delay = 1500) => {
+    // Clear any existing timeout
+    if (loadingTimeoutRef.current !== null) {
+      clearTimeout(loadingTimeoutRef.current);
+    }
+
+    // Set new timeout
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      setIsLoading(false);
+      loadingTimeoutRef.current = null;
+    }, delay);
+  }, []);
+
+  // Load animation from server
+  const loadAnimation = useCallback(async (animationId: string, isNew = false) => {
+    if (!animationId) return false;
+
+    startLoading();
+    console.log(`[Animation Loading] Loading animation ${animationId}`);
+
+    try {
+      const animation = await MovieStorageApi.getClipAnimation(animationId);
+
+      if (animation && animation.svg) {
+        console.log(`[Animation Loading] Successfully loaded animation (${animation.svg.length} bytes)`);
+        setSvgContent(animation.svg);
+        endLoading();
+        return true;
+      } else {
+        console.error(`[Animation Loading] Animation found but no SVG content available`);
+        const errorMessage = isNew
+          ? 'Animation is being created. Please wait a moment...'
+          : 'No animation content available';
+        setSvgContent(createPlaceholderSvg(errorMessage));
+        endLoading();
+        return false;
+      }
+    } catch (error: any) {
+      console.error(`[Animation Loading] Error loading animation:`, error);
+
+      // Create message based on error type
+      let errorMessage = `Error loading animation: ${error.message}`;
+
+      if (error.message?.includes('404') || error.message?.includes('not found')) {
+        if (isNew) {
+          errorMessage = 'Animation is still being created. Please wait or refresh in a few minutes.';
+        } else {
+          errorMessage = 'Animation not found. It may have been deleted or failed to generate.';
+        }
+      }
+
+      setSvgContent(createPlaceholderSvg(errorMessage));
+      endLoading();
+      return false;
+    }
+  }, [startLoading, endLoading, setSvgContent, createPlaceholderSvg]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (loadingTimeoutRef.current !== null) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    isLoading,
+    startLoading,
+    endLoading,
+    loadAnimation
+  };
+};
+
 const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   svgContent: propSvgContent,
   style
@@ -24,8 +115,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const renderCountRef = useRef(0);
   // Use a state variable to track whether we're showing the empty state or the SVG
   const [showEmptyState, setShowEmptyState] = useState(true);
-  // Track loading state from API calls
-  const [isLoading, setIsLoading] = useState(false);
   // Track if a message has been sent to hide the empty state
   const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
 
@@ -123,7 +212,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // This is crucial because displaySvgContent includes the combined sources
       if (displaySvgContent !== activeClip.svgContent) {
         // Set loading state before updating to prevent flashes
-        setIsLoading(true);
+        startLoading();
 
         console.log(`[Animation] Using cached SVG content for clip ${activeClip.id} (${activeClip.svgContent.length} bytes)`);
 
@@ -137,7 +226,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
           // Delay removing loading state to allow the DOM to update first
           setTimeout(() => {
-            setIsLoading(false);
+            endLoading(0); // immediate
             // Clear the clip change pending flag once we've settled
             clipChangePendingRef.current = false;
           }, 50);
@@ -145,7 +234,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       }
     } else if (activeClip.animationId) {
       // If no SVG content but we have an animation ID, fetch it from server
-      setIsLoading(true);
       clipChangePendingRef.current = true;
 
       // Add detailed logging about this animation loading attempt
@@ -160,69 +248,27 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         order: activeClip.order
       });
 
+      // Make loading state visible immediately
+      setShowEmptyState(false);
+      setHasMessageBeenSent(true);
+
       // Check if this is a new clip that might still be in the process of being created
       const clipIsNew = activeClip.createdAt &&
         (new Date().getTime() - new Date(activeClip.createdAt).getTime() < 5 * 60 * 1000); // 5 minutes
 
-      // Fetch the animation using the ID - using the enhanced API method that validates SVG content
-      MovieStorageApi.getClipAnimation(activeClip.animationId || '')
-        .then(animation => {
-          if (animation && animation.svg) {
-            console.log(`[Animation Loading] Successfully loaded animation (${animation.svg.length} bytes) for clip: ${activeClip.id}`);
-
-            // Update the clip in the storyboard with the SVG content
-            updateClip(activeClip.id, { svgContent: animation.svg });
-
-            // Prevent setting the same content again
-            if (displaySvgContent !== animation.svg) {
-              setSvgContent(animation.svg);
-            }
-          } else {
-            // This case should be caught by the enhanced API method validation
-            console.error(`[Animation Loading] Animation found for clip ${activeClip.id} but no SVG content available`);
-
-            // Create a placeholder SVG
-            let errorMessage = 'No animation content available';
-            if (clipIsNew) {
-              errorMessage = 'Animation is being created. Please wait a moment...';
-            }
-            setSvgContent(createPlaceholderSvg(errorMessage));
+      // Use our custom hook to load the animation
+      loadAnimation(activeClip.animationId || '', clipIsNew)
+        .then(success => {
+          if (success) {
+            // If we successfully loaded the animation, update the clip in the storyboard
+            updateClip(activeClip.id, { svgContent: contextSvgContent || '' });
           }
-        })
-        .catch(error => {
-          console.error(`[Animation Loading] Error loading animation for clip ${activeClip.id}:`, {
-            error: error.message,
-            clipData: {
-              id: activeClip.id,
-              name: activeClip.name,
-              animationId: activeClip.animationId,
-              order: activeClip.order,
-              createdAt: activeClip.createdAt
-            },
-            isNew: clipIsNew,
-            loadAttemptTime
-          });
-
-          // Create a placeholder SVG with error message based on context
-          let errorMessage = `Error loading animation: ${error.message}`;
-
-          // If this is a 404 error and the clip is new, it might still be processing
-          if (error.message?.includes('404') || error.message?.includes('not found')) {
-            if (clipIsNew) {
-              errorMessage = 'Animation is still being created. Please wait or refresh in a few minutes.';
-            } else {
-              errorMessage = 'Animation not found. It may have been deleted or failed to generate.';
-            }
-          }
-
-          setSvgContent(createPlaceholderSvg(errorMessage));
         })
         .finally(() => {
-          // Add slight delay before removing loading state to prevent flickering
+          // Clear the pending flag after a delay
           setTimeout(() => {
-            setIsLoading(false);
             clipChangePendingRef.current = false;
-          }, 50);
+          }, 300);
         });
 
     } else {
@@ -232,7 +278,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   }, [activeClipId, getActiveClip, updateClip, propSvgContent, contextSvgContent, displaySvgContent, setSvgContent]);
 
   // Helper function to create a placeholder SVG with an error message
-  const createPlaceholderSvg = (message: string): string => {
+  const createPlaceholderSvg = useCallback((message: string): string => {
     // Determine color based on message type
     let color = '#e63946'; // Default error color (red)
 
@@ -300,7 +346,15 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         Load Attempt: ${new Date().toISOString()}
       </text>
     </svg>`;
-  };
+  }, [getActiveClip]);
+
+  // Use our animation loader hook
+  const {
+    isLoading,
+    startLoading,
+    endLoading,
+    loadAnimation
+  } = useAnimationLoader(setSvgContent, createPlaceholderSvg);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -474,18 +528,26 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   useEffect(() => {
     // Function to listen for API calls starting
     const handleApiCallStart = () => {
-      setIsLoading(true);
+      console.log('[Loading] API call started, showing loading animation');
+      startLoading();
       setHasMessageBeenSent(true);
       setShowEmptyState(false);
     };
 
     // Function to listen for API calls completing
     const handleApiCallEnd = () => {
-      // Add a delay before hiding the loading animation to ensure it's visible
-      // Longer on mobile to account for slower rendering
-      const delay = window.innerWidth < 768 ? 800 : 600;
+      console.log('[Loading] API call ended, will hide loading animation after delay');
+      // Use a much longer delay to ensure the loading state is visible
+      // This gives users clear feedback that something is happening
+      const delay = window.innerWidth < 768 ? 2000 : 1500;
       setTimeout(() => {
-        setIsLoading(false);
+        // Only hide loading if we're not in the middle of another operation
+        if (!clipChangePendingRef.current) {
+          endLoading(0); // immediate
+          console.log('[Loading] Loading animation hidden');
+        } else {
+          console.log('[Loading] Keeping loading animation visible due to pending operation');
+        }
       }, delay);
     };
 
@@ -498,6 +560,17 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // Remove event listeners on cleanup
       window.removeEventListener('api-call-start', handleApiCallStart);
       window.removeEventListener('api-call-end', handleApiCallEnd);
+      window.removeEventListener('animation-updated', handleAnimationUpdated);
+    };
+  }, [displaySvgContent, setupSvgElement]);
+
+  // Only listen for animation updates
+  useEffect(() => {
+    // Add event listener for animation updates
+    window.addEventListener('animation-updated', handleAnimationUpdated);
+
+    return () => {
+      // Remove event listener on cleanup
       window.removeEventListener('animation-updated', handleAnimationUpdated);
     };
   }, [displaySvgContent, setupSvgElement]);
@@ -564,41 +637,49 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     };
   }, [displaySvgContent, getSvgContainer]);
 
-  // Monitor clip change events to ensure SVG updates even if state doesn't trigger re-renders
+  // Create a prefetchClipAnimation function that can be called directly
+  const prefetchClipAnimation = useCallback((clipId: string) => {
+    console.log(`[Clip Change] Handling clip change to ${clipId}`);
+
+    // Set flag that we're in the middle of a clip change
+    clipChangePendingRef.current = true;
+
+    // Get the clip info
+    const clip = getActiveClip();
+
+    if (clip && clip.animationId && !clip.svgContent) {
+      console.log(`[Clip Change] Will prefetch animation for clip ${clip.id} with animationId ${clip.animationId}`);
+      // Show loading state for user feedback
+      startLoading();
+
+      // The clip change effect will handle the actual loading since
+      // it monitors activeClipId changes
+    }
+
+    // Clear the pending flag after a short delay to allow state to settle
+    setTimeout(() => {
+      clipChangePendingRef.current = false;
+    }, 300);
+  }, [getActiveClip]);
+
+  // Monitor for clip change events (keep for backward compatibility)
   useEffect(() => {
-    // Function to handle clip change events
     const handleClipChanged = (event: Event) => {
       const customEvent = event as CustomEvent;
+      const { clipId } = customEvent.detail;
 
-      console.log(`[EVENT LISTENER] Received clip-changed event at ${new Date().toISOString()} for clip ${customEvent.detail.clipId}`);
-
-      // Set flag that we're in the middle of a clip change
-      clipChangePendingRef.current = true;
-
-      // If the clip already has SVG content, we'll get that through the normal React props
-      // But if it has an animationId and no content, we might need to prefetch the animation
-      if (customEvent.detail.hasAnimationId && !customEvent.detail.svgContentAvailable) {
-        const clip = getActiveClip();
-        if (clip && clip.animationId && !clip.svgContent) {
-          console.log(`[EVENT LISTENER] Will prefetch animation for clip ${clip.id} with animationId ${clip.animationId}`);
-          // This will trigger the normal effect that handles active clip changes
-        }
+      if (clipId) {
+        prefetchClipAnimation(clipId);
       }
-
-      // Clear the pending flag after a short delay to allow state to settle
-      setTimeout(() => {
-        clipChangePendingRef.current = false;
-      }, 300);
     };
 
     // Add event listener for clip changes
     window.addEventListener('clip-changed', handleClipChanged);
 
     return () => {
-      // Remove event listener on cleanup
       window.removeEventListener('clip-changed', handleClipChanged);
     };
-  }, [getActiveClip]);
+  }, [prefetchClipAnimation]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -617,64 +698,42 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   }, [setSvgRef, getSvgContainer]);
 
   // Add support for forcing a refresh of the animation content
-  useEffect(() => {
-    // Function to handle force refresh requests
-    const handleForceRefresh = () => {
-      console.log(`[Refresh] Animation refresh requested at ${new Date().toISOString()}`);
+  const handleForceRefresh = useCallback(() => {
+    console.log(`[Refresh] Animation refresh requested at ${new Date().toISOString()}`);
 
-      // Get the active clip
-      const activeClip = getActiveClip();
+    // Get the active clip
+    const activeClip = getActiveClip();
 
-      if (activeClip) {
-        console.log(`[Refresh] Refreshing animation for clip ${activeClip.id}`);
+    if (activeClip) {
+      console.log(`[Refresh] Refreshing animation for clip ${activeClip.id}`);
 
-        // If we have animationId but content is missing, fetch it
-        if (activeClip.animationId && (!activeClip.svgContent || !displaySvgContent)) {
-          console.log(`[Refresh] Fetching animation from server for clip ${activeClip.id}`);
+      // If we have animationId but content is missing, fetch it
+      if (activeClip.animationId && (!activeClip.svgContent || !displaySvgContent)) {
+        console.log(`[Refresh] Fetching animation from server for clip ${activeClip.id}`);
 
-          // Show loading state
-          setIsLoading(true);
-
-          // Fetch the animation
-          MovieStorageApi.getClipAnimation(activeClip.animationId)
-            .then(animation => {
-              if (animation && animation.svg) {
-                console.log(`[Refresh] Successfully fetched animation: ${animation.svg.length} bytes`);
-
-                // Update the storyboard clip with new content
-                updateClip(activeClip.id, { svgContent: animation.svg });
-
-                // Set the SVG content
-                setSvgContent(animation.svg);
-              } else {
-                console.error(`[Refresh] No SVG content found for animation ${activeClip.animationId}`);
-                setSvgContent(createPlaceholderSvg('Failed to load animation content'));
-              }
-            })
-            .catch(error => {
-              console.error(`[Refresh] Error fetching animation:`, error);
-              setSvgContent(createPlaceholderSvg(`Error loading animation: ${error.message}`));
-            })
-            .finally(() => {
-              setIsLoading(false);
-            });
-        }
-        // If we already have SVG content, just make sure it's displayed
-        else if (activeClip.svgContent) {
-          console.log(`[Refresh] Using existing SVG content: ${activeClip.svgContent.length} bytes`);
-          setSvgContent(activeClip.svgContent);
-        }
+        // Use our custom hook to load the animation
+        loadAnimation(activeClip.animationId).then(success => {
+          if (success) {
+            // If loading was successful, update the clip with the new content
+            updateClip(activeClip.id, { svgContent: contextSvgContent || '' });
+          }
+        });
       }
-    };
+      // If we already have SVG content, just make sure it's displayed
+      else if (activeClip.svgContent) {
+        console.log(`[Refresh] Using existing SVG content: ${activeClip.svgContent.length} bytes`);
+        setSvgContent(activeClip.svgContent);
+      }
+    }
+  }, [displaySvgContent, getActiveClip, updateClip, setSvgContent, loadAnimation, contextSvgContent]);
 
-    // Register the event listener
+  // Register event listener for legacy DOM-based refreshes
+  useEffect(() => {
     window.addEventListener('force-refresh-animation', handleForceRefresh);
-
-    // Clean up
     return () => {
       window.removeEventListener('force-refresh-animation', handleForceRefresh);
     };
-  }, [displaySvgContent, getActiveClip, updateClip, setSvgContent, setupSvgElement]);
+  }, [handleForceRefresh]);
 
   // Add an event listener to handle page visibility changes for resuming content
   useEffect(() => {
@@ -690,7 +749,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           // If we have a clip with animation ID but missing content, fetch it
           if (activeClip.animationId && !activeClip.svgContent) {
             console.log(`[Visibility] Fetching missing animation for clip ${activeClip.id}`);
-            window.dispatchEvent(new CustomEvent('force-refresh-animation'));
+            handleForceRefresh();
           }
           // If we have SVG content but empty container, restore it
           else if (activeClip.svgContent && svgContainerRef.current) {
@@ -788,28 +847,33 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     return undefined;
   }, [displaySvgContent, getSvgContainer]);
 
-  // Main render function with simplified layout that respects parent's constraints
+  // Main render function with improved responsive sizing
   return (
     <div
       ref={containerRef}
-      className="w-full h-full max-w-full max-h-full flex items-center justify-center bg-gotham-black/30 rounded-lg"
+      className="w-full h-full max-w-full max-h-full flex items-center justify-center bg-gotham-black/30 rounded-lg relative"
       style={{
         ...style,
-        aspectRatio: '16/9',
+        minWidth: '280px',
+        minHeight: '157px',
       }}
     >
-      {/* Empty state overlay */}
+      {/* Empty state or loading overlay - ensure it's visible when loading */}
       <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${showEmptyState ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'}`}
+        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
+          showEmptyState || isLoading ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'
+        }`}
       >
         <EmptyState loading={isLoading} />
       </div>
 
-      {/* SVG container with automatic centering */}
+      {/* SVG container with automatic centering - fade out when loading */}
       <div
         ref={svgContainerRef}
         data-testid="svg-container"
-        className={`w-full h-full overflow-hidden flex items-center justify-center transition-opacity duration-300 ${showEmptyState ? 'opacity-0' : 'opacity-100'}`}
+        className={`w-full h-full overflow-hidden flex items-center justify-center transition-opacity duration-300 ${
+          isLoading ? 'opacity-40' : showEmptyState ? 'opacity-0' : 'opacity-100'
+        }`}
       />
     </div>
   );
