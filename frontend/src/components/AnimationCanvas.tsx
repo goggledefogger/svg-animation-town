@@ -16,6 +16,10 @@ const useAnimationLoader = (setSvgContent: (content: string) => void, createPlac
   const loadingTimeoutRef = useRef<number | null>(null);
   // Add a flag to track if we're waiting for a server API call
   const isServerApiCallPendingRef = useRef(false);
+  // Add tracking of previously loaded animations
+  const loadedAnimationsRef = useRef<Set<string>>(new Set());
+  // Track animations that are currently being loaded to prevent duplicate loading
+  const loadingInProgressRef = useRef<Record<string, boolean>>({});
 
   // Start loading animation - only show for server API calls
   const startLoading = useCallback((isServerCall = false) => {
@@ -43,6 +47,7 @@ const useAnimationLoader = (setSvgContent: (content: string) => void, createPlac
 
     // Only hide loading if it was a server call
     if (isServerApiCallPendingRef.current) {
+      console.log('[Loading] Scheduling end of loading animation after server API call');
       // Set new timeout
       loadingTimeoutRef.current = window.setTimeout(() => {
         setIsLoading(false);
@@ -53,100 +58,45 @@ const useAnimationLoader = (setSvgContent: (content: string) => void, createPlac
     }
   }, []);
 
-  // Load animation from server
-  const loadAnimation = useCallback(async (animationId: string | null): Promise<boolean> => {
+  // Track loaded animations to avoid showing loading for previously loaded content
+  const trackLoadedAnimation = useCallback((animationId: string | null) => {
+    if (animationId) {
+      // Mark as loaded and no longer in progress
+      loadedAnimationsRef.current.add(animationId);
+      delete loadingInProgressRef.current[animationId];
+      console.log(`[Loading] Tracked loaded animation: ${animationId}. Total cached: ${loadedAnimationsRef.current.size}`);
+    }
+  }, []);
+
+  // Track animations that are currently being loaded
+  const markLoadingInProgress = useCallback((animationId: string | null) => {
+    if (animationId) {
+      loadingInProgressRef.current[animationId] = true;
+      console.log(`[Loading] Marked animation loading in progress: ${animationId}`);
+    }
+  }, []);
+
+  // Check if an animation has been loaded before
+  const hasBeenLoaded = useCallback((animationId: string | null) => {
     if (!animationId) return false;
 
-    startLoading(true);
-    console.log(`[Animation Loading] Loading animation ${animationId}`);
+    // Check if the animation has been loaded or is currently being loaded
+    const hasLoaded = loadedAnimationsRef.current.has(animationId);
+    const isLoading = animationId in loadingInProgressRef.current;
 
-    try {
-      // Dispatch event for API call tracking
-      window.dispatchEvent(new CustomEvent('api-call-start', {
-        detail: {
-          type: 'animation-load',
-          animationId
-        }
-      }));
+    console.log(`[Loading] Animation ${animationId} has ${hasLoaded ? 'been loaded before' : 'not been loaded before'}, isLoading: ${isLoading}`);
 
-      const animation = await MovieStorageApi.getClipAnimation(animationId);
-
-      // Success - set the content
-      if (animation && animation.svg) {
-        setSvgContent(animation.svg);
-        console.log(`[Animation Loading] Successfully loaded animation ${animationId} (${animation.svg.length} bytes)`);
-
-        // Dispatch end event with success result
-        window.dispatchEvent(new CustomEvent('api-call-end', {
-          detail: {
-            type: 'animation-load',
-            animationId,
-            success: true
-          }
-        }));
-
-        endLoading();
-        return true;
-      } else {
-        // No SVG in response
-        console.error(`[Animation Loading] Animation found but no SVG content available for ${animationId}`);
-        setSvgContent(createPlaceholderSvg('No animation content found'));
-
-        // Dispatch end event with failure
-        window.dispatchEvent(new CustomEvent('api-call-end', {
-          detail: {
-            type: 'animation-load',
-            animationId,
-            success: false,
-            error: 'No SVG content in response'
-          }
-        }));
-
-        endLoading();
-        return false;
-      }
-    } catch (error: any) {
-      console.error(`[Animation Loading] Error loading animation ${animationId}:`, error);
-
-      // Create appropriate error message
-      let errorMessage = 'Error loading animation';
-
-      // Handle 404 specifically or check for related error messages
-      if (error.message?.includes('404') || error.message?.includes('not found')) {
-        errorMessage = 'Animation not found or still being created';
-      }
-
-      setSvgContent(createPlaceholderSvg(errorMessage));
-
-      // Dispatch end event with error details
-      window.dispatchEvent(new CustomEvent('api-call-end', {
-        detail: {
-          type: 'animation-load',
-          animationId,
-          success: false,
-          error: error.message || 'Unknown error'
-        }
-      }));
-
-      endLoading();
-      return false;
-    }
-  }, [startLoading, endLoading, setSvgContent, createPlaceholderSvg]);
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (loadingTimeoutRef.current !== null) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
-    };
+    // Return true if either it's been loaded or is currently loading to prevent duplicate loads
+    return hasLoaded || isLoading;
   }, []);
 
   return {
     isLoading,
     startLoading,
     endLoading,
-    loadAnimation
+    trackLoadedAnimation,
+    markLoadingInProgress,
+    hasBeenLoaded
   };
 };
 
@@ -167,6 +117,28 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const [showEmptyState, setShowEmptyState] = useState(true);
   // Track if a message has been sent to hide the empty state
   const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
+
+  // Helper function to create a placeholder SVG with an error message
+  const createPlaceholderSvg = useCallback((message: string): string => {
+    // Placeholder implementation
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+      <rect width="800" height="600" fill="#1a1a2e" />
+      <text x="400" y="300" font-family="Arial" font-size="16" fill="white" text-anchor="middle">${message}</text>
+    </svg>`;
+  }, []);
+
+  // Use our animation loader hook
+  const {
+    isLoading,
+    startLoading,
+    endLoading,
+    trackLoadedAnimation,
+    markLoadingInProgress,
+    hasBeenLoaded
+  } = useAnimationLoader(setSvgContent, createPlaceholderSvg);
+
+  // Add a reference to track if clip change is pending
+  const clipChangePendingRef = useRef(false);
 
   // Get the current active clip's SVG content
   const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
@@ -233,7 +205,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
                      displaySvgLength !== lastDepsRef.current.svgContentLength;
 
     if (hasChanged) {
-
       // Update the ref
       lastDepsRef.current = {
         activeClipId,
@@ -294,13 +265,25 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         order: activeClip.order
       });
 
-      // Make loading state visible immediately
+      // First mark this animation as loading to prevent duplicate loads
+      markLoadingInProgress(activeClip.animationId);
+
+      // Check if this animation has been loaded before (should now return true since we marked it as loading)
+      const alreadyLoaded = hasBeenLoaded(activeClip.animationId);
+
+      // Always hide empty state and mark message as sent for active clips
       setShowEmptyState(false);
       setHasMessageBeenSent(true);
 
-      // Check if this is a new clip that might still be in the process of being created
-      const clipIsNew = activeClip.createdAt &&
-        (new Date().getTime() - new Date(activeClip.createdAt).getTime() < 5 * 60 * 1000); // 5 minutes
+      // Only show loading animation for animations never loaded before
+      if (!alreadyLoaded) {
+        // Show loading animation for first-time loads only
+        console.log(`[Animation] Animation ${activeClip.animationId} not loaded before, showing loading animation`);
+        // Let the loadAnimation function handle the loading state
+      } else {
+        console.log(`[Animation] Animation ${activeClip.animationId} already loaded or loading, skipping loading animation`);
+        // Don't show loading animation
+      }
 
       // Use our custom hook to load the animation
       loadAnimation(activeClip.animationId || null)
@@ -321,156 +304,63 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // Neither SVG content nor animation ID available
       setSvgContent(createPlaceholderSvg('No animation content available'));
     }
-  }, [activeClipId, getActiveClip, updateClip, propSvgContent, contextSvgContent, displaySvgContent, setSvgContent]);
+  }, [activeClipId, getActiveClip, updateClip, propSvgContent, contextSvgContent, displaySvgContent, setSvgContent, hasBeenLoaded, markLoadingInProgress]);
 
-  // Helper function to create a placeholder SVG with an error message
-  const createPlaceholderSvg = useCallback((message: string): string => {
-    // Determine color based on message type
-    let color = '#e63946'; // Default error color (red)
-
-    // Use yellow for "in progress" messages
-    if (message.includes('being created') || message.includes('Please wait')) {
-      color = '#f0ad4e'; // Warning/waiting color (amber)
+  // Helper to load animation with caching
+  const loadAnimation = useCallback(async (animationId: string | null): Promise<boolean> => {
+    if (!animationId) {
+      console.log('[Animation] No animation ID provided for loading');
+      return false;
     }
 
-    // Include essential debugging info in the SVG itself
-    const debugInfo = (() => {
-      const clip = getActiveClip();
-      const now = new Date();
-      const formattedTime = now.toISOString();
+    // Check if we've already loaded this animation before
+    const alreadyLoaded = hasBeenLoaded(animationId);
 
-      if (clip) {
-        const clipCreatedAt = clip.createdAt ? new Date(clip.createdAt) : null;
-        const clipAge = clipCreatedAt ?
-          `${Math.round((now.getTime() - clipCreatedAt.getTime()) / 1000)}s ago` :
-          'unknown age';
-
-        return [
-          `Debug Info (${formattedTime.slice(11,19)}):`,
-          `ClipID: ${clip.id.slice(0,8)}...`,
-          `AnimID: ${clip.animationId?.slice(0,8) || 'none'}...`,
-          `Created: ${clipAge}`,
-          `Order: ${clip.order}`,
-          `Name: ${clip.name.slice(0, 20)}${clip.name.length > 20 ? '...' : ''}`
-        ].join(' | ');
-      } else {
-        return `No active clip | Time: ${formattedTime.slice(11,19)}`;
+    if (alreadyLoaded) {
+      console.log(`[Animation] Animation ${animationId} was previously loaded or is loading, skipping duplicate load`);
+      // Still make the API call but don't show loading animation
+      try {
+        const animation = await MovieStorageApi.getClipAnimation(animationId);
+        if (animation && animation.svg) {
+          console.log(`[Animation] Successfully loaded cached animation: ${animationId}`);
+          setSvgContent(animation.svg);
+          return true;
+        }
+      } catch (error) {
+        console.error(`[Animation] Error loading cached animation: ${animationId}`, error);
       }
-    })();
+      return false;
+    }
 
-    // Create a unique ID for refresh button interaction
-    const refreshButtonId = `refresh-btn-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    // Mark this animation as in progress to prevent duplicate loading attempts
+    markLoadingInProgress(animationId);
 
-    // Dynamic gradient ID
-    const gradientId = `gradient-${Date.now()}`;
-    const pulseId = `pulse-${Date.now()}`;
+    // Show loading animation for new animations only
+    console.log(`[Animation] Loading animation from server: ${animationId}`);
+    startLoading(true);
 
-    // Choose title based on message
-    const isWaiting = message.includes('being created') || message.includes('Please wait');
-    const title = isWaiting ? 'Animation In Progress' : 'Animation Loading Issue';
+    try {
+      const animation = await MovieStorageApi.getClipAnimation(animationId);
+      if (animation && animation.svg) {
+        console.log(`[Animation] Successfully loaded animation: ${animationId}`);
+        setSvgContent(animation.svg);
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
-      <!-- Background with subtle gradient -->
-      <defs>
-        <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#0f172a" />
-          <stop offset="100%" stop-color="#1a1a2e" />
-        </linearGradient>
+        // Track this animation as loaded for future reference
+        trackLoadedAnimation(animationId);
 
-        <!-- Glowing effect for pulse -->
-        <filter id="${pulseId}" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="10" />
-        </filter>
-      </defs>
-
-      <rect width="800" height="600" fill="url(#${gradientId})" />
-
-      <!-- Animated background elements -->
-      <g opacity="0.15">
-        ${Array.from({length: 5}, (_, i) => {
-          const x = 100 + (i * 150);
-          const delay = i * 0.5;
-          return `<circle cx="${x}" cy="500" r="20" fill="#ffdf00" opacity="0.5">
-            <animate attributeName="cy" values="500;100;500" dur="${3 + i}s" begin="${delay}s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.2;0.5;0.2" dur="${3 + i}s" begin="${delay}s" repeatCount="indefinite" />
-          </circle>`;
-        }).join('')}
-      </g>
-
-      <!-- Main indicator -->
-      <g transform="translate(400, 180)">
-        <!-- Glow effect -->
-        <circle cx="0" cy="0" r="70" fill="${color}" opacity="0.2" filter="url(#${pulseId})">
-          <animate attributeName="r" values="70;90;70" dur="3s" repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.2;0.3;0.2" dur="3s" repeatCount="indefinite" />
-        </circle>
-
-        <!-- Main circular indicator -->
-        <circle cx="0" cy="0" r="50" fill="${color}">
-          <animate attributeName="r" values="50;55;50" dur="2s" repeatCount="indefinite" />
-        </circle>
-
-        <!-- Animated bat symbol -->
-        <path d="M0,-40 C-10,-25 -30,-10 -35,10 C-25,5 -15,5 0,20 C15,5 25,5 35,10 C30,-10 10,-25 0,-40"
-              fill="#1a1a2e" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.7">
-          <animate attributeName="stroke-opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
-        </path>
-      </g>
-
-      <!-- Title text with glow -->
-      <g>
-        <text x="400" y="300" font-family="Arial, sans-serif" font-size="28" fill="white" text-anchor="middle" font-weight="bold">
-          ${title}
-        </text>
-        <text x="400" y="340" font-family="Arial, sans-serif" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
-          ${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-        </text>
-      </g>
-
-      <!-- Progress indicator -->
-      ${isWaiting ? `
-      <g>
-        <rect x="250" y="380" width="300" height="8" rx="4" fill="#2d3748" />
-        <rect x="250" y="380" width="0" height="8" rx="4" fill="${color}">
-          <animate attributeName="width" values="0;300;0" dur="2s" repeatCount="indefinite" />
-        </rect>
-      </g>` : ''}
-
-      <!-- Refresh button with improved style -->
-      <g id="${refreshButtonId}" style="cursor:pointer" onclick="(function(){
-        console.log('Manual refresh requested by user');
-        window.dispatchEvent(new CustomEvent('force-refresh-animation'));
+        return true;
+      } else {
+        console.error(`[Animation] Failed to load animation: ${animationId} - No SVG content returned`);
         return false;
-      })()">
-        <rect x="330" y="410" width="140" height="45" rx="22.5" fill="#4361ee" opacity="0.9">
-          <animate attributeName="opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite" />
-        </rect>
-        <text x="400" y="438" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle" font-weight="bold">Refresh</text>
-        <!-- Refresh icon -->
-        <path d="M370,438 C370,428 378,420 388,420 C395,420 401,424 404,430 M404,420 L404,430 L394,430"
-              fill="none" stroke="white" stroke-width="2" />
-      </g>
-
-      <!-- Debug info section with improved style -->
-      <g opacity="0.8">
-        <rect x="50" y="500" width="700" height="80" fill="rgba(0,0,0,0.5)" rx="8" />
-        <text x="400" y="525" font-family="monospace" font-size="12" fill="#00ff00" text-anchor="middle">
-          ${debugInfo}
-        </text>
-        <text x="400" y="555" font-family="monospace" font-size="12" fill="#00ff00" text-anchor="middle">
-          Load Attempt: ${new Date().toISOString()}
-        </text>
-      </g>
-    </svg>`;
-  }, [getActiveClip]);
-
-  // Use our animation loader hook
-  const {
-    isLoading,
-    startLoading,
-    endLoading,
-    loadAnimation
-  } = useAnimationLoader(setSvgContent, createPlaceholderSvg);
+      }
+    } catch (error) {
+      console.error(`[Animation] Error loading animation: ${animationId}`, error);
+      return false;
+    } finally {
+      // Hide loading animation with a small delay
+      endLoading();
+    }
+  }, [setSvgContent, startLoading, endLoading, trackLoadedAnimation, markLoadingInProgress, hasBeenLoaded]);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -520,9 +410,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Debounce SVG updates to prevent rapid re-renders
   const debouncedUpdateRef = useRef<number | null>(null);
-
-  // Add a flag to track when we're in the middle of a clip change
-  const clipChangePendingRef = useRef<boolean>(false);
 
   // Function to handle animation updates with debouncing
   const handleAnimationUpdated = (event: Event) => {
@@ -644,7 +531,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   useEffect(() => {
     const handleApiCallStart = (event: any) => {
       const eventData = event?.detail || {};
-      const { type, endpoint } = eventData;
+      const { type, endpoint, animationId } = eventData;
 
       // Only show loading for animation-related API calls
       const isAnimationCall =
@@ -653,8 +540,20 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         type?.includes('animation');
 
       if (isAnimationCall) {
-        console.log('[Loading] Animation API call started, showing loading animation');
-        startLoading(true);
+        // Check if the animation has been loaded before
+        const skipLoading = animationId && hasBeenLoaded(animationId);
+
+        if (skipLoading) {
+          console.log(`[Loading] Animation API call started for ${animationId}, but already loaded or loading - not showing loading animation`);
+        } else if (animationId) {
+          // Mark this animation as loading to prevent duplicates
+          markLoadingInProgress(animationId);
+          console.log('[Loading] Animation API call started, showing loading animation');
+          startLoading(true);
+        } else {
+          console.log('[Loading] Animation API call started, showing loading animation');
+          startLoading(true);
+        }
         setHasMessageBeenSent(true);
         setShowEmptyState(false);
       } else {
@@ -664,7 +563,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     const handleApiCallEnd = (event: any) => {
       const eventData = event?.detail || {};
-      const { type, endpoint } = eventData;
+      const { type, endpoint, animationId } = eventData;
 
       // Only handle loading state for animation-related API calls
       const isAnimationCall =
@@ -674,6 +573,9 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
       if (isAnimationCall) {
         console.log('[Loading] Animation API call ended, hiding loading animation');
+        if (animationId) {
+          trackLoadedAnimation(animationId);
+        }
         endLoading();
       }
     };
@@ -685,7 +587,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       window.removeEventListener('api-call-start', handleApiCallStart);
       window.removeEventListener('api-call-end', handleApiCallEnd);
     };
-  }, [startLoading, endLoading, setHasMessageBeenSent, setShowEmptyState]);
+  }, [startLoading, endLoading, setHasMessageBeenSent, setShowEmptyState, hasBeenLoaded, trackLoadedAnimation, markLoadingInProgress]);
 
   // Only listen for animation updates
   useEffect(() => {
@@ -976,7 +878,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           showEmptyState || isLoading ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <EmptyState loading={isLoading} />
+        <EmptyState loading={isLoading} showMessage={false} />
       </div>
 
       {/* SVG container with automatic centering - fade out when loading */}
