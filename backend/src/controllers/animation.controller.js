@@ -63,7 +63,8 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
 
     // Save the animation to storage
     const timestamp = new Date().toISOString();
-    const animationId = await storageService.saveAnimation(animationName, {
+    const animationId = await storageService.saveAnimation({
+      name: animationName,
       svg,
       chatHistory,
       timestamp
