@@ -21,9 +21,13 @@ const movieStorageController = {
 
       const movieId = await storageService.saveMovie(storyboard);
 
+      // Fetch the saved movie to return it in the response
+      const savedMovie = await storageService.getMovie(movieId);
+
       res.status(200).json({
         success: true,
         id: movieId,
+        movie: savedMovie,
         message: `Storyboard '${storyboard.name}' saved successfully`
       });
     } catch (error) {

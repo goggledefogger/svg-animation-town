@@ -218,7 +218,7 @@ export const AnimationApi = {
       };
     }
   },
-  
+
   /**
    * Generate a new SVG animation with movie context data
    * This will allow the backend to update the movie JSON file directly
@@ -233,9 +233,9 @@ export const AnimationApi = {
       sceneDuration?: number;
       sceneDescription?: string;
     }
-  ): Promise<{ 
-    svg: string; 
-    message: string; 
+  ): Promise<{
+    svg: string;
+    message: string;
     animationId?: string;
     movieUpdateStatus?: {
       storyboardId: string;
@@ -249,32 +249,32 @@ export const AnimationApi = {
     try {
       // Set a longer timeout for movie generation
       const timeoutMs = parseInt(import.meta.env.VITE_REQUEST_TIMEOUT_MS || '300000', 10);
-      
+
       // Use an AbortController to allow cancellation if it takes too long
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         console.log(`Request timeout of ${timeoutMs/1000} seconds reached, aborting generation`);
         controller.abort();
       }, timeoutMs);
-      
+
       try {
         // Call the API with timeout protection and movie context
         const data = await fetchApi<any>(
           '/movie/generate-scene',
           {
             method: 'POST',
-            body: JSON.stringify({ 
-              prompt, 
+            body: JSON.stringify({
+              prompt,
               provider,
-              movieContext 
+              movieContext
             }),
             signal: controller.signal
           }
         );
-        
+
         // Clear the timeout
         clearTimeout(timeoutId);
-        
+
         // Handle the response
         if (data.svg) {
           return {
@@ -293,7 +293,7 @@ export const AnimationApi = {
       }
     } catch (error) {
       console.error('Error generating animation with movie context:', error);
-      
+
       // Create a fallback error SVG
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const errorSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
@@ -539,7 +539,7 @@ export const MovieStorageApi = {
   /**
    * Save a movie to the server (via backend API)
    */
-  saveMovie: async (storyboard: Storyboard): Promise<{id: string, success: boolean, message: string}> => {
+  saveMovie: async (storyboard: Storyboard): Promise<{id: string, movie?: Storyboard, success: boolean, message: string}> => {
     try {
       // Basic validation to ensure we're not missing required fields
       if (!storyboard.id) {
@@ -563,6 +563,7 @@ export const MovieStorageApi = {
 
       return {
         id: response.id || storyboard.id,
+        movie: response.movie,
         success: true,
         message: response.message || 'Storyboard saved successfully'
       };
@@ -604,7 +605,7 @@ export const MovieStorageApi = {
         console.log(`Movie clip data:`, {
           clipCount: data.movie.clips?.length || 0,
           hasClips: Array.isArray(data.movie.clips) && data.movie.clips.length > 0,
-          clipDetails: Array.isArray(data.movie.clips) ? 
+          clipDetails: Array.isArray(data.movie.clips) ?
             data.movie.clips.map((clip: any, index: number) => ({
               index,
               id: clip.id,
@@ -615,7 +616,7 @@ export const MovieStorageApi = {
               order: clip.order
             })) : 'No clips'
         });
-        
+
         // If no clips found, this might be a server-side issue
         if (!data.movie.clips || data.movie.clips.length === 0) {
           console.warn(`Movie '${data.movie.name}' has no clips. This might indicate a server-side issue.`);
@@ -623,7 +624,7 @@ export const MovieStorageApi = {
             console.warn(`Generation status shows ${data.movie.generationStatus.completedScenes} completed scenes but no clips found!`);
           }
         }
-        
+
         return data.movie;
       } else {
         console.error(`Invalid response when loading movie ${id}:`, data);
@@ -660,9 +661,9 @@ export const MovieStorageApi = {
       console.error(`Cannot fetch animation: No animation ID provided`);
       throw new Error('Animation ID is required');
     }
-    
+
     console.log(`Fetching animation: ${animationId}`);
-    
+
     try {
       const data = await fetchApi<any>(`/animation/${animationId}`);
 
@@ -672,13 +673,13 @@ export const MovieStorageApi = {
           console.error(`Animation ${animationId} has invalid SVG content (length: ${data.animation.svg?.length || 0})`);
           throw new Error('Invalid SVG content in animation');
         }
-        
+
         // Verify SVG has proper tags
         if (!data.animation.svg.includes('<svg') || !data.animation.svg.includes('</svg>')) {
           console.error(`Animation ${animationId} has SVG content without proper tags`);
           throw new Error('Invalid SVG content: missing proper SVG tags');
         }
-        
+
         console.log(`Successfully fetched animation ${animationId}: ${data.animation.svg.length} bytes`);
         return data.animation;
       } else {

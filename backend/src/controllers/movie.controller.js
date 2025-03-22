@@ -52,15 +52,41 @@ exports.generateScene = asyncHandler(async (req, res) => {
     console.log(`Generating scene animation for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
     console.log('Movie context:', movieContext);
 
+    // 3. Load the existing movie from storage before starting animation generation
+    let movie = await storageService.getMovie(movieContext.storyboardId);
+
+    if (!movie) {
+      throw new BadRequestError(`Movie with ID ${movieContext.storyboardId} not found`);
+    }
+
+    // Ensure dates are properly parsed
+    if (movie.createdAt && typeof movie.createdAt === 'string') {
+      movie.createdAt = new Date(movie.createdAt);
+    }
+
+    if (movie.updatedAt && typeof movie.updatedAt === 'string') {
+      movie.updatedAt = new Date(movie.updatedAt);
+    }
+
+    if (movie.generationStatus) {
+      if (movie.generationStatus.startedAt && typeof movie.generationStatus.startedAt === 'string') {
+        movie.generationStatus.startedAt = new Date(movie.generationStatus.startedAt);
+      }
+
+      if (movie.generationStatus.completedAt && typeof movie.generationStatus.completedAt === 'string') {
+        movie.generationStatus.completedAt = new Date(movie.generationStatus.completedAt);
+      }
+    }
+
     // 1. Generate animation using animationService
     let animationResult;
     try {
       animationResult = await animationService.generateAnimation(prompt, provider);
-      
+
       if (!animationResult || !animationResult.svg) {
         throw new Error('Animation generation failed: No SVG content returned');
       }
-      
+
       console.log(`Successfully generated animation for scene ${movieContext.sceneIndex + 1} with animation ID: ${animationResult.animationId || 'None'}`);
     } catch (animationError) {
       console.error('Error generating animation:', animationError);
@@ -70,7 +96,7 @@ exports.generateScene = asyncHandler(async (req, res) => {
         message: `Error: ${animationError.message || 'Unknown error'}`,
         animationId: uuidv4() // Create a placeholder ID for tracking
       };
-      
+
       // Save the error animation
       if (animationResult.animationId) {
         await storageService.saveAnimation({
@@ -81,36 +107,10 @@ exports.generateScene = asyncHandler(async (req, res) => {
         });
       }
     }
-    
+
     // 2. Create a clip ID for the new clip
     const clipId = uuidv4();
-    
-    // 3. Load the existing movie from storage
-    let movie = await storageService.getMovie(movieContext.storyboardId);
-    
-    if (!movie) {
-      throw new BadRequestError(`Movie with ID ${movieContext.storyboardId} not found`);
-    }
-    
-    // Ensure dates are properly parsed
-    if (movie.createdAt && typeof movie.createdAt === 'string') {
-      movie.createdAt = new Date(movie.createdAt);
-    }
-    
-    if (movie.updatedAt && typeof movie.updatedAt === 'string') {
-      movie.updatedAt = new Date(movie.updatedAt);
-    }
-    
-    if (movie.generationStatus) {
-      if (movie.generationStatus.startedAt && typeof movie.generationStatus.startedAt === 'string') {
-        movie.generationStatus.startedAt = new Date(movie.generationStatus.startedAt);
-      }
-      
-      if (movie.generationStatus.completedAt && typeof movie.generationStatus.completedAt === 'string') {
-        movie.generationStatus.completedAt = new Date(movie.generationStatus.completedAt);
-      }
-    }
-    
+
     // 4. Create chat history for this scene
     const chatHistory = [{
       id: uuidv4(),
@@ -123,10 +123,10 @@ exports.generateScene = asyncHandler(async (req, res) => {
       text: animationResult.message || 'Animation created',
       timestamp: new Date()
     }];
-    
+
     // 5. Create clip name based on scene index and context
     const sceneName = `Scene ${movieContext.sceneIndex + 1}${movieContext.sceneDescription ? ': ' + movieContext.sceneDescription : ''}`;
-    
+
     // 6. Create a new clip
     const newClip = {
       id: clipId,
@@ -140,15 +140,15 @@ exports.generateScene = asyncHandler(async (req, res) => {
       animationId: animationResult.animationId,
       provider: provider
     };
-    
+
     // 7. Add the clip to the movie's clips array
     if (!movie.clips) {
       movie.clips = [];
     }
-    
+
     // Check if a clip with this order already exists
     const existingClipIndex = movie.clips.findIndex(clip => clip.order === movieContext.sceneIndex);
-    
+
     if (existingClipIndex >= 0) {
       // Replace existing clip
       movie.clips[existingClipIndex] = newClip;
@@ -158,10 +158,10 @@ exports.generateScene = asyncHandler(async (req, res) => {
       movie.clips.push(newClip);
       console.log(`Added new clip with order ${movieContext.sceneIndex}`);
     }
-    
+
     // Sort clips by order for consistency
     movie.clips.sort((a, b) => a.order - b.order);
-    
+
     // 8. Update the movie's generation status
     if (!movie.generationStatus) {
       movie.generationStatus = {
@@ -176,27 +176,27 @@ exports.generateScene = asyncHandler(async (req, res) => {
       const totalScenes = Math.max(movie.generationStatus.totalScenes || 0, movieContext.sceneCount);
       movie.generationStatus.totalScenes = totalScenes;
     }
-    
+
     // Update completion count based on the number of clips we have after this addition
     // This ensures we count actual generated clips, not just the highest scene index
     movie.generationStatus.completedScenes = movie.clips.length;
-    
+
     console.log(`Updated generation status: completed ${movie.generationStatus.completedScenes}/${movie.generationStatus.totalScenes} scenes`);
-    
+
     // If we've generated all scenes, mark as complete
     if (movie.generationStatus.completedScenes >= movie.generationStatus.totalScenes) {
       movie.generationStatus.inProgress = false;
       movie.generationStatus.completedAt = new Date();
       console.log('All scenes completed, marked generation as complete');
     }
-    
+
     // 9. Update the movie's timestamps
     movie.updatedAt = new Date();
-    
+
     // 10. Save the updated movie
     const savedMovieId = await storageService.saveMovie(movie);
     console.log(`Saved updated movie with ID ${savedMovieId}, now has ${movie.clips.length} clips`);
-    
+
     // 11. Return the animation with status information
     return res.status(200).json({
       success: true,

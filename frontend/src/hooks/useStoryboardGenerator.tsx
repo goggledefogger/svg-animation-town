@@ -147,13 +147,13 @@ export function useStoryboardGenerator(
       if (!storyboard.clips) {
         storyboard.clips = [];
       }
-      
+
       // Get a list of orders from existing clips to avoid regenerating them
       const existingClipOrders = new Set(storyboard.clips.map(clip => clip.order));
-      
+
       // Calculate the next scene index to generate based on existing clips
       let startSceneIndex = 0;
-      
+
       // If we have existing clips, find the highest order + 1
       if (storyboard.clips.length > 0) {
         const highestOrder = Math.max(...Array.from(existingClipOrders));
@@ -174,14 +174,14 @@ export function useStoryboardGenerator(
 
       // Skip already completed scenes
       const remainingScenes = storyboardResponse.scenes.slice(startSceneIndex);
-      
+
       // Filter scenes that still need generation
       const scenesNeedingGeneration = remainingScenes.filter((_, index) => {
         const absoluteIndex = index + startSceneIndex;
         const hasExistingClip = existingClipOrders.has(absoluteIndex);
         return !hasExistingClip; // Only keep scenes without existing clips
       });
-      
+
       // If no scenes left to generate, just mark as complete
       if (scenesNeedingGeneration.length === 0) {
         console.log('No remaining scenes to generate, marking as complete');
@@ -227,7 +227,7 @@ export function useStoryboardGenerator(
       await processStoryboard(resumedResponse, aiProvider, startSceneIndex, true);
     } catch (error) {
       console.error('Error resuming storyboard generation:', error);
-      
+
       // Update the storyboard to mark generation as failed
       setCurrentStoryboard(prevStoryboard => {
         const updatedStoryboard = {
@@ -239,16 +239,16 @@ export function useStoryboardGenerator(
             error: error instanceof Error ? error.message : 'Unknown error resuming generation'
           }
         };
-        
+
         // Save the updated status
         setTimeout(() => {
           MovieStorageApi.saveMovie(updatedStoryboard)
             .catch(err => console.error('Error saving storyboard with error status:', err));
         }, 0);
-        
+
         return updatedStoryboard;
       });
-      
+
       setGenerationError(error instanceof Error ? error.message : 'Unknown error resuming generation');
       setShowErrorModal(true);
       setIsGenerating(false);
@@ -266,11 +266,11 @@ export function useStoryboardGenerator(
     isResuming = false
   ) => {
     console.log('Beginning storyboard generation...');
-    
+
     // CRITICAL FIX: If there are no scenes to process, bail out early
     if (!storyboard.scenes || storyboard.scenes.length === 0) {
       console.log('No scenes to process, skipping generation');
-      
+
       // If we're resuming, just mark the storyboard as complete
       if (isResuming && currentStoryboard) {
         setCurrentStoryboard(prevStoryboard => {
@@ -283,18 +283,18 @@ export function useStoryboardGenerator(
               completedAt: new Date()
             }
           };
-          
+
           // Don't call MovieStorageApi.saveMovie directly during state update
           // Instead, return the new state and save outside the state update
           setTimeout(() => {
             MovieStorageApi.saveMovie(completedStoryboard)
               .catch(err => console.error('Error saving completed storyboard:', err));
           }, 0);
-            
+
           return completedStoryboard;
         });
       }
-      
+
       // Hide modals and reset state
       setShowGeneratingClipsModal(false);
       setIsGenerating(false);
@@ -336,16 +336,16 @@ export function useStoryboardGenerator(
       } else {
         console.log(`Continuing from scene ${startingSceneIndex} with storyboard ID: ${currentStoryboard!.id}`);
       }
-      
+
       storyboardId = currentStoryboard!.id;
 
       // CRITICAL FIX: We need to make a deep copy of existing clips to ensure we preserve them
-      const existingClips = currentStoryboard!.clips ? 
+      const existingClips = currentStoryboard!.clips ?
         JSON.parse(JSON.stringify(currentStoryboard!.clips)) : [];
-      
+
       // Log the existing clips we're preserving (important for debugging)
       console.log(`Preserving ${existingClips.length} existing clips during resume/continue`);
-      
+
       // Use the current storyboard as starting point - WITH the existing clips
       newStoryboard = {
         ...currentStoryboard!,
@@ -367,22 +367,19 @@ export function useStoryboardGenerator(
     }
 
     try {
-      // Move MovieStorageApi.saveMovie out of the React render cycle
+      // Save the storyboard and wait for it to complete before starting generation
       console.log('Saving initial/resumed storyboard to server...');
-      setTimeout(() => {
-        MovieStorageApi.saveMovie(newStoryboard)
-          .then(result => {
-            console.log(`Initial/resumed storyboard saved to server with ID: ${result.id}`);
-          })
-          .catch(error => {
-            console.error('Error saving initial storyboard:', error);
-          });
-      }, 0);
-      
+      const savedResult = await MovieStorageApi.saveMovie(newStoryboard);
+      console.log(`Initial/resumed storyboard saved to server with ID: ${savedResult.id}`);
+
+      // Always use the server-assigned ID
+      newStoryboard.id = savedResult.id;
+      storyboardId = savedResult.id;
+
       // Update current storyboard state
       setCurrentStoryboard(newStoryboard);
       setShowGeneratingClipsModal(true);
-      
+
       // Track scene generation errors
       const errors: SceneGenerationError[] = [];
 
@@ -420,7 +417,7 @@ export function useStoryboardGenerator(
         if (processedScenes.has(absoluteSceneIndex)) {
           return;
         }
-        
+
         // Skip if this scene already has a clip with matching order
         const existingClipWithOrder = newStoryboard.clips.find(clip => clip.order === absoluteSceneIndex);
         if (existingClipWithOrder) {
@@ -438,7 +435,7 @@ export function useStoryboardGenerator(
 
         try {
           console.log(`Generating SVG for scene ${absoluteSceneIndex+1}/${startingSceneIndex + totalScenesForProgress}: ${scene.id || 'Untitled'}`);
-          
+
           // Prepare movie context for backend request
           const movieContext = {
             storyboardId: newStoryboard.id,
@@ -466,14 +463,14 @@ export function useStoryboardGenerator(
               if (result && result.movieUpdateStatus) {
                 // For backend-assisted generation, use the server's information to update local state
                 const { sceneIndex, completedScenes, totalScenes, clipId } = result.movieUpdateStatus;
-                
+
                 // Update progress to reflect the server's state
                 updateGenerationProgress(
                   sceneIndex,
                   totalScenes,
                   startingSceneIndex > 0 ? startingSceneIndex : undefined
                 );
-                
+
                 // Create a clip object for local state only - the backend already saved it
                 const newClip = {
                   id: clipId,
@@ -497,18 +494,18 @@ export function useStoryboardGenerator(
                   createdAt: new Date(),
                   provider: aiProvider
                 };
-                
+
                 // Update frontend state to match backend state
                 setCurrentStoryboard(prevStoryboard => {
                   const clipExists = prevStoryboard.clips.some(c => c.order === absoluteSceneIndex);
-                  
+
                   if (clipExists) {
                     return prevStoryboard;
                   }
-                  
+
                   const updatedClips = [...prevStoryboard.clips, newClip];
                   updatedClips.sort((a, b) => a.order - b.order);
-                  
+
                   const updatedStoryboard = {
                     ...prevStoryboard,
                     clips: updatedClips,
@@ -522,7 +519,7 @@ export function useStoryboardGenerator(
 
                   return updatedStoryboard;
                 });
-                
+
                 return;
               }
             } catch (sceneError) {
@@ -596,7 +593,7 @@ export function useStoryboardGenerator(
           setCurrentStoryboard(prevStoryboard => {
             const existingClips = JSON.parse(JSON.stringify(prevStoryboard.clips || []));
             const exists = existingClips.some((clip: MovieClip) => clip.order === absoluteSceneIndex);
-            
+
             if (exists) {
               return prevStoryboard;
             }
