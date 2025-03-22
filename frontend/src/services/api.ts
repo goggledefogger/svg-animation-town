@@ -656,10 +656,30 @@ export const MovieStorageApi = {
    * Get animation content for a clip by animation ID
    */
   getClipAnimation: async (animationId: string): Promise<any> => {
+    if (!animationId) {
+      console.error(`Cannot fetch animation: No animation ID provided`);
+      throw new Error('Animation ID is required');
+    }
+    
+    console.log(`Fetching animation: ${animationId}`);
+    
     try {
       const data = await fetchApi<any>(`/animation/${animationId}`);
 
       if (data.success && data.animation) {
+        // Basic validation to ensure we have valid SVG content
+        if (!data.animation.svg || typeof data.animation.svg !== 'string') {
+          console.error(`Animation ${animationId} has invalid SVG content (length: ${data.animation.svg?.length || 0})`);
+          throw new Error('Invalid SVG content in animation');
+        }
+        
+        // Verify SVG has proper tags
+        if (!data.animation.svg.includes('<svg') || !data.animation.svg.includes('</svg>')) {
+          console.error(`Animation ${animationId} has SVG content without proper tags`);
+          throw new Error('Invalid SVG content: missing proper SVG tags');
+        }
+        
+        console.log(`Successfully fetched animation ${animationId}: ${data.animation.svg.length} bytes`);
         return data.animation;
       } else {
         throw new Error('Invalid response from server');
