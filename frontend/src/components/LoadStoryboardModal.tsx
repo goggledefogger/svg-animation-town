@@ -65,11 +65,6 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
       
       // Reset search
       setSearchQuery('');
-      
-      // Log rendering behavior for debugging
-      if (filteredStoryboards.length > 0) {
-        console.log(`[RENDER TRACKING] Rendering ${filteredStoryboards.length} storyboards to DOM at ${new Date().toISOString()}. First batch: ${filteredStoryboards.slice(0, 3).map(s => s.name).join(', ')}...`);
-      }
     } else {
       // Cleanup when modal closes
       resetStoryboards();

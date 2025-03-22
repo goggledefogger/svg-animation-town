@@ -56,7 +56,33 @@ class StorageService {
         timestamp: animation.createdAt || new Date().toISOString()
       };
 
-      await fs.writeFile(filePath, JSON.stringify(animationData, null, 2));
+      // Ensure storage directory exists
+      await this._ensureDirectoryExists(ANIMATIONS_DIR);
+
+      // Write the file with error handling
+      try {
+        await fs.writeFile(filePath, JSON.stringify(animationData, null, 2));
+        
+        // Verify the file was written correctly by reading it back
+        // This ensures the file system has fully flushed the data
+        try {
+          const verifyData = await fs.readFile(filePath, 'utf8');
+          const parsedData = JSON.parse(verifyData);
+          
+          if (!parsedData || !parsedData.svg) {
+            throw new Error('Verification failed: Animation written to disk lacks SVG content');
+          }
+          
+          console.log(`Animation ${id} successfully written and verified on disk`);
+        } catch (verifyError) {
+          console.error(`Failed to verify animation ${id} was properly saved:`, verifyError);
+          throw new Error(`Animation save verification failed: ${verifyError.message}`);
+        }
+      } catch (writeError) {
+        console.error(`Failed to write animation ${id} to disk:`, writeError);
+        throw writeError;
+      }
+      
       return id;
     } catch (error) {
       console.error('Error saving animation:', error);
@@ -70,10 +96,37 @@ class StorageService {
    * @returns {Promise<Object>} Animation data
    */
   async getAnimation(id) {
+    if (!id) {
+      throw new Error('Animation ID is required');
+    }
+    
     try {
       const filePath = path.join(ANIMATIONS_DIR, `${id}.json`);
-      const data = await fs.readFile(filePath, 'utf8');
-      return JSON.parse(data);
+      
+      // Check if file exists first
+      try {
+        await fs.access(filePath);
+      } catch (accessError) {
+        console.error(`Animation file for ID ${id} does not exist or is not accessible`);
+        throw new Error(`Animation with ID ${id} not found`);
+      }
+      
+      try {
+        const data = await fs.readFile(filePath, 'utf8');
+        const animation = JSON.parse(data);
+        
+        // Validate animation data
+        if (!animation || !animation.svg) {
+          throw new Error(`Animation ${id} exists but has invalid or missing content`);
+        }
+        
+        return animation;
+      } catch (readError) {
+        console.error(`Error reading animation ${id}:`, readError);
+        throw readError instanceof SyntaxError 
+          ? new Error(`Animation ${id} contains invalid JSON: ${readError.message}`)
+          : readError;
+      }
     } catch (error) {
       console.error(`Error getting animation ${id}:`, error);
       throw error;

@@ -22,8 +22,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Add render counter to track excessive renders
   const renderCountRef = useRef(0);
-  console.log(`[RENDER TRACKING] AnimationCanvas render #${++renderCountRef.current} at ${new Date().toISOString()} - storyboardId: ${currentStoryboard?.id}, activeClipId: ${activeClipId}`);
-
   // Use a state variable to track whether we're showing the empty state or the SVG
   const [showEmptyState, setShowEmptyState] = useState(true);
   // Track loading state from API calls
@@ -157,10 +155,17 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       setIsLoading(true);
       clipChangePendingRef.current = true;
 
+      console.log(`Attempting to load animation for clip: ${activeClip.name} (ID: ${activeClip.id}, animationId: ${activeClip.animationId})`);
+
+      // Check if this is a new clip that might still be in the process of being created
+      const clipIsNew = activeClip.createdAt && 
+        (new Date().getTime() - new Date(activeClip.createdAt).getTime() < 5 * 60 * 1000); // 5 minutes
+      
       // Fetch the animation using the ID
       MovieStorageApi.getClipAnimation(activeClip.animationId)
         .then(animation => {
           if (animation && animation.svg) {
+            console.log(`Successfully loaded animation for clip: ${activeClip.name}`);
             // Prevent setting the same content again
             if (displaySvgContent !== animation.svg) {
               setSvgContent(animation.svg);
@@ -169,14 +174,31 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
             // Optionally update the clip in the storyboard with the SVG content
             updateClip(activeClip.id, { svgContent: animation.svg });
           } else {
+            console.warn(`Animation found for clip ${activeClip.id} but no SVG content available`);
             // Create a placeholder SVG
-            setSvgContent(createPlaceholderSvg('No animation content found'));
+            let errorMessage = 'No animation content found';
+            if (clipIsNew) {
+              errorMessage = 'Animation is being created. Please wait a moment...';
+            }
+            setSvgContent(createPlaceholderSvg(errorMessage));
           }
         })
         .catch(error => {
-          console.error('Error fetching animation:', error);
-          // Create a placeholder SVG with error message
-          setSvgContent(createPlaceholderSvg(`Error loading animation: ${error.message}`));
+          console.error(`Error fetching animation for clip ${activeClip.id}:`, error);
+          
+          // Create a placeholder SVG with error message based on context
+          let errorMessage = `Error loading animation: ${error.message}`;
+          
+          // If this is a 404 error and the clip is new, it might still be processing
+          if (error.message?.includes('404') || error.message?.includes('not found')) {
+            if (clipIsNew) {
+              errorMessage = 'Animation is still being created. Please wait or reload in a few minutes.';
+            } else {
+              errorMessage = 'Animation not found. It may have been deleted or failed to generate.';
+            }
+          }
+          
+          setSvgContent(createPlaceholderSvg(errorMessage));
         })
         .finally(() => {
           // Add slight delay before removing loading state to prevent flickering
@@ -193,13 +215,21 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = (message: string): string => {
+    // Determine color based on message type
+    let color = '#e63946'; // Default error color (red)
+    
+    // Use yellow for "in progress" messages
+    if (message.includes('being created') || message.includes('Please wait')) {
+      color = '#f0ad4e'; // Warning/waiting color (amber)
+    }
+    
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
       <rect width="800" height="600" fill="#1a1a2e" />
-      <circle cx="400" cy="200" r="50" fill="#e63946">
+      <circle cx="400" cy="200" r="50" fill="${color}">
         <animate attributeName="r" values="50;55;50" dur="2s" repeatCount="indefinite" />
       </circle>
       <text x="400" y="320" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
-        Animation Loading Issue
+        ${message.includes('being created') ? 'Animation In Progress' : 'Animation Loading Issue'}
       </text>
       <text x="400" y="360" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
         ${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
@@ -278,8 +308,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         if (currentContent !== displaySvgContent) {
           // Set the HTML directly
           svgContainerRef.current.innerHTML = displaySvgContent;
-          console.log(`[RENDER TRACKING] SVG content update at ${new Date().toISOString()} - content length: ${displaySvgContent.length}`);
-
           // Find the SVG element and set it up
           const newSvgElement = svgContainerRef.current.querySelector('svg');
           if (newSvgElement) {
@@ -313,11 +341,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       if (currentContent !== displaySvgContent) {
         // Skip rendering old content when we know we're in the middle of a clip change
         if (clipChangePendingRef.current && activeClipId !== lastDepsRef.current.activeClipId) {
-          console.log(`[RENDER TRACKING] Skipped rendering old content during clip change from ${lastDepsRef.current.activeClipId} to ${activeClipId}`);
           return;
         }
-        
-        console.log(`[RENDER TRACKING] SVG content update at ${new Date().toISOString()} - content length: ${displaySvgContent.length}`);
         
         // Clear container first to ensure a clean update
         svgContainerRef.current.innerHTML = '';

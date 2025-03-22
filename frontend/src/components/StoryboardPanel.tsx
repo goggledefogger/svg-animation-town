@@ -134,6 +134,8 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const [loadingClips, setLoadingClips] = useState<Record<string, boolean>>({});
   // Add a ref to track which clips have already been requested to prevent duplicate loads
   const requestedClipsRef = useRef<Set<string>>(new Set());
+  // Replace failed clip tracking with pending animation tracking
+  const [pendingClips, setPendingClips] = useState<Record<string, boolean>>({});
 
   // Load animation content for clips that have animationId but no SVG content
   useEffect(() => {
@@ -151,12 +153,13 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         clip.animationId && 
         !requestedClipsRef.current.has(clip.id)
       );
-
+      
       if (clipsToLoad.length === 0) return;
 
       // Create a batch loading approach to reduce render cycles
       const newLoadingState = { ...loadingClips };
       const newThumbnails = { ...clipThumbnails };
+      const newPendingClips = { ...pendingClips };
       
       // Mark all clips as loading at once in a single update and add to requested set
       clipsToLoad.forEach(clip => { 
@@ -170,21 +173,60 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
 
       // Load all clips in parallel but collect results before updating state
       try {
-        const results = await Promise.all(clipsToLoad.map(async (clip) => {
+        // Define the result type explicitly
+        type ClipLoadResult = {
+          clipId: string;
+          svgContent: string;
+          success: boolean;
+          isPending: boolean;
+        };
+
+        const results = await Promise.all(clipsToLoad.map(async (clip): Promise<ClipLoadResult> => {
           try {
             console.log(`Loading thumbnail for clip: ${clip.name} (ID: ${clip.id})`);
             const animation = await MovieStorageApi.getClipAnimation(clip.animationId!);
-            return {
-              clipId: clip.id,
-              svgContent: animation && animation.svg ? animation.svg : createPlaceholderSvg("No content"),
-              success: true
-            };
+            
+            // Check if this is a new clip that might be still in the process of being created
+            const clipIsNew = clip.createdAt ? 
+              (new Date().getTime() - new Date(clip.createdAt).getTime() < 5 * 60 * 1000) : false;
+            
+            if (animation && animation.svg) {
+              // Animation loaded successfully
+              return {
+                clipId: clip.id,
+                svgContent: animation.svg,
+                success: true,
+                isPending: false
+              };
+            } else {
+              // Animation found but no SVG content
+              console.warn(`Animation found for clip ${clip.id} but no SVG content available`);
+              return {
+                clipId: clip.id,
+                svgContent: createPlaceholderSvg(clipIsNew ? "Animation being created..." : "No content"),
+                success: false,
+                isPending: clipIsNew
+              };
+            }
           } catch (error) {
             console.error(`Error loading thumbnail for clip ${clip.id}:`, error);
+            
+            // Check if this could be an in-progress animation
+            const isRecentCreation = clip.createdAt ? 
+              (new Date().getTime() - new Date(clip.createdAt).getTime() < 5 * 60 * 1000) : false;
+            
+            // Safely check error properties
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const is404Error = errorMessage.includes('404') || errorMessage.includes('not found');
+            
+            // Determine if this is a clip that's still being processed
+            const isPending = isRecentCreation && is404Error;
+            
             return {
               clipId: clip.id,
-              svgContent: createPlaceholderSvg("Load error"),
-              success: false
+              svgContent: createPlaceholderSvg(isPending ? "Animation in progress..." : "Load error"),
+              success: false,
+              isPending: isPending
             };
           }
         }));
@@ -193,12 +235,14 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
         results.forEach(result => {
           newThumbnails[result.clipId] = result.svgContent;
           newLoadingState[result.clipId] = false;
+          newPendingClips[result.clipId] = result.isPending;
         });
         
         // Update state with all changes at once to minimize renders
         if (isMounted) {
           setClipThumbnails(newThumbnails);
           setLoadingClips(newLoadingState);
+          setPendingClips(newPendingClips);
         }
       } catch (error) {
         console.error("Error loading thumbnails:", error);
@@ -224,7 +268,10 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     }
 
     if (clip.animationId) {
-      return createPlaceholderSvg(loadingClips[clip.id] ? "Loading..." : "Click to load");
+      const isPending = pendingClips[clip.id];
+      return createPlaceholderSvg(loadingClips[clip.id] 
+        ? "Loading..." 
+        : (isPending ? "Animation in progress..." : "Click to load"));
     }
 
     return createPlaceholderSvg("No Preview");

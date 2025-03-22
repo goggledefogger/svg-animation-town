@@ -123,16 +123,33 @@ const movieStorageController = {
         throw new BadRequestError('Animation ID is required');
       }
 
-      const animation = await storageService.getAnimationForClip(animationId);
+      // First check if the animation exists and is accessible
+      try {
+        const animation = await storageService.getAnimation(animationId);
 
-      if (!animation) {
-        throw new NotFoundError(`Animation with ID ${animationId} not found`);
+        if (!animation) {
+          throw new NotFoundError(`Animation with ID ${animationId} not found`);
+        }
+
+        if (!animation.svg) {
+          throw new Error(`Animation with ID ${animationId} exists but has no SVG content`);
+        }
+
+        // If we got this far, the animation is fully saved and accessible
+        return res.status(200).json({
+          success: true,
+          animation
+        });
+      } catch (error) {
+        // Improve error messaging based on error type
+        if (error.message && error.message.includes('not found')) {
+          console.warn(`Animation ${animationId} was requested but not found - might still be generating`);
+          throw new NotFoundError(`Animation with ID ${animationId} not found or is still being created`);
+        } else {
+          console.error(`Error retrieving animation ${animationId}:`, error);
+          throw error;
+        }
       }
-
-      res.status(200).json({
-        success: true,
-        animation
-      });
     } catch (error) {
       next(error);
     }

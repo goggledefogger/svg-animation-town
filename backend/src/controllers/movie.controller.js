@@ -70,6 +70,16 @@ exports.generateScene = asyncHandler(async (req, res) => {
         message: `Error: ${animationError.message || 'Unknown error'}`,
         animationId: uuidv4() // Create a placeholder ID for tracking
       };
+      
+      // Save the error animation
+      if (animationResult.animationId) {
+        await storageService.saveAnimation({
+          id: animationResult.animationId,
+          name: `Error Animation for Scene ${movieContext.sceneIndex + 1}`,
+          svg: animationResult.svg,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
     
     // 2. Create a clip ID for the new clip
