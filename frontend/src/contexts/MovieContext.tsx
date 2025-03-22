@@ -712,11 +712,22 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
   // Set active clip and optionally fetch its animation
   const updateActiveClipId = useCallback((id: string | null) => {
+    // Prevent duplicate updates for the same clip ID
+    if (id === activeClipId) {
+      return; // Skip if the same clip is already active
+    }
+    
+    // Log where the clip change is being triggered from
+    console.log(`[EVENT TRACKING] Clip change requested from ${activeClipId} to ${id} at ${new Date().toISOString()}`);
+    console.trace('[EVENT TRACKING] Stack trace for clip change');
+    
+    // Set active clip ID in state
     setActiveClipId(id);
 
-    // Broadcast clip change event to ensure all components are notified
+    // Find the active clip details for the event
     const activeClip = id ? currentStoryboard.clips.find(clip => clip.id === id) : null;
 
+    // Dispatch the event immediately without any timeout
     window.dispatchEvent(new CustomEvent('clip-changed', {
       detail: {
         clipId: id,
@@ -725,7 +736,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
         timestamp: Date.now()
       }
     }));
-  }, [currentStoryboard.clips]);
+  }, [currentStoryboard.clips, activeClipId]);
 
   // Provide context values
   const contextValue: MovieContextType = {

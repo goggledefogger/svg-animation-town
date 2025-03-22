@@ -34,6 +34,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // We use a ref to store the last valid content to avoid losing it during re-renders
   const lastValidContentRef = useRef<string>('');
 
+  // Create a ref to track dependency changes
+  const lastDepsRef = useRef({
+    activeClipId: null as string | null,
+    svgContentLength: 0
+  });
+
   // Determine which SVG content to use with clear priorities and fallbacks
   const displaySvgContent = useMemo(() => {
     // Priority for content source:
@@ -43,29 +49,35 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // 4. Last valid content we've seen (in case state temporarily becomes empty)
 
     let content = '';
+    let source = 'none';
 
     if (propSvgContent) {
       // Props take highest priority
       content = propSvgContent;
-      console.log('Using SVG content from props');
+      source = 'props';
     } else if (activeClipSvgContent) {
       // Then active clip
       content = activeClipSvgContent;
-      console.log('Using SVG content from active clip');
+      source = 'activeClip';
     } else if (contextSvgContent) {
       // Then global context
       content = contextSvgContent;
-      console.log('Using SVG content from animation context');
+      source = 'context';
     } else if (lastValidContentRef.current) {
       // Fallback to last known good content if everything else is empty
       // This helps during state transitions that might temporarily clear values
       content = lastValidContentRef.current;
-      console.log('Using last valid SVG content as fallback');
+      source = 'lastValidCache';
     }
 
     // Store any non-empty content as our latest valid content
     if (content) {
       lastValidContentRef.current = content;
+      
+      // Track content source changes to help debug
+      if (content.length > 0 && content !== lastValidContentRef.current) {
+        console.log(`[SOURCE TRACKING] SVG content source changed to: ${source} (${content.length} bytes) at ${new Date().toISOString()}`);
+      }
     }
 
     return content;
@@ -77,53 +89,82 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     return containerRef.current.querySelector('[data-testid="svg-container"]') as HTMLDivElement;
   }, []);
 
-  // Effect to handle active clip changes - only run if no explicit prop was provided
+  // Effect for handling active clip changes
   useEffect(() => {
+    // Log dependency changes to track render triggers
+    const displaySvgLength = displaySvgContent?.length || 0;
+    const hasChanged = activeClipId !== lastDepsRef.current.activeClipId || 
+                     displaySvgLength !== lastDepsRef.current.svgContentLength;
+    
+    if (hasChanged) {
+      console.log(`[DEPS TRACKING] Dependencies changed at ${new Date().toISOString()}:
+        activeClipId: ${lastDepsRef.current.activeClipId} -> ${activeClipId}
+        svgContentLength: ${lastDepsRef.current.svgContentLength} -> ${displaySvgLength}
+      `);
+      
+      // Update the ref
+      lastDepsRef.current = {
+        activeClipId,
+        svgContentLength: displaySvgLength
+      };
+    }
+
     if (propSvgContent) return; // Skip if prop was provided
 
-    const activeClip = getActiveClip();
-    console.log('Active clip changed:', activeClip?.name);
+    const activeClip = activeClipId ? getActiveClip() : null;
 
-    // Prevent unnecessary state updates if there's no active clip
     if (!activeClip) {
-      // Only clear content if we don't have existing context content
+      // If no active clip and we don't already have content, clear the display
       if (!contextSvgContent) {
-        console.log('No active clip and no existing content, clearing display');
         setSvgContent('');
       }
       return;
     }
 
-    // Don't reload content unnecessarily if the SVG content is already loaded
-    if (activeClip.svgContent && displaySvgContent === activeClip.svgContent) {
-      console.log('Skipping reload, content already matches active clip');
-      return;
-    }
-
+    // Only process clip content if we've just changed to this clip or the clip is the same but content changed
+    const isNewClip = activeClipId !== lastDepsRef.current.activeClipId || clipChangePendingRef.current;
+    
+    // Keep track of active clip for updates
     if (activeClip.svgContent) {
-      // If we have SVG content, update the display directly
-      console.log('Updating SVG display with content length:', activeClip.svgContent.length);
-      // Set loading state before updating to prevent flashes
-      setIsLoading(true);
-      setSvgContent(activeClip.svgContent);
-      // Use setTimeout to give DOM time to update before removing loading state
-      setTimeout(() => setIsLoading(false), 100);
+      // Avoid unnecessary state updates by checking against displaySvgContent
+      // This is crucial because displaySvgContent includes the combined sources
+      if (displaySvgContent !== activeClip.svgContent) {
+        // Set loading state before updating to prevent flashes
+        setIsLoading(true);
+        
+        // We'll use a timeout to ensure we're not setting state too rapidly
+        // This prevents React from batching multiple state updates that could cause flicker
+        setTimeout(() => {
+          // Mark that we're actively updating this clip to prevent stale renders
+          clipChangePendingRef.current = true;
+          
+          setSvgContent(activeClip.svgContent);
+          
+          // Delay removing loading state to allow the DOM to update first
+          setTimeout(() => {
+            setIsLoading(false);
+            // Clear the clip change pending flag once we've settled
+            clipChangePendingRef.current = false;
+          }, 50);
+        }, 10);
+      }
     } else if (activeClip.animationId) {
       // If no SVG content but we have an animation ID, fetch it from server
-      console.log('Fetching animation content for ID:', activeClip.animationId);
       setIsLoading(true);
+      clipChangePendingRef.current = true;
 
       // Fetch the animation using the ID
       MovieStorageApi.getClipAnimation(activeClip.animationId)
         .then(animation => {
           if (animation && animation.svg) {
-            console.log('Retrieved animation SVG from server');
-            setSvgContent(animation.svg);
+            // Prevent setting the same content again
+            if (displaySvgContent !== animation.svg) {
+              setSvgContent(animation.svg);
+            }
 
             // Optionally update the clip in the storyboard with the SVG content
             updateClip(activeClip.id, { svgContent: animation.svg });
           } else {
-            console.error('No SVG content found in animation');
             // Create a placeholder SVG
             setSvgContent(createPlaceholderSvg('No animation content found'));
           }
@@ -135,14 +176,16 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         })
         .finally(() => {
           // Add slight delay before removing loading state to prevent flickering
-          setTimeout(() => setIsLoading(false), 100);
+          setTimeout(() => {
+            setIsLoading(false);
+            clipChangePendingRef.current = false;
+          }, 50);
         });
     } else {
       // Neither SVG content nor animation ID available
-      console.warn('Clip has no SVG content or animation ID');
       setSvgContent(createPlaceholderSvg('No animation content available'));
     }
-  }, [getActiveClip, setSvgContent, updateClip, propSvgContent, contextSvgContent, displaySvgContent]);
+  }, [activeClipId, getActiveClip, updateClip, propSvgContent, contextSvgContent, displaySvgContent, setSvgContent]);
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = (message: string): string => {
@@ -203,88 +246,111 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     }
   }, [setSvgRef]);
 
-  // Function to handle animation updates
+  // Debounce SVG updates to prevent rapid re-renders
+  const debouncedUpdateRef = useRef<number | null>(null);
+  
+  // Add a flag to track when we're in the middle of a clip change
+  const clipChangePendingRef = useRef<boolean>(false);
+  
+  // Function to handle animation updates with debouncing
   const handleAnimationUpdated = (event: Event) => {
     const customEvent = event as CustomEvent;
 
     // Skip update if either container ref is not initialized or we have no content
-    // This prevents the warning during initial page load
     if (!svgContainerRef.current || !displaySvgContent) {
-      console.log('AnimationCanvas: Skipping update event - waiting for initialization');
       return;
     }
 
-    console.log('AnimationCanvas: Received animation-updated event', customEvent.detail);
-
-    // Only update if we have SVG content and a container
-    if (displaySvgContent && svgContainerRef.current) {
-      console.log('AnimationCanvas: Updating SVG content on event');
-
-      // Set the HTML directly
-      svgContainerRef.current.innerHTML = displaySvgContent;
-
-      // Find the SVG element and set it up
-      const newSvgElement = svgContainerRef.current.querySelector('svg');
-      if (newSvgElement) {
-        setupSvgElement(newSvgElement as SVGSVGElement);
-        console.log('AnimationCanvas: Successfully updated SVG element');
-      } else {
-        console.warn('AnimationCanvas: No SVG element found after update');
-      }
+    // Clear any pending update
+    if (debouncedUpdateRef.current) {
+      window.clearTimeout(debouncedUpdateRef.current);
     }
+
+    // Debounce the update to prevent multiple rapid re-renders
+    debouncedUpdateRef.current = window.setTimeout(() => {
+      if (displaySvgContent && svgContainerRef.current) {
+        // Only update if different from current content
+        const currentContent = svgContainerRef.current.innerHTML;
+        if (currentContent !== displaySvgContent) {
+          // Set the HTML directly
+          svgContainerRef.current.innerHTML = displaySvgContent;
+          console.log(`[RENDER TRACKING] SVG content update at ${new Date().toISOString()} - content length: ${displaySvgContent.length}`);
+
+          // Find the SVG element and set it up
+          const newSvgElement = svgContainerRef.current.querySelector('svg');
+          if (newSvgElement) {
+            setupSvgElement(newSvgElement as SVGSVGElement);
+            setShowEmptyState(false);
+          }
+        }
+      }
+      debouncedUpdateRef.current = null;
+    }, 150); // Increase debounce time to coalesce events better
   };
 
   // Update SVG content and handle references
   useEffect(() => {
     // Skip if we have no container to update
     if (!svgContainerRef.current) {
-      console.log('AnimationCanvas: Container ref not initialized yet');
       return;
     }
 
-    // Check if we have SVG content to display
+    // Clear any pending update
+    if (debouncedUpdateRef.current) {
+      window.clearTimeout(debouncedUpdateRef.current);
+      debouncedUpdateRef.current = null;
+    }
+
+    // Check if we have SVG content to display and we're not in the middle of a clip change
     if (displaySvgContent) {
-      // Add an edge-case log to check content length
-      console.log(`AnimationCanvas: Updating SVG (length: ${displaySvgContent.length})`);
-
-      // Always clear the container first to ensure a clean update
-      // This prevents stale content from persisting
-      svgContainerRef.current.innerHTML = '';
-
-      // Force content update by directly setting innerHTML after a delay
-      // Use a longer delay on mobile to reduce flickering
-      const delay = window.innerWidth < 768 ? 100 : 10;
-
-      setTimeout(() => {
-        if (svgContainerRef.current) {
-          svgContainerRef.current.innerHTML = displaySvgContent;
-
-          // Find the SVG element in the container
-          const svgElement = svgContainerRef.current.querySelector('svg');
-          if (svgElement) {
-            console.log('AnimationCanvas: Found and setting up SVG element');
-            setupSvgElement(svgElement as SVGSVGElement);
-
-            // Add a slight delay before hiding empty state to reduce flickering
-            setTimeout(() => {
-              setShowEmptyState(false);
-            }, 50);
-
-            // Dispatch a "confirmation" event that the SVG is now visible
-            window.dispatchEvent(new CustomEvent('svg-displayed', {
-              detail: { timestamp: Date.now() }
-            }));
-          } else {
-            console.warn('AnimationCanvas: No SVG element found in container after setting content');
-            // No SVG element found, show the empty state if no message has been sent
-            setShowEmptyState(!hasMessageBeenSent);
-          }
+      // Only update if different from current content to prevent unnecessary re-renders
+      const currentContent = svgContainerRef.current.innerHTML;
+      
+      if (currentContent !== displaySvgContent) {
+        // Skip rendering old content when we know we're in the middle of a clip change
+        if (clipChangePendingRef.current && activeClipId !== lastDepsRef.current.activeClipId) {
+          console.log(`[RENDER TRACKING] Skipped rendering old content during clip change from ${lastDepsRef.current.activeClipId} to ${activeClipId}`);
+          return;
         }
-      }, delay);
+        
+        console.log(`[RENDER TRACKING] SVG content update at ${new Date().toISOString()} - content length: ${displaySvgContent.length}`);
+        
+        // Clear container first to ensure a clean update
+        svgContainerRef.current.innerHTML = '';
+
+        // Set new content after a delay to reduce flickering
+        const delay = window.innerWidth < 768 ? 100 : 10;
+
+        debouncedUpdateRef.current = window.setTimeout(() => {
+          if (svgContainerRef.current) {
+            svgContainerRef.current.innerHTML = displaySvgContent;
+
+            // Find the SVG element in the container
+            const svgElement = svgContainerRef.current.querySelector('svg');
+            if (svgElement) {
+              setupSvgElement(svgElement as SVGSVGElement);
+
+              // Hide empty state
+              setShowEmptyState(false);
+
+              // Dispatch a "confirmation" event that the SVG is now visible
+              window.dispatchEvent(new CustomEvent('svg-displayed', {
+                detail: { timestamp: Date.now() }
+              }));
+            } else {
+              // No SVG element found, show the empty state if no message has been sent
+              setShowEmptyState(!hasMessageBeenSent);
+            }
+          }
+          debouncedUpdateRef.current = null;
+        }, delay);
+      } else {
+        // Content is the same, just make sure empty state is hidden
+        setShowEmptyState(false);
+      }
     } else {
       // No SVG content, show the empty state only if no message has been sent
       setShowEmptyState(!hasMessageBeenSent || !isLoading);
-      console.log('AnimationCanvas: No content to display');
 
       // Clear the SVG container if it exists
       if (svgContainerRef.current) {
@@ -297,6 +363,14 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         setSvgRef(null);
       }
     }
+
+    // Cleanup function to clear any pending updates
+    return () => {
+      if (debouncedUpdateRef.current) {
+        window.clearTimeout(debouncedUpdateRef.current);
+        debouncedUpdateRef.current = null;
+      }
+    };
   }, [displaySvgContent, setupSvgElement, hasMessageBeenSent, isLoading]);
 
   // Monitor API calls to show loading animation
@@ -360,18 +434,26 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Function to handle clip change events
     const handleClipChanged = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('AnimationCanvas: Received clip-changed event', customEvent.detail);
-
+      
+      console.log(`[EVENT LISTENER] Received clip-changed event at ${new Date().toISOString()} for clip ${customEvent.detail.clipId}`);
+      
+      // Set flag that we're in the middle of a clip change
+      clipChangePendingRef.current = true;
+      
       // If the clip already has SVG content, we'll get that through the normal React props
       // But if it has an animationId and no content, we might need to prefetch the animation
       if (customEvent.detail.hasAnimationId && !customEvent.detail.svgContentAvailable) {
         const clip = getActiveClip();
         if (clip && clip.animationId && !clip.svgContent) {
-          console.log('AnimationCanvas: Prefetching animation for clip', clip.name);
+          console.log(`[EVENT LISTENER] Will prefetch animation for clip ${clip.id} with animationId ${clip.animationId}`);
           // This will trigger the normal effect that handles active clip changes
-          // so we don't need to do anything else here
         }
       }
+      
+      // Clear the pending flag after a short delay to allow state to settle
+      setTimeout(() => {
+        clipChangePendingRef.current = false;
+      }, 300);
     };
 
     // Add event listener for clip changes
@@ -403,40 +485,40 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   useEffect(() => {
     // Function to handle force refresh requests
     const handleForceRefresh = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      console.log('AnimationCanvas: Received force-refresh event', customEvent.detail);
+      // Clear any pending update
+      if (debouncedUpdateRef.current) {
+        window.clearTimeout(debouncedUpdateRef.current);
+      }
 
       // Check if we already have content but it's not showing
       if (displaySvgContent && svgContainerRef.current) {
-        // Force re-render the SVG
-        console.log('AnimationCanvas: Force refreshing SVG content');
-        svgContainerRef.current.innerHTML = displaySvgContent;
+        // Debounce the update
+        debouncedUpdateRef.current = window.setTimeout(() => {
+          if (svgContainerRef.current) {
+            svgContainerRef.current.innerHTML = displaySvgContent;
 
-        // Find and setup the SVG element
-        const svgElement = svgContainerRef.current.querySelector('svg');
-        if (svgElement) {
-          setupSvgElement(svgElement as SVGSVGElement);
-          setShowEmptyState(false);
-        }
+            // Find and setup the SVG element
+            const svgElement = svgContainerRef.current.querySelector('svg');
+            if (svgElement) {
+              setupSvgElement(svgElement as SVGSVGElement);
+              setShowEmptyState(false);
+            }
+          }
+          debouncedUpdateRef.current = null;
+        }, 50);
       }
     };
 
     // Register the event listener
     window.addEventListener('force-refresh-animation', handleForceRefresh);
 
-    // For convenience, create a global debug function for the browser console
-    // This allows manual triggering from the browser's console
-    (window as any).debugForceRefreshAnimation = () => {
-      window.dispatchEvent(new CustomEvent('force-refresh-animation', {
-        detail: { source: 'manual', timestamp: Date.now() }
-      }));
-    };
-
+    // Clean up
     return () => {
-      // Clean up event listener
       window.removeEventListener('force-refresh-animation', handleForceRefresh);
-      // Remove global debug function
-      delete (window as any).debugForceRefreshAnimation;
+      // Clear any pending updates on cleanup
+      if (debouncedUpdateRef.current) {
+        window.clearTimeout(debouncedUpdateRef.current);
+      }
     };
   }, [displaySvgContent, setupSvgElement]);
 

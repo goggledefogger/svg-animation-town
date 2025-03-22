@@ -30,6 +30,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   const {
     svgContent,
     setSvgContent,
+    setSvgContentWithBroadcast,
     generateAnimationFromPrompt,
     updateAnimationFromPrompt,
     saveAnimation,
@@ -37,7 +38,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     setChatHistory,
     loadAnimation,
     getSavedAnimations,
-    setAIProvider
+    setAIProvider,
   } = useAnimation();
 
   const { saveCurrentAnimationAsClip, updateClip } = useMovie();
@@ -320,18 +321,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
           if (result) {
             console.log(`Animation loaded successfully`);
 
-            // If editing from movie editor, force a broadcast update
-            // to ensure the content is completely detached from original
+            // If editing from movie editor, no need to force a broadcast update
+            // The loadAnimation function already handles the broadcast
             if (isEditingFromMovie) {
-              setTimeout(() => {
-                console.log('Editing from movie, forcing update broadcast');
-                window.dispatchEvent(new CustomEvent('animation-updated', {
-                  detail: {
-                    source: 'movie-clip-edit',
-                    timestamp: Date.now()
-                  }
-                }));
-              }, 300);
+              console.log('Editing from movie - broadcast handled by AnimationContext');
             }
 
             // If there's a pending prompt but the animation already has chat history,
@@ -361,26 +354,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
       const clipSvgContent = sessionStorage.getItem('clip_svg_content');
       if (clipSvgContent && isEditingFromMovie) {
         console.log('Loading clip SVG content directly from sessionStorage');
-        // Set the SVG content directly
-        setSvgContent(clipSvgContent);
-
-        // Force a broadcast update
-        setTimeout(() => {
-          console.log('Direct SVG content from movie clip, forcing update broadcast');
-          window.dispatchEvent(new CustomEvent('animation-updated', {
-            detail: {
-              source: 'movie-clip-edit-direct',
-              timestamp: Date.now()
-            }
-          }));
-        }, 300);
-
-        // Clear the storage
+        
+        // Use the broadcast version to ensure proper updates
+        setSvgContentWithBroadcast(clipSvgContent, 'movie-clip-edit-direct');
+        
+        // Clear the storage immediately since the broadcast function handles proper timing
         sessionStorage.removeItem('clip_svg_content');
         sessionStorage.removeItem('editing_from_movie');
       }
     }
-  }, [loadAnimation, setSvgContent, setAIProvider]);
+  }, [loadAnimation, setSvgContent, setSvgContentWithBroadcast, setAIProvider]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

@@ -254,32 +254,29 @@ const MovieEditorPage: React.FC = () => {
 
   // Add a new effect to check for incomplete generations when the page loads
   useEffect(() => {
+    // Skip if we don't have a storyboard yet or if we're already generating something
+    if (!currentStoryboard || storyboardGenerator.isGenerating) return;
+    
+    // Use storyboard ID in the check to avoid checking the same board multiple times
+    const checkKey = `hasCheckedIncompleteGeneration_${currentStoryboard.id}`;
+    const hasCheckedIncomplete = sessionStorage.getItem(checkKey);
+
+    if (hasCheckedIncomplete === 'true') {
+      // Already checked this specific storyboard
+      return;
+    }
+
     const checkIncompleteGenerations = async () => {
       try {
-        // Only run this if we're not already generating something
-        if (storyboardGenerator.isGenerating) return;
-
-        // Add sessionStorage flag to prevent infinite loop
-        const hasCheckedIncomplete = sessionStorage.getItem('hasCheckedIncompleteGeneration');
-        if (hasCheckedIncomplete === 'true') {
-          console.log('Already checked for incomplete generation this session, skipping check');
-          return;
-        }
-
-        console.log('Checking for incomplete storyboard generation...');
-        
         // Check if there's a current storyboard that's incomplete
-        if (currentStoryboard?.generationStatus?.inProgress) {
+        if (currentStoryboard.generationStatus?.inProgress) {
           console.log('Found incomplete storyboard generation:', {
             id: currentStoryboard.id,
             name: currentStoryboard.name,
-            clipCount: currentStoryboard.clips.length,
-            hasOriginalScenes: !!currentStoryboard.originalScenes,
-            originalScenesCount: currentStoryboard.originalScenes?.length || 0
           });
 
-          // Set the flag to prevent infinite loop
-          sessionStorage.setItem('hasCheckedIncompleteGeneration', 'true');
+          // Set the flag to prevent checking this storyboard again
+          sessionStorage.setItem(checkKey, 'true');
 
           // Show a confirmation to the user
           const shouldResume = window.confirm(
@@ -295,7 +292,6 @@ const MovieEditorPage: React.FC = () => {
             // Determine which AI provider was being used
             const aiProvider = currentStoryboard.aiProvider || 'openai';
 
-            // Resume the generation process - simulating the storyboard response
             // We need to create a faux storyboard response from the existing storyboard
             const resumeStoryboardResponse = {
               title: currentStoryboard.name,
@@ -305,11 +301,8 @@ const MovieEditorPage: React.FC = () => {
 
             // If we have the original scenes data stored, use it
             if (currentStoryboard.originalScenes && currentStoryboard.originalScenes.length > 0) {
-              console.log('Using original scenes for resume:', currentStoryboard.originalScenes.length);
               resumeStoryboardResponse.scenes = currentStoryboard.originalScenes;
             } else {
-              console.warn('No original scenes data found, attempting to reconstruct from clips');
-              
               // Attempt to reconstruct scenes from existing clips
               currentStoryboard.clips.forEach((clip, index) => {
                 // Only add if we have the necessary data
@@ -321,7 +314,6 @@ const MovieEditorPage: React.FC = () => {
                     duration: clip.duration || 5,
                     provider: aiProvider as 'openai' | 'claude'
                   });
-                  console.log(`Reconstructed scene ${index + 1} from clip: ${clip.name}`);
                 }
               });
               
@@ -352,7 +344,6 @@ const MovieEditorPage: React.FC = () => {
             const sceneCount = resumeStoryboardResponse.scenes.length;
             
             if (clipCount >= sceneCount) {
-              console.log('All scenes already have clips, no need to resume');
               modalManager.showToastNotification('All scenes already completed, no need to resume', 'info');
               modalManager.setShowGeneratingClipsModal(false);
               storyboardGenerator.setIsGenerating(false);
@@ -370,12 +361,6 @@ const MovieEditorPage: React.FC = () => {
               saveStoryboard();
               return;
             }
-
-            // Log the reconstructed response
-            console.log('Resuming with storyboard data:', {
-              title: resumeStoryboardResponse.title,
-              sceneCount: resumeStoryboardResponse.scenes.length
-            });
 
             // Resume from the last completed scene
             try {
@@ -400,7 +385,6 @@ const MovieEditorPage: React.FC = () => {
               storyboardGenerator.setIsGenerating(false);
             }
           } else {
-            console.log('User declined to resume generation');
             // User declined to resume - clear the inProgress flag
             const updatedStoryboard = {
               ...currentStoryboard,
@@ -412,19 +396,17 @@ const MovieEditorPage: React.FC = () => {
             setCurrentStoryboard(updatedStoryboard);
             saveStoryboard();
           }
-        } else {
-          console.log('No incomplete storyboard generation found');
         }
       } catch (error) {
         console.error('Error checking for incomplete generations:', error);
         // Set the flag to prevent infinite loop
-        sessionStorage.setItem('hasCheckedIncompleteGeneration', 'true');
+        sessionStorage.setItem(checkKey, 'true');
       }
     };
 
-    // Run the check when the component mounts
+    // Run the check
     checkIncompleteGenerations();
-  }, [currentStoryboard, storyboardGenerator]);
+  }, [currentStoryboard?.id, storyboardGenerator.isGenerating]); // Only depend on storyboard ID, not the entire object
 
   // Add a reset function to clear the incomplete check flag when creating a new storyboard
   useEffect(() => {

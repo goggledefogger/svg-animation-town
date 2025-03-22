@@ -13,6 +13,7 @@ interface AnimationContextType {
   setAIProvider: (provider: 'openai' | 'claude') => void;
   setPlaying: (playing: boolean) => void;
   setSvgContent: React.Dispatch<React.SetStateAction<string>>;
+  setSvgContentWithBroadcast: (newContent: string | ((prev: string) => string), source?: string) => void;
   setSvgRef: (ref: SVGSVGElement | null) => void;
   generateAnimationFromPrompt: (prompt: string) => Promise<string>;
   updateAnimationFromPrompt: (prompt: string) => Promise<string>;
@@ -566,33 +567,35 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Broadcast SVG content update to ensure all components are notified
+  const broadcastDebounceRef = useRef<number | null>(null);
+  
   const broadcastSvgUpdate = useCallback((source: string) => {
     // Don't broadcast if there's no SVG content to display
     if (!svgContent) {
-      console.log(`Skipping broadcast from ${source} - no SVG content available`);
       return;
     }
 
-    console.log(`Broadcasting SVG update from ${source}`);
+    // Clear any previous pending broadcast
+    if (broadcastDebounceRef.current) {
+      clearTimeout(broadcastDebounceRef.current);
+    }
 
     // Dispatch event to force UI refresh after a small delay to ensure state has been updated
-    setTimeout(() => {
+    broadcastDebounceRef.current = window.setTimeout(() => {
       const updateEvent = new CustomEvent('animation-updated', {
         detail: {
           source,
           timestamp: Date.now()
         }
       });
-      console.log(`Dispatching animation-updated event from ${source}`);
       window.dispatchEvent(updateEvent);
-    }, 50);
+      broadcastDebounceRef.current = null;
+    }, 100); // Increased debounce time to reduce multiple events
   }, [svgContent]);
 
   // Enhanced setter for SVG content that also broadcasts updates
-  const setSvgContentWithBroadcast = useCallback((newContent: string | ((prev: string) => string), source = 'unknown') => {
-    // Log SVG content update
-    console.log(`Setting SVG content from ${source}`);
-
+  const setSvgContentWithBroadcast = useCallback(
+    (newContent: string | ((prev: string) => string), source = 'unknown') => {
     // When loading a clip's SVG content from the movie editor,
     // ensure we make a clean copy to detach from original references
     if (source.includes('load-animation') || source === 'movie-clip') {
@@ -603,7 +606,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         setSvgContent(cleanContent);
 
         // Broadcast after ensuring state is updated
-        setTimeout(() => broadcastSvgUpdate(source), 50);
+        broadcastSvgUpdate(source);
         return;
       }
     }
@@ -613,20 +616,22 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         const result = newContent(prevContent);
         // Only broadcast if we have actual content after the update
         if (result && result.length > 0) {
-          // Use setTimeout to ensure state is updated before broadcasting
-          setTimeout(() => broadcastSvgUpdate(source), 0);
+          // Broadcast after the state update
+          broadcastSvgUpdate(source);
         }
         return result;
       });
     } else {
-      setSvgContent(newContent);
-      // Only broadcast if we have actual content
-      if (newContent && typeof newContent === 'string' && newContent.length > 0) {
-        // Use setTimeout to ensure state is updated before broadcasting
-        setTimeout(() => broadcastSvgUpdate(source), 0);
+      // Check if content is actually different before updating
+      if (typeof newContent === 'string' && newContent !== svgContent) {
+        setSvgContent(newContent);
+        // Only broadcast if we have actual content
+        if (newContent.length > 0) {
+          broadcastSvgUpdate(source);
+        }
       }
     }
-  }, [broadcastSvgUpdate]);
+  }, [broadcastSvgUpdate, svgContent]);
 
   // Helper function to add timestamp to SVG content to force updates
   const addTimestampToSvg = (content: string): string => {
@@ -676,17 +681,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Set the new SVG content with broadcast
           setSvgContentWithBroadcast(result.svg, 'prompt-update');
           console.log('SVG content updated and broadcast sent');
-
-          // To ensure all components update, dispatch an additional event
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('animation-updated', {
-              detail: {
-                source: 'force-update-after-prompt',
-                timestamp: Date.now()
-              }
-            }));
-            console.log('Forced animation update event dispatched');
-          }, 300);
+          
+          // We don't need the additional event dispatch, removed the setTimeout
         } else {
           console.warn('SVG content did not change after update. This may indicate the API did not modify the SVG.');
           // Force a re-render even if the content is the same
@@ -695,6 +691,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             const timestampComment = `<!-- Updated ${Date.now()} -->`;
             return prevContent.replace('</svg>', `${timestampComment}</svg>`);
           });
+          
+          // Ensure we broadcast this update
+          broadcastSvgUpdate('force-refresh-unchanged-content');
           console.log('Added timestamp to force re-render');
         }
 
@@ -1153,7 +1152,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       aiProvider,
       setAIProvider,
       setPlaying,
-      setSvgContent: setSvgContentWithBroadcast,
+      setSvgContent,
+      setSvgContentWithBroadcast,
       setSvgRef,
       generateAnimationFromPrompt,
       updateAnimationFromPrompt,

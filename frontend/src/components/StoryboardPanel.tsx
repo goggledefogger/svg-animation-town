@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import SvgThumbnail from './SvgThumbnail';
 import { MovieStorageApi, AnimationStorageApi } from '../services/api';
@@ -132,59 +132,85 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   // State to track clip thumbnails
   const [clipThumbnails, setClipThumbnails] = useState<Record<string, string>>({});
   const [loadingClips, setLoadingClips] = useState<Record<string, boolean>>({});
-
-  // State for clip selector
-  const [showClipSelector, setShowClipSelector] = useState(false);
+  // Add a ref to track which clips have already been requested to prevent duplicate loads
+  const requestedClipsRef = useRef<Set<string>>(new Set());
 
   // Load animation content for clips that have animationId but no SVG content
   useEffect(() => {
+    // Avoid loading thumbnails if we don't have clips
+    if (!clips.length) return;
+    
+    // Use a reference to track the loading process and avoid race conditions
+    let isMounted = true;
+    
     const loadMissingThumbnails = async () => {
-      // Identify clips that need content loading
-      const clipsToLoad = clips.filter(clip => !clip.svgContent && clip.animationId);
+      // Identify clips that need content loading - only load those with animationId but no SVG content
+      // and that haven't already been requested
+      const clipsToLoad = clips.filter(clip => 
+        !clip.svgContent && 
+        clip.animationId && 
+        !requestedClipsRef.current.has(clip.id)
+      );
 
       if (clipsToLoad.length === 0) return;
 
-      // Mark these clips as loading
+      // Create a batch loading approach to reduce render cycles
       const newLoadingState = { ...loadingClips };
-      clipsToLoad.forEach(clip => { newLoadingState[clip.id] = true; });
-      setLoadingClips(newLoadingState);
+      const newThumbnails = { ...clipThumbnails };
+      
+      // Mark all clips as loading at once in a single update and add to requested set
+      clipsToLoad.forEach(clip => { 
+        newLoadingState[clip.id] = true;
+        requestedClipsRef.current.add(clip.id);
+      });
+      
+      if (isMounted) {
+        setLoadingClips(newLoadingState);
+      }
 
-      // Load each clip's content
-      for (const clip of clipsToLoad) {
-        try {
-          console.log(`Loading thumbnail for clip: ${clip.name} (ID: ${clip.animationId})`);
-          const animation = await MovieStorageApi.getClipAnimation(clip.animationId!);
-
-          if (animation && animation.svg) {
-            // Update our thumbnail cache
-            setClipThumbnails(prev => ({
-              ...prev,
-              [clip.id]: animation.svg
-            }));
-          } else {
-            // Set a placeholder for failed loads
-            setClipThumbnails(prev => ({
-              ...prev,
-              [clip.id]: createPlaceholderSvg("No content")
-            }));
+      // Load all clips in parallel but collect results before updating state
+      try {
+        const results = await Promise.all(clipsToLoad.map(async (clip) => {
+          try {
+            console.log(`Loading thumbnail for clip: ${clip.name} (ID: ${clip.id})`);
+            const animation = await MovieStorageApi.getClipAnimation(clip.animationId!);
+            return {
+              clipId: clip.id,
+              svgContent: animation && animation.svg ? animation.svg : createPlaceholderSvg("No content"),
+              success: true
+            };
+          } catch (error) {
+            console.error(`Error loading thumbnail for clip ${clip.id}:`, error);
+            return {
+              clipId: clip.id,
+              svgContent: createPlaceholderSvg("Load error"),
+              success: false
+            };
           }
-        } catch (error) {
-          console.error(`Error loading thumbnail for clip ${clip.id}:`, error);
-          setClipThumbnails(prev => ({
-            ...prev,
-            [clip.id]: createPlaceholderSvg("Load error")
-          }));
-        } finally {
-          // Mark this clip as done loading
-          setLoadingClips(prev => ({
-            ...prev,
-            [clip.id]: false
-          }));
+        }));
+        
+        // Process all results at once
+        results.forEach(result => {
+          newThumbnails[result.clipId] = result.svgContent;
+          newLoadingState[result.clipId] = false;
+        });
+        
+        // Update state with all changes at once to minimize renders
+        if (isMounted) {
+          setClipThumbnails(newThumbnails);
+          setLoadingClips(newLoadingState);
         }
+      } catch (error) {
+        console.error("Error loading thumbnails:", error);
       }
     };
 
     loadMissingThumbnails();
+    
+    // Clean up function
+    return () => {
+      isMounted = false;
+    };
   }, [clips]);
 
   // Helper to get SVG content for a clip (from content or cache)
@@ -266,6 +292,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
     }
     return null; // Return null for regular items
   }, []);
+
+  // State for clip selector
+  const [showClipSelector, setShowClipSelector] = useState(false);
 
   // If renderHeaderContent is true, just return the generation badge for the header
   if (renderHeaderContent && hasGenerationStatus) {
