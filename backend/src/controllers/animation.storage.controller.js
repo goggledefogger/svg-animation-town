@@ -20,8 +20,9 @@ const animationStorageController = {
       }
 
       const timestamp = new Date().toISOString();
-      const animationId = await storageService.saveAnimation(name, {
+      const animationId = await storageService.saveAnimation({
         id,
+        name,
         svg,
         chatHistory,
         timestamp
