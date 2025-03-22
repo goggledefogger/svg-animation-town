@@ -53,16 +53,16 @@ const AnimationEditor = () => {
     <div className="flex flex-col h-screen h-mobile-screen overflow-hidden">
       <Header />
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        {/* Main content area */}
+        {/* Main content area - ALTERNATIVE LAYOUT with fixed chat height */}
         <div className="flex flex-col h-[calc(100vh-64px)] h-mobile-screen-minus-header md:flex-row md:overflow-hidden">
-          {/* Animation section - takes proper space on all screen sizes */}
-          <div className="flex-none h-[45vh] h-mobile-partial md:flex-1 md:h-auto md:w-2/3 p-4 flex flex-col z-0">
+          {/* Animation section - flex grow to fill available space */}
+          <div className="flex-1 min-h-0 md:w-2/3 p-2 md:p-4 flex flex-col z-0 overflow-hidden">
             <AnimationCanvas />
             <AnimationControls />
           </div>
 
-          {/* Chat section - conditionally shown on mobile, fixed position on mobile */}
-          <div className={`${showChat ? 'flex' : 'hidden'} md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[calc(100vh-45vh-64px)] h-mobile-content md:h-auto md:max-h-[calc(100vh-64px)] md:max-h-mobile-screen-minus-header z-10 md:z-0 md:relative bg-gotham-dark md:bg-transparent overflow-hidden`}>
+          {/* Chat section - fixed height on mobile, flexible on desktop */}
+          <div className={`${showChat ? 'flex' : 'hidden'} md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[300px] md:h-auto md:max-h-[calc(100vh-64px)] md:max-h-mobile-screen-minus-header z-10 md:z-0 md:relative bg-gotham-dark md:bg-transparent overflow-hidden`}>
             <ChatInterface
               onClose={() => setShowChat(false)}
               pendingClipName={pendingClipName}

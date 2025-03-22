@@ -496,8 +496,8 @@ const Header: React.FC<HeaderProps> = ({
           />
         </div>
 
-        {/* Bottom row with action buttons - left aligned with consistent gap */}
-        <div className="flex justify-start gap-3 px-2 overflow-x-auto">
+        {/* Bottom row with action buttons - centered with consistent gap */}
+        <div className="flex justify-center gap-3 px-2 overflow-x-auto">
           {/* Generate button - only shown on movie editor page */}
           {isMovieEditorPage && onGenerate && (
             <ActionButton

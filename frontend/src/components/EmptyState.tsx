@@ -16,23 +16,23 @@ const EmptyState: React.FC<EmptyStateProps> = memo(({
   if (svgContent) return null;
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 p-4">
+    <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 p-4">
       {loading ? (
-        <div className="relative">
+        <div className="relative flex items-center justify-center">
           {/* Pulsing loading indicator */}
-          <svg className="w-20 h-20 animate-spin-slow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <svg className="w-24 h-24 animate-spin-slow" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M50,10 C40,25 20,40 15,60 C25,55 35,55 50,70 C65,55 75,55 85,60 C80,40 60,25 50,10"
               fill="none"
               stroke="#ffdf00"
-              strokeWidth="2"
+              strokeWidth="2.5"
               strokeDasharray="240"
               strokeDashoffset="0"
               className="animate-dash-offset-300"
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-4 h-4 bg-bat-yellow rounded-full animate-ping"></div>
+            <div className="w-5 h-5 bg-bat-yellow rounded-full animate-ping"></div>
           </div>
         </div>
       ) : (

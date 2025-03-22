@@ -45,20 +45,20 @@
   .input {
     @apply bg-gotham-blue border border-gray-700 rounded-md px-4 py-2 w-full focus:outline-none focus:ring-1 focus:ring-bat-yellow text-sm md:text-base;
   }
-  
+
   /* Add visual style for disabled inputs */
   .input:disabled,
   textarea:disabled,
   select:disabled {
     @apply opacity-60 cursor-not-allowed bg-opacity-75 border-opacity-50;
   }
-  
+
   /* Handle custom background elements when disabled */
   select.bg-gray-700:disabled,
   textarea.bg-gray-700:disabled {
     @apply bg-opacity-60;
   }
-  
+
   /* Style for disabled buttons (keeping existing styling consistent) */
   button:disabled {
     @apply opacity-60 cursor-not-allowed;
@@ -75,7 +75,7 @@
 }
 
 .h-mobile-partial {
-  height: calc(var(--vh, 1vh) * 45);
+  height: calc(var(--vh, 1vh) * 35);
 }
 
 .max-h-mobile-screen-minus-header {
@@ -83,7 +83,7 @@
 }
 
 .h-mobile-content {
-  height: calc(var(--vh, 1vh) * 55 - 64px);
+  height: calc(var(--vh, 1vh) * 65 - 64px);
 }
 
 /* Mobile keyboard fix - adjust behavior when input is focused */
