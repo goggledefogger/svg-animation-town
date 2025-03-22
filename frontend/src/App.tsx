@@ -55,13 +55,9 @@ const AnimationEditor = () => {
       <div className="flex flex-col flex-1 overflow-hidden relative">
         {/* Main content area with simplified layout */}
         <div className="flex flex-col h-[calc(100vh-64px)] h-mobile-screen-minus-header md:flex-row md:overflow-hidden">
-          {/* Animation container with improved size handling */}
-          <div className={`
-            relative flex items-center justify-center flex-1 md:w-2/3
-            ${showChat ? 'max-h-[calc(100vh-64px-280px)]' : 'max-h-[calc(100vh-64px)]'}
-            overflow-hidden h-[100%]
-          `}>
-            <AnimationCanvas style={{ borderRadius: '12px' }} />
+          {/* Animation container with smooth transitions - using max-h for proper responsiveness when chat is open */}
+          <div className={`relative flex items-center justify-center flex-1 md:w-2/3 overflow-hidden transition-all duration-300 ease-in-out ${showChat ? 'max-h-[calc(100vh-64px-280px)]' : 'h-[calc(100vh-64px)]'}`}>
+            <AnimationCanvas style={{ borderRadius: '12px', transition: 'all 0.3s ease-in-out' }} />
           </div>
 
           {/* Controls overlay */}
@@ -69,8 +65,12 @@ const AnimationEditor = () => {
             <AnimationControls />
           </div>
 
-          {/* Chat section - fixed position on mobile with bottom-0, flexible on desktop */}
-          <div className={`${showChat ? 'flex' : 'hidden'} md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[280px] md:h-auto md:max-h-[calc(100vh-64px)] md:max-h-mobile-screen-minus-header fixed md:static bottom-0 left-0 right-0 z-20 md:z-0 bg-gotham-dark md:bg-transparent overflow-hidden shadow-[0_-4px_12px_rgba(0,0,0,0.5)]`}>
+          {/* Chat section with smooth transitions */}
+          <div className={`${showChat ? 'flex translate-y-0' : 'flex translate-y-full md:translate-y-0'}
+            transition-transform duration-300 ease-in-out
+            md:flex w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-700 flex-col h-[280px] md:h-auto
+            md:max-h-[calc(100vh-64px)] md:max-h-mobile-screen-minus-header fixed md:static bottom-0 left-0 right-0
+            z-20 md:z-0 bg-gotham-dark md:bg-transparent overflow-hidden shadow-[0_-4px_12px_rgba(0,0,0,0.5)]`}>
             <ChatInterface
               onClose={() => setShowChat(false)}
               pendingClipName={pendingClipName}
@@ -78,9 +78,11 @@ const AnimationEditor = () => {
           </div>
         </div>
 
-        {/* Mobile chat toggle button - only visible on mobile when chat is closed */}
+        {/* Mobile chat toggle button with smooth transitions */}
         <button
-          className={`md:hidden fixed bottom-6 right-4 z-50 bg-bat-yellow text-black rounded-full p-4 shadow-xl ${showChat ? 'hidden' : 'flex items-center justify-center animate-pulse-subtle'}`}
+          className={`md:hidden fixed bottom-6 right-4 z-50 bg-bat-yellow text-black rounded-full p-4 shadow-xl
+            transition-all duration-300 ease-in-out transform
+            ${showChat ? 'opacity-0 scale-90 translate-y-10 pointer-events-none' : 'opacity-100 scale-100 flex items-center justify-center animate-pulse-subtle'}`}
           onClick={() => setShowChat(true)}
           aria-label="Show Chat"
           style={{ zIndex: 30 }}

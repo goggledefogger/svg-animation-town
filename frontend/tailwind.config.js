@@ -19,6 +19,7 @@ module.exports = {
         'fadeIn': 'fadeIn 0.2s ease-in-out',
         'fade-in': 'fadeIn 0.2s ease-in-out',
         'ping': 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+        'progress-indeterminate': 'progress-indeterminate 1.5s ease-in-out infinite',
       },
       keyframes: {
         'pulse-glow': {
@@ -37,6 +38,11 @@ module.exports = {
         fadeIn: {
           '0%': { opacity: 0 },
           '100%': { opacity: 1 },
+        },
+        'progress-indeterminate': {
+          '0%': { transform: 'translateX(-100%)' },
+          '50%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(100%)' },
         },
       },
     },

@@ -19,30 +19,36 @@ const EmptyState: React.FC<EmptyStateProps> = memo(({
     <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 p-4">
       {loading ? (
         <div className="relative flex flex-col items-center justify-center">
-          {/* Enhanced pulsing loading indicator */}
-          <svg className="w-28 h-28 sm:w-32 sm:h-32 animate-spin-slow drop-shadow-lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M50,10 C40,25 20,40 15,60 C25,55 35,55 50,70 C65,55 75,55 85,60 C80,40 60,25 50,10"
-              fill="none"
-              stroke="#ffdf00"
-              strokeWidth="4"
-              strokeDasharray="240"
-              strokeDashoffset="0"
-              className="animate-dash-offset-300"
-            />
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 bg-bat-yellow rounded-full animate-ping opacity-80"></div>
-          </div>
+          {/* Main animated logo with pulse effect */}
+          <div className="relative">
+            <svg className="w-32 h-32 sm:w-36 sm:h-36 drop-shadow-lg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              {/* Background glow effect */}
+              <circle cx="50" cy="50" r="40" fill="#ffdf00" opacity="0.2" className="animate-pulse">
+                <animate attributeName="r" values="40;45;40" dur="3s" repeatCount="indefinite" />
+              </circle>
 
-          {/* Loading message */}
-          <div className="text-center mt-6 px-4 py-2 bg-black/40 backdrop-blur-sm rounded-lg">
-            <p className="text-base sm:text-lg font-medium text-bat-yellow animate-pulse">
-              Loading animation...
-            </p>
-            <p className="text-xs sm:text-sm mt-1 text-gray-300">
-              Please wait while we create your masterpiece
-            </p>
+              {/* Main bat symbol path */}
+              <path
+                d="M50,10 C40,25 20,40 15,60 C25,55 35,55 50,70 C65,55 75,55 85,60 C80,40 60,25 50,10"
+                fill="none"
+                stroke="#ffdf00"
+                strokeWidth="4"
+                strokeDasharray="240"
+                strokeDashoffset="0"
+                className="animate-dash-offset-300"
+              />
+
+              {/* Highlight points at key locations */}
+              <circle cx="50" cy="10" r="2" fill="#ffffff" className="animate-pulse-subtle" />
+              <circle cx="15" cy="60" r="2" fill="#ffffff" className="animate-pulse-subtle" />
+              <circle cx="85" cy="60" r="2" fill="#ffffff" className="animate-pulse-subtle" />
+              <circle cx="50" cy="70" r="2" fill="#ffffff" className="animate-pulse-subtle" />
+            </svg>
+
+            {/* Center pulse */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-bat-yellow rounded-full animate-ping opacity-80"></div>
+            </div>
           </div>
         </div>
       ) : (

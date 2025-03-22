@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
+import { MovieClip } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 import { MovieStorageApi } from '../services/api';
 
@@ -13,10 +14,18 @@ interface AnimationCanvasProps {
 const useAnimationLoader = (setSvgContent: (content: string) => void, createPlaceholderSvg: (message: string) => string) => {
   const [isLoading, setIsLoading] = useState(false);
   const loadingTimeoutRef = useRef<number | null>(null);
+  // Add a flag to track if we're waiting for a server API call
+  const isServerApiCallPendingRef = useRef(false);
 
-  // Start loading animation
-  const startLoading = useCallback(() => {
-    setIsLoading(true);
+  // Start loading animation - only show for server API calls
+  const startLoading = useCallback((isServerCall = false) => {
+    if (isServerCall) {
+      isServerApiCallPendingRef.current = true;
+      setIsLoading(true);
+      console.log('[Loading] Starting loading animation for server API call');
+    } else {
+      console.log('[Loading] Skipping loading animation for client-side operation');
+    }
 
     // Clear any existing timeout
     if (loadingTimeoutRef.current !== null) {
@@ -26,58 +35,99 @@ const useAnimationLoader = (setSvgContent: (content: string) => void, createPlac
   }, []);
 
   // End loading with delay
-  const endLoading = useCallback((delay = 1500) => {
+  const endLoading = useCallback((delay = 800) => {
     // Clear any existing timeout
     if (loadingTimeoutRef.current !== null) {
       clearTimeout(loadingTimeoutRef.current);
     }
 
-    // Set new timeout
-    loadingTimeoutRef.current = window.setTimeout(() => {
-      setIsLoading(false);
-      loadingTimeoutRef.current = null;
-    }, delay);
+    // Only hide loading if it was a server call
+    if (isServerApiCallPendingRef.current) {
+      // Set new timeout
+      loadingTimeoutRef.current = window.setTimeout(() => {
+        setIsLoading(false);
+        isServerApiCallPendingRef.current = false;
+        loadingTimeoutRef.current = null;
+        console.log('[Loading] Hiding loading animation after server API call');
+      }, delay);
+    }
   }, []);
 
   // Load animation from server
-  const loadAnimation = useCallback(async (animationId: string, isNew = false) => {
+  const loadAnimation = useCallback(async (animationId: string | null): Promise<boolean> => {
     if (!animationId) return false;
 
-    startLoading();
+    startLoading(true);
     console.log(`[Animation Loading] Loading animation ${animationId}`);
 
     try {
+      // Dispatch event for API call tracking
+      window.dispatchEvent(new CustomEvent('api-call-start', {
+        detail: {
+          type: 'animation-load',
+          animationId
+        }
+      }));
+
       const animation = await MovieStorageApi.getClipAnimation(animationId);
 
+      // Success - set the content
       if (animation && animation.svg) {
-        console.log(`[Animation Loading] Successfully loaded animation (${animation.svg.length} bytes)`);
         setSvgContent(animation.svg);
+        console.log(`[Animation Loading] Successfully loaded animation ${animationId} (${animation.svg.length} bytes)`);
+
+        // Dispatch end event with success result
+        window.dispatchEvent(new CustomEvent('api-call-end', {
+          detail: {
+            type: 'animation-load',
+            animationId,
+            success: true
+          }
+        }));
+
         endLoading();
         return true;
       } else {
-        console.error(`[Animation Loading] Animation found but no SVG content available`);
-        const errorMessage = isNew
-          ? 'Animation is being created. Please wait a moment...'
-          : 'No animation content available';
-        setSvgContent(createPlaceholderSvg(errorMessage));
+        // No SVG in response
+        console.error(`[Animation Loading] Animation found but no SVG content available for ${animationId}`);
+        setSvgContent(createPlaceholderSvg('No animation content found'));
+
+        // Dispatch end event with failure
+        window.dispatchEvent(new CustomEvent('api-call-end', {
+          detail: {
+            type: 'animation-load',
+            animationId,
+            success: false,
+            error: 'No SVG content in response'
+          }
+        }));
+
         endLoading();
         return false;
       }
     } catch (error: any) {
-      console.error(`[Animation Loading] Error loading animation:`, error);
+      console.error(`[Animation Loading] Error loading animation ${animationId}:`, error);
 
-      // Create message based on error type
-      let errorMessage = `Error loading animation: ${error.message}`;
+      // Create appropriate error message
+      let errorMessage = 'Error loading animation';
 
+      // Handle 404 specifically or check for related error messages
       if (error.message?.includes('404') || error.message?.includes('not found')) {
-        if (isNew) {
-          errorMessage = 'Animation is still being created. Please wait or refresh in a few minutes.';
-        } else {
-          errorMessage = 'Animation not found. It may have been deleted or failed to generate.';
-        }
+        errorMessage = 'Animation not found or still being created';
       }
 
       setSvgContent(createPlaceholderSvg(errorMessage));
+
+      // Dispatch end event with error details
+      window.dispatchEvent(new CustomEvent('api-call-end', {
+        detail: {
+          type: 'animation-load',
+          animationId,
+          success: false,
+          error: error.message || 'Unknown error'
+        }
+      }));
+
       endLoading();
       return false;
     }
@@ -211,9 +261,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // Avoid unnecessary state updates by checking against displaySvgContent
       // This is crucial because displaySvgContent includes the combined sources
       if (displaySvgContent !== activeClip.svgContent) {
-        // Set loading state before updating to prevent flashes
-        startLoading();
-
+        // Don't show loading for content we already have cached - this is a client-side operation
         console.log(`[Animation] Using cached SVG content for clip ${activeClip.id} (${activeClip.svgContent.length} bytes)`);
 
         // We'll use a timeout to ensure we're not setting state too rapidly
@@ -224,10 +272,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
           setSvgContent(activeClip.svgContent);
 
-          // Delay removing loading state to allow the DOM to update first
+          // Clear the clip change pending flag once we've settled
           setTimeout(() => {
-            endLoading(0); // immediate
-            // Clear the clip change pending flag once we've settled
             clipChangePendingRef.current = false;
           }, 50);
         }, 10);
@@ -257,7 +303,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         (new Date().getTime() - new Date(activeClip.createdAt).getTime() < 5 * 60 * 1000); // 5 minutes
 
       // Use our custom hook to load the animation
-      loadAnimation(activeClip.animationId || '', clipIsNew)
+      loadAnimation(activeClip.animationId || null)
         .then(success => {
           if (success) {
             // If we successfully loaded the animation, update the clip in the storyboard
@@ -315,36 +361,106 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Create a unique ID for refresh button interaction
     const refreshButtonId = `refresh-btn-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
-      <rect width="800" height="600" fill="#1a1a2e" />
-      <circle cx="400" cy="200" r="50" fill="${color}">
-        <animate attributeName="r" values="50;55;50" dur="2s" repeatCount="indefinite" />
-      </circle>
-      <text x="400" y="300" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
-        ${message.includes('being created') ? 'Animation In Progress' : 'Animation Loading Issue'}
-      </text>
-      <text x="400" y="340" font-family="Arial" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
-        ${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
-      </text>
+    // Dynamic gradient ID
+    const gradientId = `gradient-${Date.now()}`;
+    const pulseId = `pulse-${Date.now()}`;
 
-      <!-- Refresh button -->
+    // Choose title based on message
+    const isWaiting = message.includes('being created') || message.includes('Please wait');
+    const title = isWaiting ? 'Animation In Progress' : 'Animation Loading Issue';
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+      <!-- Background with subtle gradient -->
+      <defs>
+        <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0f172a" />
+          <stop offset="100%" stop-color="#1a1a2e" />
+        </linearGradient>
+
+        <!-- Glowing effect for pulse -->
+        <filter id="${pulseId}" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="10" />
+        </filter>
+      </defs>
+
+      <rect width="800" height="600" fill="url(#${gradientId})" />
+
+      <!-- Animated background elements -->
+      <g opacity="0.15">
+        ${Array.from({length: 5}, (_, i) => {
+          const x = 100 + (i * 150);
+          const delay = i * 0.5;
+          return `<circle cx="${x}" cy="500" r="20" fill="#ffdf00" opacity="0.5">
+            <animate attributeName="cy" values="500;100;500" dur="${3 + i}s" begin="${delay}s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.2;0.5;0.2" dur="${3 + i}s" begin="${delay}s" repeatCount="indefinite" />
+          </circle>`;
+        }).join('')}
+      </g>
+
+      <!-- Main indicator -->
+      <g transform="translate(400, 180)">
+        <!-- Glow effect -->
+        <circle cx="0" cy="0" r="70" fill="${color}" opacity="0.2" filter="url(#${pulseId})">
+          <animate attributeName="r" values="70;90;70" dur="3s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.2;0.3;0.2" dur="3s" repeatCount="indefinite" />
+        </circle>
+
+        <!-- Main circular indicator -->
+        <circle cx="0" cy="0" r="50" fill="${color}">
+          <animate attributeName="r" values="50;55;50" dur="2s" repeatCount="indefinite" />
+        </circle>
+
+        <!-- Animated bat symbol -->
+        <path d="M0,-40 C-10,-25 -30,-10 -35,10 C-25,5 -15,5 0,20 C15,5 25,5 35,10 C30,-10 10,-25 0,-40"
+              fill="#1a1a2e" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.7">
+          <animate attributeName="stroke-opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
+        </path>
+      </g>
+
+      <!-- Title text with glow -->
+      <g>
+        <text x="400" y="300" font-family="Arial, sans-serif" font-size="28" fill="white" text-anchor="middle" font-weight="bold">
+          ${title}
+        </text>
+        <text x="400" y="340" font-family="Arial, sans-serif" font-size="16" fill="#cccccc" text-anchor="middle" width="700">
+          ${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+        </text>
+      </g>
+
+      <!-- Progress indicator -->
+      ${isWaiting ? `
+      <g>
+        <rect x="250" y="380" width="300" height="8" rx="4" fill="#2d3748" />
+        <rect x="250" y="380" width="0" height="8" rx="4" fill="${color}">
+          <animate attributeName="width" values="0;300;0" dur="2s" repeatCount="indefinite" />
+        </rect>
+      </g>` : ''}
+
+      <!-- Refresh button with improved style -->
       <g id="${refreshButtonId}" style="cursor:pointer" onclick="(function(){
         console.log('Manual refresh requested by user');
         window.dispatchEvent(new CustomEvent('force-refresh-animation'));
         return false;
       })()">
-        <rect x="350" y="400" width="100" height="40" rx="5" fill="#4361ee" stroke="#ffffff" stroke-width="2" />
-        <text x="400" y="425" font-family="Arial" font-size="14" fill="white" text-anchor="middle">Refresh</text>
+        <rect x="330" y="410" width="140" height="45" rx="22.5" fill="#4361ee" opacity="0.9">
+          <animate attributeName="opacity" values="0.9;1;0.9" dur="2s" repeatCount="indefinite" />
+        </rect>
+        <text x="400" y="438" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle" font-weight="bold">Refresh</text>
+        <!-- Refresh icon -->
+        <path d="M370,438 C370,428 378,420 388,420 C395,420 401,424 404,430 M404,420 L404,430 L394,430"
+              fill="none" stroke="white" stroke-width="2" />
       </g>
 
-      <!-- Debug info section with background for visibility -->
-      <rect x="50" y="480" width="700" height="80" fill="rgba(0,0,0,0.7)" rx="5" />
-      <text x="400" y="510" font-family="monospace" font-size="14" fill="#00ff00" text-anchor="middle">
-        ${debugInfo}
-      </text>
-      <text x="400" y="540" font-family="monospace" font-size="14" fill="#00ff00" text-anchor="middle">
-        Load Attempt: ${new Date().toISOString()}
-      </text>
+      <!-- Debug info section with improved style -->
+      <g opacity="0.8">
+        <rect x="50" y="500" width="700" height="80" fill="rgba(0,0,0,0.5)" rx="8" />
+        <text x="400" y="525" font-family="monospace" font-size="12" fill="#00ff00" text-anchor="middle">
+          ${debugInfo}
+        </text>
+        <text x="400" y="555" font-family="monospace" font-size="12" fill="#00ff00" text-anchor="middle">
+          Load Attempt: ${new Date().toISOString()}
+        </text>
+      </g>
     </svg>`;
   }, [getActiveClip]);
 
@@ -524,45 +640,52 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     };
   }, [displaySvgContent, setupSvgElement, hasMessageBeenSent, isLoading]);
 
-  // Monitor API calls to show loading animation
+  // Monitor API calls to show loading state appropriately
   useEffect(() => {
-    // Function to listen for API calls starting
-    const handleApiCallStart = () => {
-      console.log('[Loading] API call started, showing loading animation');
-      startLoading();
-      setHasMessageBeenSent(true);
-      setShowEmptyState(false);
+    const handleApiCallStart = (event: any) => {
+      const eventData = event?.detail || {};
+      const { type, endpoint } = eventData;
+
+      // Only show loading for animation-related API calls
+      const isAnimationCall =
+        endpoint?.includes('/animations/') ||
+        endpoint?.includes('/clips/') ||
+        type?.includes('animation');
+
+      if (isAnimationCall) {
+        console.log('[Loading] Animation API call started, showing loading animation');
+        startLoading(true);
+        setHasMessageBeenSent(true);
+        setShowEmptyState(false);
+      } else {
+        console.log('[Loading] Non-animation API call, not showing loading animation');
+      }
     };
 
-    // Function to listen for API calls completing
-    const handleApiCallEnd = () => {
-      console.log('[Loading] API call ended, will hide loading animation after delay');
-      // Use a much longer delay to ensure the loading state is visible
-      // This gives users clear feedback that something is happening
-      const delay = window.innerWidth < 768 ? 2000 : 1500;
-      setTimeout(() => {
-        // Only hide loading if we're not in the middle of another operation
-        if (!clipChangePendingRef.current) {
-          endLoading(0); // immediate
-          console.log('[Loading] Loading animation hidden');
-        } else {
-          console.log('[Loading] Keeping loading animation visible due to pending operation');
-        }
-      }, delay);
+    const handleApiCallEnd = (event: any) => {
+      const eventData = event?.detail || {};
+      const { type, endpoint } = eventData;
+
+      // Only handle loading state for animation-related API calls
+      const isAnimationCall =
+        endpoint?.includes('/animations/') ||
+        endpoint?.includes('/clips/') ||
+        type?.includes('animation');
+
+      if (isAnimationCall) {
+        console.log('[Loading] Animation API call ended, hiding loading animation');
+        endLoading();
+      }
     };
 
-    // Add event listeners
     window.addEventListener('api-call-start', handleApiCallStart);
     window.addEventListener('api-call-end', handleApiCallEnd);
-    window.addEventListener('animation-updated', handleAnimationUpdated);
 
     return () => {
-      // Remove event listeners on cleanup
       window.removeEventListener('api-call-start', handleApiCallStart);
       window.removeEventListener('api-call-end', handleApiCallEnd);
-      window.removeEventListener('animation-updated', handleAnimationUpdated);
     };
-  }, [displaySvgContent, setupSvgElement]);
+  }, [startLoading, endLoading, setHasMessageBeenSent, setShowEmptyState]);
 
   // Only listen for animation updates
   useEffect(() => {
@@ -637,30 +760,19 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     };
   }, [displaySvgContent, getSvgContainer]);
 
-  // Create a prefetchClipAnimation function that can be called directly
-  const prefetchClipAnimation = useCallback((clipId: string) => {
-    console.log(`[Clip Change] Handling clip change to ${clipId}`);
-
-    // Set flag that we're in the middle of a clip change
-    clipChangePendingRef.current = true;
-
-    // Get the clip info
-    const clip = getActiveClip();
-
-    if (clip && clip.animationId && !clip.svgContent) {
-      console.log(`[Clip Change] Will prefetch animation for clip ${clip.id} with animationId ${clip.animationId}`);
-      // Show loading state for user feedback
-      startLoading();
-
-      // The clip change effect will handle the actual loading since
-      // it monitors activeClipId changes
+  // Handle prefetching animation when a clip is selected
+  const prefetchClipAnimation = useCallback((clip: MovieClip) => {
+    if (!clip || !clip.animationId) {
+      console.log('[Clip Change] No animation ID available for this clip');
+      return;
     }
 
-    // Clear the pending flag after a short delay to allow state to settle
-    setTimeout(() => {
-      clipChangePendingRef.current = false;
-    }, 300);
-  }, [getActiveClip]);
+    console.log(`[Clip Change] Will prefetch animation for clip ${clip.id} with animationId ${clip.animationId}`);
+
+    // No need to show loading state for client-side clip changes
+    // The clip change effect will handle loading if needed
+    // (Only actual API calls will show loading animation)
+  }, []);
 
   // Monitor for clip change events (keep for backward compatibility)
   useEffect(() => {
