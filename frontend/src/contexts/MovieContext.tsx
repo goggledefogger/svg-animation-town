@@ -233,22 +233,24 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
           updatedAt: new Date()
         };
 
-        // Try to save to server first
-        try {
-          const result = await MovieStorageApi.saveMovie(updatedStoryboard);
-          console.log('Storyboard saved to server with ID:', result.id);
+        // Try to save to server first - no longer need the try/catch here
+        // since we're using setTimeout with its own error handling
+        setTimeout(async () => {
+          try {
+            const result = await MovieStorageApi.saveMovie(updatedStoryboard);
+            console.log('Storyboard saved to server with ID:', result.id);
 
-          // Update the storyboard with the server ID if needed
-          if (updatedStoryboard.id !== result.id) {
-            setCurrentStoryboard(prev => ({
-              ...prev,
-              id: result.id
-            }));
+            // Update the storyboard with the server ID if needed
+            if (updatedStoryboard.id !== result.id) {
+              setCurrentStoryboard(prev => ({
+                ...prev,
+                id: result.id
+              }));
+            }
+          } catch (serverError) {
+            console.error('Error saving storyboard to server:', serverError);
           }
-        } catch (serverError) {
-          console.error('Error saving storyboard to server:', serverError);
-          // Continue to local fallback
-        }
+        }, 0);
 
         // Also update local cache
         try {
@@ -275,9 +277,12 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
         console.log('Storyboard saved with', updatedStoryboard.clips.length, 'clips');
 
         // Refresh the storyboard list to ensure we have the latest from both server and local
-        getSavedStoryboards().catch(err => {
-          console.error('Error refreshing storyboard list after save:', err);
-        });
+        // Use setTimeout to move this outside the render cycle
+        setTimeout(() => {
+          getSavedStoryboards().catch(err => {
+            console.error('Error refreshing storyboard list after save:', err);
+          });
+        }, 0);
 
         resolve(true);
       } catch (error) {

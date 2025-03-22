@@ -198,10 +198,12 @@ export function useStoryboardGenerator(
             }
           };
 
-          // Save the final state
-          MovieStorageApi.saveMovie(finalStoryboard).catch(err => {
-            console.error('Error in final storyboard save:', err);
-          });
+          // Don't call MovieStorageApi.saveMovie directly during state update
+          // Instead, return the new state and save outside the state update
+          setTimeout(() => {
+            MovieStorageApi.saveMovie(finalStoryboard)
+              .catch(err => console.error('Error saving completed storyboard:', err));
+          }, 0);
 
           return finalStoryboard;
         });
@@ -239,9 +241,10 @@ export function useStoryboardGenerator(
         };
         
         // Save the updated status
-        MovieStorageApi.saveMovie(updatedStoryboard).catch(err => {
-          console.error('Error saving storyboard with error status:', err);
-        });
+        setTimeout(() => {
+          MovieStorageApi.saveMovie(updatedStoryboard)
+            .catch(err => console.error('Error saving storyboard with error status:', err));
+        }, 0);
         
         return updatedStoryboard;
       });
@@ -281,9 +284,12 @@ export function useStoryboardGenerator(
             }
           };
           
-          // Save the completed storyboard
-          MovieStorageApi.saveMovie(completedStoryboard)
-            .catch(err => console.error('Error saving completed storyboard:', err));
+          // Don't call MovieStorageApi.saveMovie directly during state update
+          // Instead, return the new state and save outside the state update
+          setTimeout(() => {
+            MovieStorageApi.saveMovie(completedStoryboard)
+              .catch(err => console.error('Error saving completed storyboard:', err));
+          }, 0);
             
           return completedStoryboard;
         });
@@ -361,26 +367,22 @@ export function useStoryboardGenerator(
     }
 
     try {
-      // Set current storyboard and show generating clips modal
+      // Move MovieStorageApi.saveMovie out of the React render cycle
+      console.log('Saving initial/resumed storyboard to server...');
+      setTimeout(() => {
+        MovieStorageApi.saveMovie(newStoryboard)
+          .then(result => {
+            console.log(`Initial/resumed storyboard saved to server with ID: ${result.id}`);
+          })
+          .catch(error => {
+            console.error('Error saving initial storyboard:', error);
+          });
+      }, 0);
+      
+      // Update current storyboard state
       setCurrentStoryboard(newStoryboard);
       setShowGeneratingClipsModal(true);
       
-      // Save the initial storyboard to the server using direct API call
-      console.log('Saving initial/resumed storyboard to server...');
-      try {
-        // Use direct API call to avoid stale state issues
-        const result = await MovieStorageApi.saveMovie(newStoryboard);
-        console.log(`Initial/resumed storyboard saved to server with ID: ${result.id}`);
-
-        // CRITICAL: Store the server-assigned ID if different
-        if (result.id !== storyboardId) {
-          console.log(`Server assigned different ID: ${result.id} (original: ${storyboardId})`);
-          newStoryboard.id = result.id;
-        }
-      } catch (error) {
-        console.error('Error saving initial/resumed storyboard:', error);
-      }
-
       // Track scene generation errors
       const errors: SceneGenerationError[] = [];
 
@@ -518,13 +520,6 @@ export function useStoryboardGenerator(
                     }
                   };
 
-                  // Save the storyboard via the API to ensure the backend has the updated clips
-                  MovieStorageApi.saveMovie(updatedStoryboard)
-                    .catch(err => {
-                      console.error(`Error saving storyboard:`, err);
-                    });
-
-                  successfulClipsCount++;
                   return updatedStoryboard;
                 });
                 
@@ -629,13 +624,6 @@ export function useStoryboardGenerator(
               }
             };
 
-            // Save the storyboard via the API to ensure the backend has the updated clips
-            MovieStorageApi.saveMovie(updatedStoryboard)
-              .catch(err => {
-                console.error(`Error saving storyboard:`, err);
-              });
-
-            successfulClipsCount++;
             return updatedStoryboard;
           });
         } catch (sceneError) {
@@ -684,20 +672,22 @@ export function useStoryboardGenerator(
         console.log(`Finalizing storyboard ${finalStoryboard.id} with ${finalStoryboard.clips.length} clips`);
 
         // Save the final storyboard and ensure we preserve the current ID
-        MovieStorageApi.saveMovie(finalStoryboard)
-          .then(result => {
-            // Log the saved state
-            console.log(`Final storyboard saved with ID: ${result.id} (original: ${finalStoryboard.id})`);
+        setTimeout(() => {
+          MovieStorageApi.saveMovie(finalStoryboard)
+            .then(result => {
+              // Log the saved state
+              console.log(`Final storyboard saved with ID: ${result.id} (original: ${finalStoryboard.id})`);
 
-            // If server assigned a different ID, update our reference but keep all clips
-            if (result.id !== finalStoryboard.id) {
-              console.log(`Server assigned different ID - updating reference only`);
-              finalStoryboard.id = result.id;
-            }
-          })
-          .catch(saveError => {
-            console.error('Failed to save final storyboard:', saveError);
-          });
+              // If server assigned a different ID, update our reference but keep all clips
+              if (result.id !== finalStoryboard.id) {
+                console.log(`Server assigned different ID - updating reference only`);
+                finalStoryboard.id = result.id;
+              }
+            })
+            .catch(saveError => {
+              console.error('Failed to save final storyboard:', saveError);
+            });
+        }, 0);
 
         return finalStoryboard;
       });
@@ -737,11 +727,15 @@ export function useStoryboardGenerator(
 
       // Direct save of error state using the same ID to prevent creating a new file
       console.log(`Saving error state for storyboard with ID ${errorStoryboard.id}`);
-      MovieStorageApi.saveMovie(errorStoryboard).then(result => {
-        console.log(`Error state saved with ID: ${result.id}`);
-      }).catch(err => {
-        console.error('Error saving storyboard error state:', err);
-      });
+      setTimeout(() => {
+        MovieStorageApi.saveMovie(errorStoryboard)
+          .then(result => {
+            console.log(`Error state saved with ID: ${result.id}`);
+          })
+          .catch(err => {
+            console.error('Error saving storyboard error state:', err);
+          });
+      }, 0);
 
       return errorStoryboard;
     });
