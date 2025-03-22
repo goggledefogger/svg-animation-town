@@ -347,6 +347,30 @@ const MovieEditorPage: React.FC = () => {
               }
             }
 
+            // Check if we actually have scenes remaining based on clips already generated
+            const clipCount = currentStoryboard.clips?.length || 0;
+            const sceneCount = resumeStoryboardResponse.scenes.length;
+            
+            if (clipCount >= sceneCount) {
+              console.log('All scenes already have clips, no need to resume');
+              modalManager.showToastNotification('All scenes already completed, no need to resume', 'info');
+              modalManager.setShowGeneratingClipsModal(false);
+              storyboardGenerator.setIsGenerating(false);
+              
+              // Mark as completed
+              const updatedStoryboard = {
+                ...currentStoryboard,
+                generationStatus: {
+                  ...currentStoryboard.generationStatus,
+                  inProgress: false,
+                  completedAt: new Date()
+                }
+              };
+              setCurrentStoryboard(updatedStoryboard);
+              saveStoryboard();
+              return;
+            }
+
             // Log the reconstructed response
             console.log('Resuming with storyboard data:', {
               title: resumeStoryboardResponse.title,

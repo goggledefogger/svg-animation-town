@@ -221,8 +221,8 @@ export function useStoryboardGenerator(
         scenes: remainingScenes
       };
 
-      // Process the remaining scenes
-      await processStoryboard(resumedResponse, aiProvider, startSceneIndex);
+      // Process the remaining scenes - pass true for isResuming
+      await processStoryboard(resumedResponse, aiProvider, startSceneIndex, true);
     } catch (error) {
       console.error('Error resuming storyboard generation:', error);
       
@@ -259,7 +259,8 @@ export function useStoryboardGenerator(
   const processStoryboard = async (
     storyboard: StoryboardResponse,
     aiProvider: 'openai' | 'claude',
-    startingSceneIndex = 0
+    startingSceneIndex = 0,
+    isResuming = false
   ) => {
     console.log('Beginning storyboard generation...');
 
@@ -267,7 +268,7 @@ export function useStoryboardGenerator(
     let storyboardId: string;
     let newStoryboard: Storyboard;
 
-    if (startingSceneIndex === 0) {
+    if (startingSceneIndex === 0 && !isResuming) {
       // Create a new storyboard
       storyboardId = uuidv4();
       console.log(`Created new storyboard with ID: ${storyboardId}`);
@@ -291,9 +292,14 @@ export function useStoryboardGenerator(
         }
       };
     } else {
-      // We're resuming an existing storyboard
+      // We're resuming an existing storyboard or continuing from a non-zero index
+      if (isResuming) {
+        console.log(`Continuing with existing storyboard ID: ${currentStoryboard!.id} (resume operation)`);
+      } else {
+        console.log(`Continuing from scene ${startingSceneIndex} with storyboard ID: ${currentStoryboard!.id}`);
+      }
+      
       storyboardId = currentStoryboard!.id;
-      console.log(`Resuming storyboard with ID: ${storyboardId}`);
 
       // Use the current storyboard as starting point
       newStoryboard = {
