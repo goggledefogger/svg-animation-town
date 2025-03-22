@@ -161,19 +161,19 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     try {
       // Try to fetch from server first
       let updatedSavedStoryboards: Record<string, Storyboard> = {};
-      
+
       try {
         console.log('Fetching storyboards from server...');
         const serverStoryboards = await MovieStorageApi.listMovies();
-        
+
         console.log(`Received ${serverStoryboards.length} storyboards from server`);
-        
+
         // Convert to record format
         updatedSavedStoryboards = serverStoryboards.reduce((acc, storyboard) => {
           acc[storyboard.id] = storyboard;
           return acc;
         }, {} as Record<string, Storyboard>);
-        
+
         // Check for force refresh flag and clear it if present
         const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
         if (forceRefresh) {
@@ -191,29 +191,29 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Also try to get from localStorage as fallback or to merge with server data
       try {
         const localIds = getSavedStoryboardsFromStorage();
-        
+
         // Get local storyboards data
         const localStoryboards = JSON.parse(localStorage.getItem(STORYBOARD_STORAGE_KEY) || '{}');
-        
+
         // Merge local and server storyboards
         const mergedStoryboards = { ...updatedSavedStoryboards };
-        
+
         // Add local storyboards that aren't in the server data
         localIds.forEach(id => {
           if (!mergedStoryboards[id] && localStoryboards[id]) {
             mergedStoryboards[id] = localStoryboards[id];
           }
         });
-        
+
         // Update saved storyboards list with merged IDs
         const mergedIds = Object.keys(mergedStoryboards);
         setSavedStoryboards(mergedIds);
-        
+
         return mergedIds;
       } catch (localError) {
         console.error('Error getting storyboards from local storage:', localError);
       }
-      
+
       // If we get here, there was an error with both server and local storage
       // Return an empty array to maintain the return type
       return [];
@@ -352,7 +352,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
             }
 
             setCurrentStoryboard(storyboard);
-            
+
             // Find the first clip by order
             if (storyboard.clips && storyboard.clips.length > 0) {
               const sortedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
@@ -721,11 +721,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     if (id === activeClipId) {
       return; // Skip if the same clip is already active
     }
-    
-    // Log where the clip change is being triggered from
-    console.log(`[EVENT TRACKING] Clip change requested from ${activeClipId} to ${id} at ${new Date().toISOString()}`);
-    console.trace('[EVENT TRACKING] Stack trace for clip change');
-    
+
     // Set active clip ID in state
     setActiveClipId(id);
 

@@ -75,11 +75,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Store any non-empty content as our latest valid content
     if (content) {
       lastValidContentRef.current = content;
-
-      // Track content source changes to help debug
-      if (content.length > 0 && content !== lastValidContentRef.current) {
-        console.log(`[SOURCE TRACKING] SVG content source changed to: ${source} (${content.length} bytes) at ${new Date().toISOString()}`);
-      }
     }
 
     return content;
@@ -99,10 +94,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
                      displaySvgLength !== lastDepsRef.current.svgContentLength;
 
     if (hasChanged) {
-      console.log(`[DEPS TRACKING] Dependencies changed at ${new Date().toISOString()}:
-        activeClipId: ${lastDepsRef.current.activeClipId} -> ${activeClipId}
-        svgContentLength: ${lastDepsRef.current.svgContentLength} -> ${displaySvgLength}
-      `);
 
       // Update the ref
       lastDepsRef.current = {
@@ -324,34 +315,37 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       }, 50);
     }
 
-    // Get container dimensions
+    // Get container dimensions (or use defaults if container not available)
     const containerWidth = containerRef.current?.clientWidth || 800;
-    const containerHeight = containerRef.current?.clientHeight || 600;
-
-    // Ensure SVG is contained within the container boundaries
-    // We'll set both width/height and viewBox to control boundaries
-    svgElement.setAttribute('width', '100%');
-    svgElement.setAttribute('height', '100%');
-
-    // Add max-width to ensure SVG doesn't overflow on mobile
-    svgElement.style.maxWidth = '100%';
-    svgElement.style.boxSizing = 'border-box';
-
-    // Preserve aspect ratio and ensure proper scaling
-    svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    const containerHeight = containerRef.current?.clientHeight || 450;
 
     // Ensure SVG has a viewBox if missing
     if (!svgElement.getAttribute('viewBox')) {
-      // Get original width/height from the SVG if available
-      const originalWidth = svgElement.getAttribute('width') || containerWidth.toString();
-      const originalHeight = svgElement.getAttribute('height') || containerHeight.toString();
-
-      // Parse numeric values from original dimensions
-      const width = parseInt(originalWidth.toString(), 10) || containerWidth;
-      const height = parseInt(originalHeight.toString(), 10) || containerHeight;
-
+      // Default to 16:9 aspect ratio if no viewBox exists
+      const width = 800;
+      const height = 450;
       svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
     }
+
+    // Set width to 100% to use available space
+    svgElement.setAttribute('width', '100%');
+
+    // Calculate height based on viewBox aspect ratio
+    const viewBox = svgElement.getAttribute('viewBox');
+    if (viewBox) {
+      const [, , vbWidth, vbHeight] = viewBox.split(' ').map(parseFloat);
+      const aspectRatio = vbWidth / vbHeight;
+
+      // Set appropriate preserveAspectRatio to ensure proper centering
+      svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    }
+
+    // Ensure SVG doesn't overflow container
+    svgElement.style.maxWidth = '100%';
+    svgElement.style.maxHeight = '100%';
+    svgElement.style.display = 'block';
+    svgElement.style.margin = '0 auto';
+    svgElement.style.boxSizing = 'border-box';
   }, [setSvgRef]);
 
   // Debounce SVG updates to prevent rapid re-renders
@@ -487,10 +481,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Function to listen for API calls completing
     const handleApiCallEnd = () => {
-      // Add a small delay before hiding the loading animation to prevent flashing
+      // Add a delay before hiding the loading animation to ensure it's visible
+      // Longer on mobile to account for slower rendering
+      const delay = window.innerWidth < 768 ? 800 : 600;
       setTimeout(() => {
         setIsLoading(false);
-      }, 600);
+      }, delay);
     };
 
     // Add event listeners
@@ -506,7 +502,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     };
   }, [displaySvgContent, setupSvgElement]);
 
-  // Adjust SVG to container size when window resizes
+  // Adjust SVG to container size when container dimensions change
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current && displaySvgContent) {
@@ -525,31 +521,32 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
             const svgRatio = vbWidth / vbHeight;
             const containerRatio = containerWidth / containerHeight;
 
-            // Scale differently based on aspect ratio comparison to maintain proportions
-            let width, height;
+            // Determine the best fit approach based on container ratio
             if (containerRatio > svgRatio) {
-              // Container is wider than SVG
-              height = containerHeight;
-              width = height * svgRatio;
+              // Container is wider than SVG - fit to height
+              svgElement.setAttribute('height', `${containerHeight}px`);
+              svgElement.setAttribute('width', `${containerHeight * svgRatio}px`);
             } else {
-              // Container is taller than SVG
-              width = containerWidth;
-              height = width / svgRatio;
+              // Container is taller than SVG - fit to width
+              svgElement.setAttribute('width', `${containerWidth}px`);
+              svgElement.setAttribute('height', `${containerWidth / svgRatio}px`);
             }
 
-            // Apply the calculated dimensions
-            svgElement.setAttribute('width', `${width}px`);
-            svgElement.setAttribute('height', `${height}px`);
+            // Ensure the SVG is centered in the container
+            svgElement.style.display = 'block';
+            svgElement.style.margin = '0 auto';
 
-            // Center the SVG in the container
-            svgElement.style.position = 'absolute';
-            svgElement.style.left = '50%';
-            svgElement.style.top = '50%';
-            svgElement.style.transform = 'translate(-50%, -50%)';
+            // Use relative positioning for better reliability
+            svgElement.style.position = 'relative';
           } else {
-            // Fallback if viewBox is not available
-            svgElement.setAttribute('width', `${containerWidth}px`);
-            svgElement.setAttribute('height', `${containerHeight}px`);
+            // Create a default viewBox if none exists
+            const defaultWidth = 800;
+            const defaultHeight = 450; // 16:9 aspect ratio
+            svgElement.setAttribute('viewBox', `0 0 ${defaultWidth} ${defaultHeight}`);
+            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+            // Then call handleResize again to apply proper sizing
+            setTimeout(handleResize, 10);
           }
         }
       }
@@ -565,7 +562,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [displaySvgContent]);
+  }, [displaySvgContent, getSvgContainer]);
 
   // Monitor clip change events to ensure SVG updates even if state doesn't trigger re-renders
   useEffect(() => {
@@ -753,29 +750,66 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     };
   }, [activeClipId, getActiveClip, setSvgContent]);
 
-  // Main render function
+  // Force a resize whenever the container dimensions change
+  useEffect(() => {
+    // Create a ResizeObserver to detect container size changes
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      const resizeObserver = new ResizeObserver(() => {
+        // Get container dimensions
+        if (containerRef.current && displaySvgContent) {
+          const containerWidth = containerRef.current.clientWidth;
+          const containerHeight = containerRef.current.clientHeight;
+
+          console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
+
+          // Trigger resize of SVG content
+          const svgElement = getSvgContainer()?.querySelector('svg');
+          if (svgElement) {
+            // Ensure preserveAspectRatio is set
+            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+            // Force SVG to use available space
+            svgElement.setAttribute('width', '100%');
+            svgElement.setAttribute('height', '100%');
+          }
+        }
+      });
+
+      // Start observing the container
+      resizeObserver.observe(containerRef.current);
+
+      // Clean up
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
+
+    // Fallback for browsers without ResizeObserver
+    return undefined;
+  }, [displaySvgContent, getSvgContainer]);
+
+  // Main render function with simplified layout that respects parent's constraints
   return (
     <div
       ref={containerRef}
-      className="w-full h-full max-w-full overflow-hidden flex items-center justify-center relative"
-      style={{...style}}
+      className="w-full h-full max-w-full max-h-full flex items-center justify-center bg-gotham-black/30 rounded-lg"
+      style={{
+        ...style,
+        aspectRatio: '16/9',
+      }}
     >
+      {/* Empty state overlay */}
       <div
         className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${showEmptyState ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'}`}
       >
         <EmptyState loading={isLoading} />
       </div>
 
+      {/* SVG container with automatic centering */}
       <div
         ref={svgContainerRef}
         data-testid="svg-container"
-        className={`w-full h-full max-w-full flex items-center justify-center overflow-hidden transition-opacity duration-300 ${showEmptyState ? 'opacity-0' : 'opacity-100'}`}
-        style={{
-          position: 'relative',
-          maxWidth: '100%',
-          maxHeight: '100%',
-          boxSizing: 'border-box'
-        }}
+        className={`w-full h-full overflow-hidden flex items-center justify-center transition-opacity duration-300 ${showEmptyState ? 'opacity-0' : 'opacity-100'}`}
       />
     </div>
   );

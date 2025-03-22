@@ -25,7 +25,7 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
 }) => {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Confirmation dialog state
   const [storyboardToDelete, setStoryboardToDelete] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -50,7 +50,6 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
   } = useInfiniteLoading<Storyboard, string>({
     fetchIds: getSavedStoryboards,
     fetchItem: (id) => {
-      console.log(`[FETCH TRACKING] Loading storyboard ${id}`);
       return MovieStorageApi.getMovie(id);
     },
     enabled: isOpen,
@@ -62,7 +61,7 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
     if (isOpen) {
       // Clear cache to force fresh data
       clearCacheForServerRefresh();
-      
+
       // Reset search
       setSearchQuery('');
     } else {
@@ -161,7 +160,7 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
                   ref={index === filteredStoryboards.length - 1 ? lastItemRef : undefined}
                 />
               ))}
-              
+
               {/* Loading more indicator */}
               {(isLoadingMore || hasMore) && (
                 <div className="flex items-center justify-center py-4">
@@ -190,10 +189,10 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
         onConfirm={async () => {
           if (storyboardToDelete) {
             await onDeleteStoryboard(storyboardToDelete);
-            
+
             // Reset to reload without the deleted item
             resetStoryboards();
-            
+
             setShowDeleteConfirmation(false);
             setStoryboardToDelete(null);
           }
