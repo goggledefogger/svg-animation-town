@@ -630,38 +630,35 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         const activeClip = getActiveClip();
         const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
-        // On mobile, briefly check if the active clip needs loading
-        if (isMobile && activeClip) {
-          console.log(`[Visibility] Mobile device detected, checking active clip ${activeClip.id}`);
+        // Simplified approach for mobile - restore directly from registry if possible
+        if (isMobile && activeClip && activeClip.animationId) {
+          const container = getSvgContainer();
+          const containerIsEmpty = !container || !container.innerHTML || container.innerHTML.length < 50;
           
-          // If we have SVG content but container is empty, restore it
-          if (activeClip.svgContent && activeClip.svgContent.length > 100) {
-            const container = getSvgContainer();
-            const containerIsEmpty = !container || !container.innerHTML || container.innerHTML.length < 50;
+          // Only refresh if the container is actually empty
+          if (containerIsEmpty) {
+            console.log(`[Visibility] Mobile restore: Container is empty, restoring from registry or cache`);
             
-            if (containerIsEmpty) {
-              console.log(`[Visibility] Restoring SVG content for active clip ${activeClip.id}`);
-              setSvgContent(activeClip.svgContent);
-            }
-            return;
-          }
-          
-          // If we have animationId but missing content, try to load it
-          if (activeClip.animationId && (!activeClip.svgContent || activeClip.svgContent.length < 100)) {
-            // First check the cache
-            const cachedContent = getCachedContent(activeClip.animationId || '');
+            // Check registry first (preferred source)
+            const cachedContent = getCachedContent(activeClip.animationId);
             if (cachedContent) {
-              console.log(`[Visibility] Using cached content for active clip ${activeClip.id}`);
+              console.log(`[Visibility] Using cached content for ${activeClip.animationId}`);
               setSvgContent(cachedContent);
-              updateClip(activeClip.id, { svgContent: cachedContent });
               return;
             }
             
-            // If not previously loaded, trigger refresh
-            if (!hasBeenLoaded(activeClip.animationId || '')) {
-              console.log(`[Visibility] Need to load content for active clip ${activeClip.id}`);
-              handleForceRefresh();
+            // If we have SVG content in the clip, use that
+            if (activeClip.svgContent && activeClip.svgContent.length > 100) {
+              console.log(`[Visibility] Using clip's SVG content for ${activeClip.id}`);
+              setSvgContent(activeClip.svgContent);
+              return;
             }
+            
+            // Only force refresh as last resort
+            console.log(`[Visibility] No cached content available, forcing refresh`);
+            handleForceRefresh();
+          } else {
+            console.log(`[Visibility] Container already has content, skipping refresh`);
           }
         }
       }
@@ -674,8 +671,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [getActiveClip, setupSvgElement, handleForceRefresh, getSvgContainer, 
-      getCachedContent, hasBeenLoaded, setSvgContent, updateClip]);
+  }, [getActiveClip, getSvgContainer, getCachedContent, setSvgContent, handleForceRefresh]);
 
   // Add an event listener for thumbnail updates
   useEffect(() => {
