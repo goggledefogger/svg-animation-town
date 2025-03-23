@@ -256,7 +256,7 @@ const MovieEditorPage: React.FC = () => {
   useEffect(() => {
     // Skip if we don't have a storyboard yet or if we're already generating something
     if (!currentStoryboard || storyboardGenerator.isGenerating) return;
-    
+
     // Use storyboard ID in the check to avoid checking the same board multiple times
     const checkKey = `hasCheckedIncompleteGeneration_${currentStoryboard.id}`;
     const hasCheckedIncomplete = sessionStorage.getItem(checkKey);
@@ -316,14 +316,14 @@ const MovieEditorPage: React.FC = () => {
                   });
                 }
               });
-              
+
               // If we still couldn't reconstruct any scenes, show an error
               if (resumeStoryboardResponse.scenes.length === 0) {
                 console.error('Could not reconstruct scenes from existing clips');
                 modalManager.showToastNotification('Could not resume generation - missing scene data', 'error');
                 modalManager.setShowGeneratingClipsModal(false);
                 storyboardGenerator.setIsGenerating(false);
-                
+
                 // Clear the inProgress flag to prevent future attempts
                 const updatedStoryboard = {
                   ...currentStoryboard,
@@ -342,12 +342,17 @@ const MovieEditorPage: React.FC = () => {
             // Check if we actually have scenes remaining based on clips already generated
             const clipCount = currentStoryboard.clips?.length || 0;
             const sceneCount = resumeStoryboardResponse.scenes.length;
-            
+
+            console.log(`[RESUME_FLOW] Resume evaluation - MovieID: ${currentStoryboard.id}, MovieName: "${currentStoryboard.name}", ExistingClips: ${clipCount}, TotalScenes: ${sceneCount}, ClipOrders: [${currentStoryboard.clips.map(c => c.order).join(',')}], HasOriginalScenes: ${Boolean(currentStoryboard.originalScenes)}`);
+            if (currentStoryboard.originalScenes) {
+              console.log(`[RESUME_FLOW] Original scenes: ${currentStoryboard.originalScenes.length}, Resume scenes: ${resumeStoryboardResponse.scenes.length}`);
+            }
+
             if (clipCount >= sceneCount) {
               modalManager.showToastNotification('All scenes already completed, no need to resume', 'info');
               modalManager.setShowGeneratingClipsModal(false);
               storyboardGenerator.setIsGenerating(false);
-              
+
               // Mark as completed
               const updatedStoryboard = {
                 ...currentStoryboard,
@@ -378,7 +383,7 @@ const MovieEditorPage: React.FC = () => {
               };
               setCurrentStoryboard(updatedStoryboard);
               saveStoryboard();
-              
+
               modalManager.showToastNotification('Failed to resume generation', 'error');
             } finally {
               modalManager.setShowGeneratingClipsModal(false);

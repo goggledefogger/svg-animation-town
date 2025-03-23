@@ -148,6 +148,22 @@ export function useStoryboardGenerator(
         storyboard.clips = [];
       }
 
+      // CRITICAL: Verify clip integrify - ensure no gaps in order
+      if (storyboard.clips.length > 0) {
+        console.log(`[RESUME_INTEGRITY] Verifying clip order integrity before resuming generation`);
+
+        // Get all clip orders and sort them
+        const clipOrders = storyboard.clips.map(clip => clip.order).sort((a, b) => a - b);
+        console.log(`[RESUME_INTEGRITY] Current clip orders: [${clipOrders.join(',')}]`);
+
+        // Check for gaps in clip order sequence
+        for (let i = 0; i < clipOrders.length - 1; i++) {
+          if (clipOrders[i+1] - clipOrders[i] > 1) {
+            console.log(`[RESUME_INTEGRITY] Found gap in clip order sequence between ${clipOrders[i]} and ${clipOrders[i+1]}`);
+          }
+        }
+      }
+
       // Get a list of orders from existing clips to avoid regenerating them
       const existingClipOrders = new Set(storyboard.clips.map(clip => clip.order));
 
@@ -159,6 +175,13 @@ export function useStoryboardGenerator(
         const highestOrder = Math.max(...Array.from(existingClipOrders));
         startSceneIndex = highestOrder + 1;
       }
+
+      console.log(`[RESUME_CALCULATION] Storyboard: ${storyboard.id}, Clip count: ${storyboard.clips.length}, ExistingClipOrders: [${Array.from(existingClipOrders).join(',')}], StartSceneIndex: ${startSceneIndex}`);
+
+      // Log each clip for debugging
+      storyboard.clips.forEach((clip, idx) => {
+        console.log(`[RESUME_CALCULATION] Existing clip ${idx}: ID=${clip.id}, Order=${clip.order}, Name="${clip.name}", AnimationID=${clip.animationId || 'none'}, HasSvgContent: ${Boolean(clip.svgContent)}, SvgLength: ${clip.svgContent ? clip.svgContent.length : 0}, IsMobile: ${/Mobi|Android/i.test(navigator.userAgent)}`);
+      });
 
       // Validate scenes are available
       if (!storyboardResponse.scenes || storyboardResponse.scenes.length === 0) {
@@ -181,6 +204,8 @@ export function useStoryboardGenerator(
         const hasExistingClip = existingClipOrders.has(absoluteIndex);
         return !hasExistingClip; // Only keep scenes without existing clips
       });
+
+      console.log(`[RESUME_CALCULATION] ScenesNeedingGeneration: ${scenesNeedingGeneration.length}/${remainingScenes.length}, RemainingSceneIndices: [${scenesNeedingGeneration.map((_, i) => i + startSceneIndex).join(',')}]`);
 
       // If no scenes left to generate, just mark as complete
       if (scenesNeedingGeneration.length === 0) {

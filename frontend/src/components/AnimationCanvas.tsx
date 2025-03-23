@@ -302,7 +302,25 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     } else {
       // Neither SVG content nor animation ID available
-      setSvgContent(createPlaceholderSvg('No animation content available'));
+      console.log(`[RESUME_DEBUG] No content for clip - ActiveClipId: ${activeClipId}, HasAnimationId: ${Boolean(activeClip?.animationId)}, HasSvgContent: ${Boolean(activeClip?.svgContent)}, IsMobile: ${/Mobi|Android/i.test(navigator.userAgent)}, Timestamp: ${new Date().toISOString()}`);
+
+      // Only set placeholder if we don't have an animationId - otherwise try loading content
+      if (activeClip?.animationId) {
+        console.log(`[RESUME_DEBUG] Animation ID exists but no content, attempting immediate load: ${activeClip.animationId}`);
+
+        // Start loading in the background
+        loadAnimation(activeClip.animationId).then(success => {
+          if (success) {
+            updateClip(activeClip.id, { svgContent: contextSvgContent || '' });
+          }
+        });
+
+        // Show loading placeholder instead of error
+        setSvgContent(createPlaceholderSvg('Loading animation content...'));
+      } else {
+        // No animation ID available
+        setSvgContent(createPlaceholderSvg('No animation content available'));
+      }
     }
   }, [activeClipId, getActiveClip, updateClip, propSvgContent, contextSvgContent, displaySvgContent, setSvgContent, hasBeenLoaded, markLoadingInProgress]);
 
@@ -759,10 +777,34 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
         // Check if we have an active clip that needs content restored
         const activeClip = getActiveClip();
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
+        // On mobile, proactively load all animations when returning to the page
+        if (isMobile && currentStoryboard?.clips?.length > 0) {
+          console.log(`[Visibility] Mobile device detected, proactively loading all clip animations`);
+
+          // Load all clips with animationId but missing SVG content
+          currentStoryboard.clips.forEach(clip => {
+            if (clip.animationId && (!clip.svgContent || clip.svgContent.length < 100)) {
+              console.log(`[Visibility] Prefetching animation for clip ${clip.id}, animationId: ${clip.animationId}`);
+
+              // Fetch the animation content
+              MovieStorageApi.getClipAnimation(clip.animationId)
+                .then(animation => {
+                  if (animation && animation.svg) {
+                    // Update the clip with the SVG content
+                    updateClip(clip.id, { svgContent: animation.svg });
+                    console.log(`[Visibility] Successfully loaded animation for clip ${clip.id}`);
+                  }
+                })
+                .catch(err => console.error(`[Visibility] Error loading animation for clip ${clip.id}:`, err));
+            }
+          });
+        }
 
         if (activeClip) {
           // If we have a clip with animation ID but missing content, fetch it
-          if (activeClip.animationId && !activeClip.svgContent) {
+          if (activeClip.animationId && (!activeClip.svgContent || !displaySvgContent)) {
             console.log(`[Visibility] Fetching missing animation for clip ${activeClip.id}`);
             handleForceRefresh();
           }
@@ -794,7 +836,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [getActiveClip, setupSvgElement]);
+  }, [getActiveClip, setupSvgElement, displaySvgContent, handleForceRefresh, currentStoryboard, updateClip]);
 
   // Add an event listener for thumbnail updates
   useEffect(() => {

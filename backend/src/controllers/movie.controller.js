@@ -152,6 +152,10 @@ exports.generateScene = asyncHandler(async (req, res) => {
     // Add detailed logging to track clip state before and after linking to movie
     console.log(`[CLIP_LINKING] Before linking - MovieID: ${movie.id}, ClipID: ${clipId}, Provider: ${provider}, SceneIndex: ${movieContext.sceneIndex}, ExistingClipIndex: ${existingClipIndex}, CurrentClipCount: ${movie.clips.length}`);
 
+    // Store all clip orders for debugging
+    const allClipOrders = movie.clips.map(c => c.order);
+    console.log(`[CLIP_LINKING] Existing clip orders: [${allClipOrders.join(',')}]`);
+
     if (existingClipIndex >= 0) {
       // Replace existing clip
       movie.clips[existingClipIndex] = newClip;
@@ -201,19 +205,26 @@ exports.generateScene = asyncHandler(async (req, res) => {
     // 10. Save the updated movie
     // CRITICAL FIX: Read the freshest movie data before saving to prevent race conditions
     const currentMovie = await storageService.getMovie(movieContext.storyboardId);
-    if (currentMovie && currentMovie.clips && currentMovie.clips.length > movie.clips.length) {
-      // Another request has added more clips since we loaded the movie, preserve them
-      console.log(`[CLIP_LINKING] Race condition detected! Movie has ${currentMovie.clips.length} clips in storage but only ${movie.clips.length} in memory`);
+    if (currentMovie && currentMovie.clips && currentMovie.clips.length > 0) {
+      // Another request may have added more clips since we loaded the movie
+      console.log(`[CLIP_LINKING] Race check - Movie has ${currentMovie.clips.length} clips in storage vs ${movie.clips.length} in memory`);
 
-      // Find clips that exist in currentMovie but not in our local movie
-      const currentClipOrders = currentMovie.clips.map(c => c.order);
+      // Track which clip orders we already have
+      const existingOrders = new Set(movie.clips.map(clip => clip.order));
+
+      // Find clips that exist in currentMovie but not in our local movie object
       const missingClips = currentMovie.clips.filter(clip =>
-        !movie.clips.some(localClip => localClip.order === clip.order)
+        !existingOrders.has(clip.order)
       );
 
-      // Add the missing clips
+      // Add the missing clips if needed
       if (missingClips.length > 0) {
         console.log(`[CLIP_LINKING] Adding ${missingClips.length} missing clips to our movie before saving`);
+
+        // Log which orders we're adding
+        const missingOrders = missingClips.map(c => c.order);
+        console.log(`[CLIP_LINKING] Missing clip orders being merged: [${missingOrders.join(',')}]`);
+
         movie.clips = [...movie.clips, ...missingClips];
         // Sort clips by order for consistency
         movie.clips.sort((a, b) => a.order - b.order);
@@ -229,6 +240,9 @@ exports.generateScene = asyncHandler(async (req, res) => {
         console.log('[CLIP_LINKING] All scenes completed after merging clips, marked generation as complete');
       }
     }
+
+    // Log all clip orders in final movie before saving
+    console.log(`[CLIP_LINKING] Final clip orders before saving: [${movie.clips.map(c => c.order).join(',')}]`);
 
     const savedMovieId = await storageService.saveMovie(movie);
     console.log(`Saved updated movie with ID ${savedMovieId}, now has ${movie.clips.length} clips`);

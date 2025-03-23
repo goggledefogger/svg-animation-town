@@ -327,15 +327,39 @@ class StorageService {
       try {
         await fs.access(filePath);
       } catch (err) {
+        console.log(`Movie file ${id} not found, returning null`);
         return null;
       }
 
-      const data = await fs.readFile(filePath, 'utf8');
-      const movie = JSON.parse(data);
+      // CRITICAL: Add retry logic to handle potential file system race conditions
+      // This ensures we get the most up-to-date movie data even during concurrent operations
+      let retries = 0;
+      const maxRetries = 3;
+      let lastError = null;
 
-      console.log(`[MOVIE_LOADING] Successfully loaded movie ${id} with ${movie.clips ? movie.clips.length : 0} clips`);
+      while (retries < maxRetries) {
+        try {
+          // Read file with a small delay between retries to allow writes to complete
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50 * retries));
+          }
 
-      return movie;
+          const data = await fs.readFile(filePath, 'utf8');
+          const movie = JSON.parse(data);
+
+          console.log(`[MOVIE_LOADING] Successfully loaded movie ${id} with ${movie.clips ? movie.clips.length : 0} clips`);
+
+          return movie;
+        } catch (retryError) {
+          lastError = retryError;
+          retries++;
+          console.warn(`Retry ${retries}/${maxRetries} loading movie ${id} due to: ${retryError.message}`);
+        }
+      }
+
+      // If we get here, all retries failed
+      console.error(`Failed to load movie ${id} after ${maxRetries} attempts: ${lastError.message}`);
+      return null;
     } catch (error) {
       console.error(`Error getting movie ${id}:`, error);
       return null;
