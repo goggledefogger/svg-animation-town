@@ -1,6 +1,7 @@
 import { ApiResponse, ApiError } from '../types/api';
 import { ApiError as CustomApiError } from './movie.api';
 import { Storyboard } from '../contexts/MovieContext';
+import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -662,32 +663,100 @@ export const MovieStorageApi = {
       throw new Error('Animation ID is required');
     }
 
-    console.log(`Fetching animation: ${animationId}`);
-
-    try {
-      const data = await fetchApi<any>(`/animation/${animationId}`);
-
-      if (data.success && data.animation) {
-        // Basic validation to ensure we have valid SVG content
-        if (!data.animation.svg || typeof data.animation.svg !== 'string') {
-          console.error(`Animation ${animationId} has invalid SVG content (length: ${data.animation.svg?.length || 0})`);
-          throw new Error('Invalid SVG content in animation');
-        }
-
-        // Verify SVG has proper tags
-        if (!data.animation.svg.includes('<svg') || !data.animation.svg.includes('</svg>')) {
-          console.error(`Animation ${animationId} has SVG content without proper tags`);
-          throw new Error('Invalid SVG content: missing proper SVG tags');
-        }
-
-        console.log(`Successfully fetched animation ${animationId}: ${data.animation.svg.length} bytes`);
-        return data.animation;
-      } else {
-        throw new Error('Invalid response from server');
-      }
-    } catch (error) {
-      console.error(`Error fetching animation with ID ${animationId}:`, error);
-      throw error;
+    // Check if we already have an active request for this animation
+    const requestId = `clip-animation-${animationId}`;
+    
+    // Try to get animation from the registry first
+    const registryResult = AnimationRegistryHelpers.getAnimation(animationId);
+    
+    if (registryResult.status === 'available' && registryResult.svg) {
+      console.log(`[API] Using cached animation from registry: ${animationId} (${registryResult.svg.length} bytes)`);
+      return { 
+        success: true, 
+        animation: { 
+          svg: registryResult.svg,
+          animationId,
+          ...(registryResult.metadata || {})
+        } 
+      };
     }
+    
+    // Skip if already marked as failed
+    if (registryResult.status === 'failed') {
+      console.log(`[API] Animation previously failed to load: ${animationId}`);
+      throw new Error('Animation previously failed to load');
+    }
+    
+    // Skip if already loading
+    if (registryResult.status === 'loading') {
+      console.log(`[API] Animation ${animationId} already being loaded by another request`);
+      // Wait until the other request finishes, then check the registry again
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Check the registry again
+      const updatedResult = AnimationRegistryHelpers.getAnimation(animationId);
+      if (updatedResult.status === 'available' && updatedResult.svg) {
+        return { 
+          success: true, 
+          animation: { 
+            svg: updatedResult.svg,
+            animationId,
+            ...(updatedResult.metadata || {})
+          } 
+        };
+      } else if (updatedResult.status === 'failed') {
+        throw new Error('Animation previously failed to load');
+      }
+    }
+    
+    // Mark as loading
+    AnimationRegistryHelpers.markLoading(animationId);
+    console.log(`[API] Fetching animation: ${animationId}`);
+
+    // Create and track the API request
+    const apiRequest = async () => {
+      try {
+        const data = await fetchApi<any>(`/movie/clip-animation/${animationId}`);
+
+        if (data.success && data.animation) {
+          // Basic validation to ensure we have valid SVG content
+          if (!data.animation.svg || typeof data.animation.svg !== 'string') {
+            console.error(`Animation ${animationId} has invalid SVG content (length: ${data.animation.svg?.length || 0})`);
+            AnimationRegistryHelpers.markFailed(animationId);
+            throw new Error('Invalid SVG content in animation');
+          }
+
+          // Verify SVG has proper tags
+          if (!data.animation.svg.includes('<svg') || !data.animation.svg.includes('</svg>')) {
+            console.error(`Animation ${animationId} has SVG content without proper tags`);
+            AnimationRegistryHelpers.markFailed(animationId);
+            throw new Error('Invalid SVG content: missing proper SVG tags');
+          }
+
+          // Store in registry with metadata
+          const metadata = {
+            name: data.animation.name,
+            timestamp: data.animation.timestamp,
+            chatHistory: data.animation.chatHistory
+          };
+          
+          AnimationRegistryHelpers.storeAnimation(animationId, data.animation.svg, metadata);
+          console.log(`[API] Successfully fetched animation ${animationId}: ${data.animation.svg.length} bytes`);
+          
+          return data.animation;
+        } else {
+          AnimationRegistryHelpers.markFailed(animationId);
+          throw new Error('Invalid response from server');
+        }
+      } catch (error) {
+        // Mark as failed
+        AnimationRegistryHelpers.markFailed(animationId);
+        console.error(`[API] Error fetching animation with ID ${animationId}:`, error);
+        throw error;
+      }
+    };
+    
+    // Use the registry helper to track this request and prevent duplicates
+    return AnimationRegistryHelpers.trackRequest(requestId, apiRequest());
   }
 };

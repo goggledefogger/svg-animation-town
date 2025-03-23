@@ -138,49 +138,36 @@ class StorageService {
         return null;
       }
       
-      // Add retry logic for resilience
-      let retries = 0;
-      const maxRetries = 3;
-      let lastError = null;
-      
-      while (retries < maxRetries) {
-        try {
-          // Add a small delay between retries to allow file system to settle
-          if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 50 * retries));
-          }
-          
-          console.log(`[ANIMATION_LOADING] Reading animation ${id} from ${filePath}, attempt ${retries + 1}/${maxRetries}`);
-          const data = await fs.readFile(filePath, 'utf8');
-          
-          try {
-            const animation = JSON.parse(data);
-            
-            // Validate that we have the essential data
-            if (!animation || !animation.svg) {
-              console.warn(`[ANIMATION_LOADING] Animation ${id} exists but lacks SVG content`);
-              retries++;
-              lastError = new Error('Animation file exists but lacks SVG content');
-              continue;
-            }
-            
-            console.log(`[ANIMATION_LOADING] Successfully loaded animation ${id}, SVG length: ${animation.svg.length}`);
-            return animation;
-          } catch (parseError) {
-            console.error(`[ANIMATION_LOADING] Error parsing animation ${id} JSON:`, parseError);
-            retries++;
-            lastError = parseError;
-          }
-        } catch (readError) {
-          console.error(`[ANIMATION_LOADING] Error reading animation ${id}:`, readError);
-          retries++;
-          lastError = readError;
+      // Simple approach: Read the file and parse it
+      try {
+        console.log(`[ANIMATION_LOADING] Reading animation ${id} from ${filePath}`);
+        const data = await fs.readFile(filePath, 'utf8');
+        
+        const animation = JSON.parse(data);
+        
+        // Validate that we have the essential data
+        if (!animation) {
+          console.warn(`[ANIMATION_LOADING] Animation ${id} parsed but resulted in null/undefined value`);
+          return null;
         }
+        
+        if (!animation.svg) {
+          console.warn(`[ANIMATION_LOADING] Animation ${id} exists but lacks SVG content`);
+          return null;
+        }
+        
+        // Basic validation for SVG content
+        if (typeof animation.svg !== 'string' || !animation.svg.includes('<svg')) {
+          console.warn(`[ANIMATION_LOADING] Animation ${id} has invalid SVG content`);
+          return null;
+        }
+        
+        console.log(`[ANIMATION_LOADING] Successfully loaded animation ${id}, SVG length: ${animation.svg.length}`);
+        return animation;
+      } catch (error) {
+        console.error(`[ANIMATION_LOADING] Error reading/parsing animation ${id}:`, error);
+        return null;
       }
-      
-      // If we get here, all retries failed
-      console.error(`[ANIMATION_LOADING] Failed to load animation ${id} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
-      return null;
     } catch (error) {
       console.error(`[ANIMATION_LOADING] Unhandled error getting animation ${id}:`, error);
       return null;
@@ -274,23 +261,30 @@ class StorageService {
       let optimizedClips = [];
 
       if (storyboard.clips && Array.isArray(storyboard.clips)) {
+        // Before optimization, log all clips' animation IDs for debugging
+        storyboard.clips.forEach((clip, index) => {
+          console.log(`[MOVIE_SAVING] Clip ${index} (order ${clip.order}): animationId=${clip.animationId || 'MISSING!'}`);
+        });
+
         optimizedClips = storyboard.clips.map((clip) => {
-          // Create an optimized clip object that preserves the critical animationId reference
-          return {
+          // Create an optimized clip object with essential properties
+          const optimizedClip = {
             id: clip.id,
             name: clip.name,
             duration: clip.duration,
             order: clip.order,
             prompt: clip.prompt || '',
-            animationId: clip.animationId // The key reference to the animation
+            // CRITICAL: Ensure animation ID is preserved regardless of other properties
+            animationId: clip.animationId
           };
+
+          // Log warning for any clip missing an animation ID
+          if (!optimizedClip.animationId) {
+            console.warn(`[MOVIE_SAVING] Warning: Clip ${clip.id} at order ${clip.order} has no animationId reference!`);
+          }
+
+          return optimizedClip;
         });
-        
-        // Check for any clips missing animation IDs
-        const missingIds = optimizedClips.filter(clip => !clip.animationId).length;
-        if (missingIds > 0) {
-          console.warn(`[MOVIE_SAVING] Warning: ${missingIds} clips have no animationId reference`);
-        }
       }
 
       // Store original scenes array for resumable generation
@@ -353,37 +347,27 @@ class StorageService {
         return null;
       }
 
-      // CRITICAL: Add retry logic to handle potential file system race conditions
-      // This ensures we get the most up-to-date movie data even during concurrent operations
-      let retries = 0;
-      const maxRetries = 3;
-      let lastError = null;
+      // Simple direct read approach
+      try {
+        const data = await fs.readFile(filePath, 'utf8');
+        const movie = JSON.parse(data);
 
-      while (retries < maxRetries) {
-        try {
-          // Read file with a small delay between retries to allow writes to complete
-          if (retries > 0) {
-            await new Promise(resolve => setTimeout(resolve, 50 * retries));
-          }
-
-          const data = await fs.readFile(filePath, 'utf8');
-          const movie = JSON.parse(data);
-
-          console.log(`[MOVIE_LOADING] Successfully loaded movie ${id} with ${movie.clips ? movie.clips.length : 0} clips`);
-
-          return movie;
-        } catch (retryError) {
-          lastError = retryError;
-          retries++;
-          console.warn(`Retry ${retries}/${maxRetries} loading movie ${id} due to: ${retryError.message}`);
+        console.log(`[MOVIE_LOADING] Successfully loaded movie ${id} with ${movie.clips ? movie.clips.length : 0} clips`);
+        
+        // Logging to help diagnose clip issues
+        if (movie.clips && movie.clips.length > 0) {
+          movie.clips.forEach((clip, index) => {
+            console.log(`[MOVIE_LOADING] Clip ${index}: order=${clip.order}, animationId=${clip.animationId || 'MISSING'}`);
+          });
         }
-      }
 
-      // If we get here, all retries failed
-      console.error(`Failed to load movie ${id} after ${maxRetries} attempts: ${lastError.message}`);
-      return null;
+        return movie;
+      } catch (error) {
+        console.error(`Error reading or parsing movie file ${id}:`, error);
+        return null;
+      }
     } catch (error) {
-      console.error(`Error getting movie ${id}:`, error);
+      console.error(`Unhandled error getting movie ${id}:`, error);
       return null;
     }
   }
