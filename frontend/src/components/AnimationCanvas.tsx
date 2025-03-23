@@ -676,12 +676,13 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // (Only actual API calls will show loading animation)
   }, []);
 
-  // Monitor for clip change events (keep for backward compatibility)
+  // Monitor for clip change events (only for prefetching)
   useEffect(() => {
     const handleClipChanged = (event: Event) => {
       const customEvent = event as CustomEvent;
       const { clipId } = customEvent.detail;
 
+      // This handler only handles prefetching, not displaying content
       if (clipId) {
         prefetchClipAnimation(clipId);
       }

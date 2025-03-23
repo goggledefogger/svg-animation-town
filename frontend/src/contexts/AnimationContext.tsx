@@ -568,7 +568,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Broadcast SVG content update to ensure all components are notified
   const broadcastDebounceRef = useRef<number | null>(null);
-  
+
   const broadcastSvgUpdate = useCallback((source: string) => {
     // Don't broadcast if there's no SVG content to display
     if (!svgContent) {
@@ -596,27 +596,12 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Enhanced setter for SVG content that also broadcasts updates
   const setSvgContentWithBroadcast = useCallback(
     (newContent: string | ((prev: string) => string), source = 'unknown') => {
-    // When loading a clip's SVG content from the movie editor,
-    // ensure we make a clean copy to detach from original references
-    if (source.includes('load-animation') || source === 'movie-clip') {
-      if (typeof newContent === 'string') {
-        // Make a clean copy by adding a hidden timestamp comment to force the update
-        // This ensures the SVG content is completely new and not referencing the original
-        const cleanContent = addTimestampToSvg(newContent);
-        setSvgContent(cleanContent);
-
-        // Broadcast after ensuring state is updated
-        broadcastSvgUpdate(source);
-        return;
-      }
-    }
-
+    // Direct approach - just set the content and broadcast update
     if (typeof newContent === 'function') {
       setSvgContent(prevContent => {
         const result = newContent(prevContent);
         // Only broadcast if we have actual content after the update
         if (result && result.length > 0) {
-          // Broadcast after the state update
           broadcastSvgUpdate(source);
         }
         return result;
@@ -635,13 +620,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Helper function to add timestamp to SVG content to force updates
   const addTimestampToSvg = (content: string): string => {
-    if (!content || !content.includes('</svg>')) return content;
-
-    const timestamp = Date.now();
-    const comment = `<!-- timestamp: ${timestamp} -->`;
-
-    // Add timestamp comment before closing SVG tag
-    return content.replace('</svg>', `${comment}</svg>`);
+    // Simply return the original content without modification
+    return content;
   };
 
   // Update the current animation from a prompt
@@ -681,7 +661,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Set the new SVG content with broadcast
           setSvgContentWithBroadcast(result.svg, 'prompt-update');
           console.log('SVG content updated and broadcast sent');
-          
+
           // We don't need the additional event dispatch, removed the setTimeout
         } else {
           console.warn('SVG content did not change after update. This may indicate the API did not modify the SVG.');
@@ -691,7 +671,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             const timestampComment = `<!-- Updated ${Date.now()} -->`;
             return prevContent.replace('</svg>', `${timestampComment}</svg>`);
           });
-          
+
           // Ensure we broadcast this update
           broadcastSvgUpdate('force-refresh-unchanged-content');
           console.log('Added timestamp to force re-render');
@@ -1024,24 +1004,26 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       } catch (error) {
         console.error('Error resetting animations:', error);
+
+        // Fallback: reapply the same content to force a refresh
+        if (svgContent) {
+          console.log('Using fallback reset method');
+          const currentContent = svgContent;
+
+          // Briefly clear content then reapply
+          setSvgContent('');
+
+          // Use setTimeout to ensure React processes the state change
+          setTimeout(() => {
+            setSvgContent(currentContent);
+            setPlaying(true);
+          }, 10);
+        }
       }
     } else {
-      // Force a re-render by adding a unique comment and removing it
-      setSvgContent(prevContent => {
-        if (!prevContent) return prevContent;
-        return prevContent + `<!-- reset-${Date.now()} -->`;
-      });
-
-      setTimeout(() => {
-        setSvgContent(prevContent => {
-          if (!prevContent) return prevContent;
-          return prevContent.replace(/<!-- reset-\d+ -->/g, '');
-        });
-      }, 50);
-
       setPlaying(true);
     }
-  }, [svgRef, setPlaying, setSvgContent, setSvgRef]);
+  }, [svgRef, svgContent, setPlaying, setSvgContent, setSvgRef]);
 
   // Completely reset everything to initial state
   const resetEverything = useCallback(() => {
@@ -1143,6 +1125,89 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       return false;
     }
   }, []);
+
+  // Listen for clip selection events and load the associated animation
+  useEffect(() => {
+    const handleClipChanged = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const detail = customEvent.detail;
+
+      if (!detail) return;
+
+      const { clip, clipId } = detail;
+
+      // Skip if no clip data
+      if (!clip) return;
+
+      console.log(`[AnimationContext] Clip changed: ${clip.name}`);
+
+      // Reset state before loading new content
+      setSvgContent('');
+      setChatHistory([]);
+
+      // First stop any existing animations
+      if (svgRef) {
+        try {
+          svgRef.pauseAnimations();
+        } catch (e) {
+          // Ignore pause errors
+        }
+      }
+
+      // If the clip has an animationId, load from server (source of truth)
+      if (clip.animationId) {
+        console.log(`[AnimationContext] Loading animation from server: ${clip.animationId}`);
+
+        // Simple, direct API call - the AnimationStorageApi already has error handling
+        AnimationStorageApi.getAnimation(clip.animationId)
+          .then(animation => {
+            if (animation?.svg) {
+              // Set the SVG content directly
+              setSvgContent(animation.svg);
+
+              // Set the chat history if available
+              if (animation.chatHistory) {
+                setChatHistory(animation.chatHistory);
+              }
+
+              console.log(`[AnimationContext] Animation loaded: ${clip.animationId}`);
+            }
+          })
+          .catch(error => {
+            console.error(`[AnimationContext] Error loading animation: ${error}`);
+
+            // Use clip's SVG content as fallback
+            if (clip.svgContent) {
+              setSvgContent(clip.svgContent);
+
+              if (clip.chatHistory) {
+                setChatHistory(clip.chatHistory);
+              }
+            }
+          });
+      }
+      // Use the clip's SVG content directly if it has no animationId
+      else if (clip.svgContent) {
+        console.log(`[AnimationContext] Using clip's SVG content directly`);
+
+        // Set content directly
+        setSvgContent(clip.svgContent);
+
+        // Set chat history if available
+        if (clip.chatHistory) {
+          setChatHistory(clip.chatHistory);
+        }
+      }
+    };
+
+    // Add event listener
+    window.addEventListener('clip-changed', handleClipChanged);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('clip-changed', handleClipChanged);
+    };
+  }, [svgRef]);
 
   return (
     <AnimationContext.Provider value={{

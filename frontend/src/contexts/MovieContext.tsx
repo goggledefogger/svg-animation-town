@@ -58,6 +58,8 @@ export interface AnimationData {
   svgContent: string;
   chatHistory: Message[];
   generateAnimation?: (prompt: string) => Promise<any>;
+  setSvgContent?: (svgContent: string) => void;
+  setChatHistory?: (chatHistory: Message[]) => void;
 }
 
 // MovieContext interface
@@ -66,6 +68,7 @@ interface MovieContextType {
   currentStoryboard: Storyboard;
   savedStoryboards: string[];
   activeClipId: string | null;
+  activeClip: MovieClip | null;
 
   // Storyboard state setter
   setCurrentStoryboard: React.Dispatch<React.SetStateAction<Storyboard>>;
@@ -113,12 +116,18 @@ interface MovieProviderProps {
 }
 
 export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animationData }) => {
-  // Use animation data passed from parent
-  const { svgContent, chatHistory } = animationData;
+  // Define props coming from animation data
+  const { svgContent, chatHistory, generateAnimation } = animationData;
+
+  // Destructure additional functions needed from the parent component
+  // The parent is expected to pass setSvgContent and setChatHistory functions
+  const setSvgContent = animationData.setSvgContent || (() => {});
+  const setChatHistory = animationData.setChatHistory || (() => {});
 
   // Storyboard state
   const [currentStoryboard, setCurrentStoryboard] = useState<Storyboard>(defaultStoryboard);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
+  const [activeClip, setActiveClip] = useState<MovieClip | null>(null);
   const [savedStoryboards, setSavedStoryboards] = useState<string[]>([]);
 
   // Caching mechanism to avoid redundant API calls
@@ -305,6 +314,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
     setCurrentStoryboard(newStoryboard);
     setActiveClipId(null);
+    setActiveClip(null);
   }, []);
 
   // Rename current storyboard
@@ -328,6 +338,14 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   // Load storyboard from server, falling back to local storage
   const loadStoryboard = useCallback(async (storyboardId: string) => {
     try {
+      // Clear the active clip state first to prevent any state persistence between loads
+      setActiveClipId(null);
+      setActiveClip(null);
+
+      // Clear SVG content to prevent first clip being replaced by previously viewed clip
+      setSvgContent('');
+      setChatHistory([]);
+
       // Check if this ID was previously not found on the server to avoid redundant requests
       const wasNotFound = notFoundMovieIds.current.has(storyboardId);
 
@@ -356,9 +374,15 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
             // Find the first clip by order
             if (storyboard.clips && storyboard.clips.length > 0) {
               const sortedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
-              setActiveClipId(sortedClips[0].id);
+
+              // Force a clean state update cycle before setting the active clip
+              setTimeout(() => {
+                setActiveClipId(sortedClips[0].id);
+                setActiveClip(sortedClips[0]);
+              }, 0);
             } else {
               setActiveClipId(null);
+              setActiveClip(null);
             }
 
             console.log(`Loaded storyboard from server: ${storyboard.name}`);
@@ -398,7 +422,19 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       storyboard.updatedAt = new Date(storyboard.updatedAt);
 
       setCurrentStoryboard(storyboard);
-      setActiveClipId(storyboard.clips.length > 0 ? storyboard.clips[0].id : null);
+
+      // Force a clean state update cycle before setting the active clip
+      if (storyboard.clips.length > 0) {
+        const sortedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
+        setTimeout(() => {
+          setActiveClipId(sortedClips[0].id);
+          setActiveClip(sortedClips[0]);
+        }, 0);
+      } else {
+        setActiveClipId(null);
+        setActiveClip(null);
+      }
+
       console.log(`Loaded storyboard from local storage: ${storyboard.name}`);
       return true;
     } catch (error) {
@@ -616,7 +652,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       try {
         // Use the generate function from animationData if available, otherwise fall back to AnimationApi
         console.log(`Generating SVG for scene ${index + 1}: ${scene.id}`);
-        const generateFn = animationData.generateAnimation || AnimationApi.generate;
+        const generateFn = generateAnimation || AnimationApi.generate;
         const generatedSvg = await generateFn(scene.svgPrompt);
 
         // Create a new clip with the generated SVG
@@ -680,6 +716,11 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
       setCurrentStoryboard(updatedStoryboard);
       setActiveClipId(generatedClips[0]?.id || null);
+      if (generatedClips.length > 0) {
+        setActiveClip(generatedClips[0]);
+      } else {
+        setActiveClip(null);
+      }
 
       // Save the storyboard
       saveStoryboard();
@@ -689,7 +730,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       console.error('Error creating storyboard from response:', error);
       return newStoryboard;
     }
-  }, [animationData.generateAnimation, saveStoryboard]);
+  }, [generateAnimation, saveStoryboard]);
 
   // Create an error SVG for failed clip generation
   const createErrorSvg = (description: string): string => {
@@ -715,28 +756,31 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     </svg>`;
   };
 
-  // Set active clip and optionally fetch its animation
+  // Set active clip
   const updateActiveClipId = useCallback((id: string | null) => {
     // Prevent duplicate updates for the same clip ID
     if (id === activeClipId) {
-      return; // Skip if the same clip is already active
+      return;
     }
 
     // Set active clip ID in state
     setActiveClipId(id);
 
-    // Find the active clip details for the event
-    const activeClip = id ? currentStoryboard.clips.find(clip => clip.id === id) : null;
+    // Find the active clip
+    const activeClipObj = id ? currentStoryboard.clips.find(clip => clip.id === id) : null;
 
-    // Dispatch the event immediately without any timeout
-    window.dispatchEvent(new CustomEvent('clip-changed', {
-      detail: {
-        clipId: id,
-        svgContentAvailable: !!activeClip?.svgContent,
-        hasAnimationId: !!activeClip?.animationId,
-        timestamp: Date.now()
-      }
-    }));
+    // Update the activeClip state
+    setActiveClip(activeClipObj || null);
+
+    // Dispatch event after state updates to ensure proper order
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('clip-changed', {
+        detail: {
+          clipId: id,
+          clip: activeClipObj
+        }
+      }));
+    }, 0);
   }, [currentStoryboard.clips, activeClipId]);
 
   // Provide context values
@@ -744,6 +788,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     currentStoryboard,
     savedStoryboards,
     activeClipId,
+    activeClip,
     setCurrentStoryboard,
     createNewStoryboard,
     renameStoryboard,

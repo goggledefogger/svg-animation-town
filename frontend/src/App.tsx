@@ -20,7 +20,9 @@ const MovieContextConnector: React.FC<{ children: React.ReactNode }> = ({ childr
   const animationData = {
     svgContent: animationContext.svgContent,
     chatHistory: animationContext.chatHistory,
-    generateAnimation: animationContext.generateAnimation
+    generateAnimation: animationContext.generateAnimation,
+    setSvgContent: animationContext.setSvgContent,
+    setChatHistory: animationContext.setChatHistory
   };
 
   return (
