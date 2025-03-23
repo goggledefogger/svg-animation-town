@@ -51,6 +51,8 @@ exports.generateScene = asyncHandler(async (req, res) => {
   try {
     console.log(`Generating scene animation for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
     console.log('Movie context:', movieContext);
+    // Log provider information for debugging provider-specific issues
+    console.log(`Using animation provider: ${provider || config.aiProvider}`);
 
     // 3. Load the existing movie from storage before starting animation generation
     let movie = await storageService.getMovie(movieContext.storyboardId);
@@ -87,7 +89,26 @@ exports.generateScene = asyncHandler(async (req, res) => {
         throw new Error('Animation generation failed: No SVG content returned');
       }
 
+      // Add more detailed logging for provider-specific debugging
       console.log(`Successfully generated animation for scene ${movieContext.sceneIndex + 1} with animation ID: ${animationResult.animationId || 'None'}`);
+      console.log(`Animation provider: ${provider || config.aiProvider}, SVG content length: ${animationResult.svg.length}`);
+      
+      // Explicitly validate that we have a valid animationId for tracking
+      if (!animationResult.animationId) {
+        console.warn(`WARNING: Generated animation has no animationId. Provider: ${provider || config.aiProvider}`);
+        // Generate a fallback ID to ensure tracking works
+        animationResult.animationId = uuidv4();
+        console.log(`Created fallback animation ID: ${animationResult.animationId}`);
+        
+        // Save the animation with the new ID
+        await storageService.saveAnimation({
+          id: animationResult.animationId,
+          name: `Generated Animation for Scene ${movieContext.sceneIndex + 1}`,
+          svg: animationResult.svg,
+          timestamp: new Date().toISOString(),
+          provider: provider || config.aiProvider
+        });
+      }
     } catch (animationError) {
       console.error('Error generating animation:', animationError);
       // Create fallback animation result with error SVG
@@ -103,7 +124,9 @@ exports.generateScene = asyncHandler(async (req, res) => {
           id: animationResult.animationId,
           name: `Error Animation for Scene ${movieContext.sceneIndex + 1}`,
           svg: animationResult.svg,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          provider: provider || config.aiProvider,
+          error: animationError.message
         });
       }
     }
@@ -127,79 +150,42 @@ exports.generateScene = asyncHandler(async (req, res) => {
     // 5. Create clip name based on scene index and context
     const sceneName = `Scene ${movieContext.sceneIndex + 1}${movieContext.sceneDescription ? ': ' + movieContext.sceneDescription : ''}`;
 
-    // 6. Create a new clip
+    // 6. Create a new clip object with the generated animation
+    // Ensure critical fields are present, including animationId
     const newClip = {
       id: clipId,
       name: sceneName,
       svgContent: animationResult.svg,
-      duration: movieContext.sceneDuration || 5,
+      duration: movieContext.sceneDuration || 3000,
       order: movieContext.sceneIndex,
       prompt: prompt,
       chatHistory: chatHistory,
+      animationId: animationResult.animationId, // Ensure animation ID is preserved
       createdAt: new Date(),
-      animationId: animationResult.animationId,
-      provider: provider
+      provider: provider || config.aiProvider
     };
 
-    // 7. Add the clip to the movie's clips array
+    // Log new clip details to verify animation ID is set
+    console.log(`[CLIP_CREATION] Created clip: id=${newClip.id}, order=${newClip.order}, animationId=${newClip.animationId || 'MISSING!'}`);
+
+    // 7. Initialize movie clips array if not exists
     if (!movie.clips) {
       movie.clips = [];
     }
 
-    // Check if a clip with this order already exists
+    // 8. Add or replace the clip at the correct position
+    // Find the index of the existing clip with the same order
     const existingClipIndex = movie.clips.findIndex(clip => clip.order === movieContext.sceneIndex);
 
-    // Add detailed logging to track clip state before and after linking to movie
-    console.log(`[CLIP_LINKING] Before linking - MovieID: ${movie.id}, ClipID: ${clipId}, Provider: ${provider}, SceneIndex: ${movieContext.sceneIndex}, ExistingClipIndex: ${existingClipIndex}, CurrentClipCount: ${movie.clips.length}`);
-
-    // Store all clip orders for debugging
-    const allClipOrders = movie.clips.map(c => c.order);
-    console.log(`[CLIP_LINKING] Existing clip orders: [${allClipOrders.join(',')}]`);
-
-    if (existingClipIndex >= 0) {
-      // Replace existing clip
+    if (existingClipIndex !== -1) {
+      console.log(`Replacing existing clip at index ${existingClipIndex} for order ${movieContext.sceneIndex}`);
       movie.clips[existingClipIndex] = newClip;
-      console.log(`Replaced existing clip at index ${existingClipIndex} (order: ${movieContext.sceneIndex})`);
     } else {
-      // Add new clip
+      console.log(`Adding new clip for order ${movieContext.sceneIndex}`);
       movie.clips.push(newClip);
-      console.log(`Added new clip with order ${movieContext.sceneIndex}`);
     }
 
-    // Sort clips by order for consistency
-    movie.clips.sort((a, b) => a.order - b.order);
-
-    console.log(`[CLIP_LINKING] After linking - MovieID: ${movie.id}, ClipID: ${clipId}, NewClipCount: ${movie.clips.length}, ClipOrders: ${JSON.stringify(movie.clips.map(c => c.order))}`);
-
-    // 8. Update the movie's generation status
-    if (!movie.generationStatus) {
-      movie.generationStatus = {
-        inProgress: true,
-        startedAt: new Date(),
-        totalScenes: movieContext.sceneCount,
-        completedScenes: 0
-      };
-    } else {
-      // If the movie already has a generation status, preserve the original total scene count
-      // This ensures we maintain "7/7" instead of "7/1" when resuming
-      const totalScenes = Math.max(movie.generationStatus.totalScenes || 0, movieContext.sceneCount);
-      movie.generationStatus.totalScenes = totalScenes;
-    }
-
-    // Update completion count based on the number of clips we have after this addition
-    // This ensures we count actual generated clips, not just the highest scene index
-    movie.generationStatus.completedScenes = movie.clips.length;
-
-    console.log(`Updated generation status: completed ${movie.generationStatus.completedScenes}/${movie.generationStatus.totalScenes} scenes`);
-
-    // If we've generated all scenes, mark as complete
-    if (movie.generationStatus.completedScenes >= movie.generationStatus.totalScenes) {
-      movie.generationStatus.inProgress = false;
-      movie.generationStatus.completedAt = new Date();
-      console.log('All scenes completed, marked generation as complete');
-    }
-
-    // 9. Update the movie's timestamps
+    // 9. Update movie timestamps
     movie.updatedAt = new Date();
 
     // 10. Save the updated movie
@@ -238,6 +224,38 @@ exports.generateScene = asyncHandler(async (req, res) => {
           }
         }
       });
+      
+      // Additional check: Verify animation files exist for all referenced animationIds
+      // This helps catch provider-specific issues with animation storage
+      const animationVerificationPromises = movie.clips
+        .filter(clip => clip.animationId)
+        .map(async clip => {
+          try {
+            const animation = await storageService.getAnimation(clip.animationId);
+            if (!animation) {
+              console.warn(`[ANIMATION_VERIFY] Animation ${clip.animationId} for clip ${clip.id} not found in storage`);
+              return false;
+            }
+            if (!animation.svg) {
+              console.warn(`[ANIMATION_VERIFY] Animation ${clip.animationId} exists but has no SVG content`);
+              return false;
+            }
+            return true;
+          } catch (error) {
+            console.error(`[ANIMATION_VERIFY] Error checking animation ${clip.animationId}:`, error);
+            return false;
+          }
+        });
+      
+      // Wait for all verification checks to complete
+      const animationVerificationResults = await Promise.all(animationVerificationPromises);
+      const missingAnimationsCount = animationVerificationResults.filter(result => !result).length;
+      
+      if (missingAnimationsCount > 0) {
+        console.warn(`[ANIMATION_VERIFY] Found ${missingAnimationsCount} clips with missing or invalid animations`);
+      } else {
+        console.log(`[ANIMATION_VERIFY] All ${animationVerificationResults.length} animations verified successfully`);
+      }
 
       // Update completion count based on the number of clips we have after the merge
       movie.generationStatus.completedScenes = movie.clips.length;

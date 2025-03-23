@@ -273,6 +273,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           console.error(`Error loading animation: ${error.message}`);
           setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the "Load" button.'));
         });
+      
+      // TODO: Future enhancement (issue #3) - Add provider-specific handling for animation loading
+      // Claude-generated animations may require different loading logic or retry mechanisms
+      // than OpenAI-generated ones. Consider adding provider-specific code paths if the
+      // basic loading approach continues to have issues with specific providers.
     } else {
       // No animation ID reference at all
       setSvgContent(createPlaceholderSvg('No animation content available'));

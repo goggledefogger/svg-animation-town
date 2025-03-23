@@ -26,14 +26,55 @@ exports.extractSvgAndText = (responseText) => {
 
         // Check if it has the expected structure
         if (parsedResponse.svg && typeof parsedResponse.svg === 'string') {
+          console.log(`Successfully parsed JSON response, SVG length: ${parsedResponse.svg.length}`);
+          
+          // Validate that SVG content is usable
+          if (!parsedResponse.svg.includes('<svg') || parsedResponse.svg.length < 100) {
+            console.warn(`Parsed SVG content appears invalid: ${parsedResponse.svg.substring(0, 50)}...`);
+            throw new Error('Invalid SVG content in parsed JSON');
+          }
+          
           return {
             svg: parsedResponse.svg,
             text: parsedResponse.explanation || 'Animation created successfully!'
           };
+        } else {
+          console.warn('JSON parsed but missing valid SVG field:', Object.keys(parsedResponse).join(', '));
+          throw new Error('Missing svg field in JSON response');
         }
       }
     } catch (jsonError) {
       // Not a valid JSON or doesn't have the expected structure
+      console.warn(`JSON parsing failed: ${jsonError.message}`);
+      
+      // Claude-specific: Try to extract JSON from a larger response text
+      // This handles cases where Claude wraps JSON in other text
+      try {
+        const jsonRegex = /\{(?:[^{}]|(\{(?:[^{}]|(\{(?:[^{}]|(\{[^{}]*\}))*\}))*\}))*\}/g;
+        const jsonMatches = responseText.match(jsonRegex);
+        
+        if (jsonMatches && jsonMatches.length > 0) {
+          console.log(`Found ${jsonMatches.length} potential JSON objects in response`);
+          
+          // Try each JSON match until one parses successfully and contains SVG
+          for (const potentialJson of jsonMatches) {
+            try {
+              const parsed = JSON.parse(potentialJson);
+              if (parsed.svg && typeof parsed.svg === 'string' && parsed.svg.includes('<svg')) {
+                console.log(`Successfully extracted JSON with SVG from response text`);
+                return {
+                  svg: parsed.svg,
+                  text: parsed.explanation || 'Animation created successfully!'
+                };
+              }
+            } catch (e) {
+              // Continue to next match
+            }
+          }
+        }
+      } catch (extractionError) {
+        console.warn(`Failed to extract JSON from response: ${extractionError.message}`);
+      }
     }
 
     // If not a valid JSON, try the direct SVG extraction
@@ -46,9 +87,10 @@ exports.extractSvgAndText = (responseText) => {
       svg = svgMatch[0];
       // Get the text content by removing the SVG
       text = responseText.replace(svg, '').trim();
+      console.log(`Extracted SVG directly from response, length: ${svg.length}`);
     } else {
       // If no direct match, check for code blocks
-      const codeBlockMatch = responseText.match(/```(?:svg|html|xml)?\s*([\s\S]*?)```/);
+      const codeBlockMatch = responseText.match(/```(?:svg|html|xml|json)?\s*([\s\S]*?)```/);
       if (codeBlockMatch && codeBlockMatch[1]) {
         const content = codeBlockMatch[1].trim();
         const svgInBlock = content.match(/<svg[\s\S]*?<\/svg>/);
@@ -56,6 +98,21 @@ exports.extractSvgAndText = (responseText) => {
         if (svgInBlock) {
           svg = svgInBlock[0];
           text = responseText.replace(codeBlockMatch[0], '').trim();
+          console.log(`Extracted SVG from code block, length: ${svg.length}`);
+        } else if (content.startsWith('{') && content.endsWith('}')) {
+          // Try parsing code block as JSON (common in Claude responses)
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed.svg && typeof parsed.svg === 'string' && parsed.svg.includes('<svg')) {
+              console.log(`Extracted SVG from JSON in code block, length: ${parsed.svg.length}`);
+              return {
+                svg: parsed.svg,
+                text: parsed.explanation || 'Animation created successfully!'
+              };
+            }
+          } catch (jsonBlockError) {
+            console.warn(`Failed to parse JSON in code block: ${jsonBlockError.message}`);
+          }
         }
       }
     }
