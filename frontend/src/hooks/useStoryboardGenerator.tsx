@@ -4,6 +4,7 @@ import { useMovie } from '../contexts/MovieContext';
 import { MovieApi, StoryboardResponse, StoryboardScene } from '../services/movie.api';
 import { AnimationApi, MovieStorageApi } from '../services/api';
 import { Storyboard, MovieClip } from '../contexts/MovieContext';
+import { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 
 /**
  * Interface for generation progress state
@@ -759,9 +760,50 @@ export function useStoryboardGenerator(
                 // Add post-save synchronization for all storyboards, not just Claude
                 console.log(`Running post-generation synchronization for storyboard ${result.id}`);
                 syncClipData(result.id, finalStoryboard.clips);
+                
+                // Proactively load all SVG content for clips that have animation IDs
+                // This ensures the UI has all content it needs before showing the storyboard
+                const clipLoadPromises = finalStoryboard.clips
+                  .filter(clip => clip.animationId && (!clip.svgContent || clip.svgContent.length < 100))
+                  .map(async (clip) => {
+                    if (!clip.animationId) return;
+                    
+                    console.log(`[GEN_COMPLETE] Ensuring animation content for clip ${clip.id} is loaded`);
+                    try {
+                      // First check global registry to see if we already have this animation
+                      const existingAnimation = AnimationRegistryHelpers.getAnimation(clip.animationId);
+                      if (existingAnimation) {
+                        console.log(`[GEN_COMPLETE] Animation ${clip.animationId} already in registry`);
+                        return;
+                      }
+                      
+                      // Need to fetch from server
+                      await MovieStorageApi.getClipAnimation(clip.animationId);
+                      console.log(`[GEN_COMPLETE] Successfully preloaded animation ${clip.animationId}`);
+                    } catch (err) {
+                      console.error(`[GEN_COMPLETE] Failed to preload animation for clip ${clip.id}:`, err);
+                    }
+                  });
+                  
+                // Wait for all animations to be loaded before closing the modal
+                Promise.all(clipLoadPromises)
+                  .then(() => {
+                    console.log(`[GEN_COMPLETE] Successfully preloaded all clip animations, ready to close modal`);
+                    setShowGeneratingClipsModal(false);
+                    setIsGenerating(false);
+                  })
+                  .catch(err => {
+                    console.error(`[GEN_COMPLETE] Error during animation preloading:`, err);
+                    // Close modal anyway as we've done our best
+                    setShowGeneratingClipsModal(false);
+                    setIsGenerating(false);
+                  });
               })
               .catch(saveError => {
                 console.error('Failed to save final storyboard:', saveError);
+                // Close modal on error as well
+                setShowGeneratingClipsModal(false);
+                setIsGenerating(false);
               });
           }, 0);
 
@@ -774,9 +816,8 @@ export function useStoryboardGenerator(
           console.error(`Encountered ${errors.length} errors during generation`);
         }
 
-        // IMPORTANT: Reset UI state after successful generation
-        setShowGeneratingClipsModal(false);
-        setIsGenerating(false);
+        // UI state is now managed by the animation loading promises
+        // Don't close the modal here anymore - it will close when animations are ready
       }
     } catch (error) {
       handleGenerationError(error);
