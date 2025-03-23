@@ -49,8 +49,9 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
     filterItems
   } = useInfiniteLoading<Storyboard, string>({
     fetchIds: getSavedStoryboards,
-    fetchItem: (id) => {
-      return MovieStorageApi.getMovie(id);
+    fetchItem: async (id) => {
+      const response = await MovieStorageApi.getMovie(id);
+      return response?.success && response?.movie ? response.movie : null;
     },
     enabled: isOpen,
     initialFilter: createSearchFilter('')
@@ -153,7 +154,7 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
             <div className="divide-y divide-gray-700">
               {filteredStoryboards.map((storyboard, index) => (
                 <StoryboardItem
-                  key={storyboard.id}
+                  key={`${storyboard.id || 'item'}-${index}`}
                   storyboard={storyboard}
                   onLoadStoryboard={handleLoadStoryboard}
                   onRequestDelete={handleRequestDelete}

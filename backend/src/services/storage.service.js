@@ -140,7 +140,6 @@ class StorageService {
       
       // Simple approach: Read the file and parse it
       try {
-        console.log(`[ANIMATION_LOADING] Reading animation ${id} from ${filePath}`);
         const data = await fs.readFile(filePath, 'utf8');
         
         const animation = JSON.parse(data);
@@ -162,7 +161,6 @@ class StorageService {
           return null;
         }
         
-        console.log(`[ANIMATION_LOADING] Successfully loaded animation ${id}, SVG length: ${animation.svg.length}`);
         return animation;
       } catch (error) {
         console.error(`[ANIMATION_LOADING] Error reading/parsing animation ${id}:`, error);
@@ -245,6 +243,7 @@ class StorageService {
       const id = storyboard.id || uuidv4();
       const filename = `${id}.json`;
       const filePath = path.join(MOVIES_DIR, filename);
+      const tempFilePath = `${filePath}.tmp`;
 
       // Process generationStatus dates if present
       let generationStatus = storyboard.generationStatus;
@@ -257,14 +256,58 @@ class StorageService {
         }
       }
 
+      // Track any issues with animation references
+      const animationIssues = [];
+      
       // Process clips to store only references to animations, not the full SVG content
       let optimizedClips = [];
 
       if (storyboard.clips && Array.isArray(storyboard.clips)) {
         // Before optimization, log all clips' animation IDs for debugging
         storyboard.clips.forEach((clip, index) => {
-          console.log(`[MOVIE_SAVING] Clip ${index} (order ${clip.order}): animationId=${clip.animationId || 'MISSING!'}`);
+          console.log(`[MOVIE_SAVING] Clip ${index} (order ${clip.order}): animationId=${clip.animationId || 'MISSING!'}, provider=${clip.provider || 'unknown'}`);
         });
+        
+        // Validate animation references before saving to ensure integrity
+        const clipValidationPromises = storyboard.clips.map(async (clip) => {
+          // Skip validation for clips without animationId
+          if (!clip.animationId) {
+            const issue = `Clip ${clip.id} at order ${clip.order} has no animationId reference!`;
+            console.warn(`[MOVIE_SAVING] Warning: ${issue}`);
+            animationIssues.push(issue);
+            return clip;
+          }
+
+          // Verify animation exists
+          try {
+            const animation = await this.getAnimation(clip.animationId);
+            if (!animation) {
+              const issue = `Animation ${clip.animationId} for clip ${clip.id} not found in storage`;
+              console.warn(`[MOVIE_SAVING] ${issue}`);
+              animationIssues.push(issue);
+            } else if (!animation.svg) {
+              const issue = `Animation ${clip.animationId} exists but has no SVG content`;
+              console.warn(`[MOVIE_SAVING] ${issue}`);
+              animationIssues.push(issue);
+            } else {
+              console.log(`[MOVIE_SAVING] Verified animation ${clip.animationId} exists and has valid SVG content`);
+            }
+          } catch (error) {
+            const issue = `Error verifying animation ${clip.animationId}: ${error.message}`;
+            console.error(`[MOVIE_SAVING] ${issue}`);
+            animationIssues.push(issue);
+          }
+          
+          return clip;
+        });
+
+        // Wait for all validation checks to complete
+        await Promise.all(clipValidationPromises);
+        
+        // Log any issues found and store them with the storyboard
+        if (animationIssues.length > 0) {
+          console.warn(`[MOVIE_SAVING] Found ${animationIssues.length} issues with animation references`);
+        }
 
         optimizedClips = storyboard.clips.map((clip) => {
           // Create an optimized clip object with essential properties
@@ -275,13 +318,10 @@ class StorageService {
             order: clip.order,
             prompt: clip.prompt || '',
             // CRITICAL: Ensure animation ID is preserved regardless of other properties
-            animationId: clip.animationId
+            animationId: clip.animationId,
+            // Store provider info to help with resumption
+            provider: clip.provider
           };
-
-          // Log warning for any clip missing an animation ID
-          if (!optimizedClip.animationId) {
-            console.warn(`[MOVIE_SAVING] Warning: Clip ${clip.id} at order ${clip.order} has no animationId reference!`);
-          }
 
           return optimizedClip;
         });
@@ -295,7 +335,8 @@ class StorageService {
           id: scene.id,
           description: scene.description,
           svgPrompt: scene.svgPrompt,
-          duration: scene.duration
+          duration: scene.duration,
+          provider: scene.provider // Make sure provider is preserved for resumption
         }));
       }
 
@@ -312,12 +353,94 @@ class StorageService {
         // Store AI provider for resumable generation
         aiProvider: storyboard.aiProvider,
         // Store optimized original scenes
-        originalScenes: optimizedOriginalScenes
+        originalScenes: optimizedOriginalScenes,
+        // Store validation results for diagnostics
+        validationResults: animationIssues?.length > 0 ? { 
+          hasIssues: true,
+          timestamp: new Date().toISOString(),
+          issueCount: animationIssues.length,
+          issues: animationIssues
+        } : null
       };
 
-      // Write the file
+      // Use atomic write pattern to prevent corruption:
+      // 1. Write to temp file
+      // 2. Flush to disk
+      // 3. Rename to target file (atomic operation on most file systems)
       const storyboardJSON = JSON.stringify(optimizedStoryboard, null, 2);
-      await fs.writeFile(filePath, storyboardJSON);
+      
+      try {
+        // Write to temp file
+        await fs.writeFile(tempFilePath, storyboardJSON, 'utf8');
+        
+        // Try to force flush to physical storage
+        const fileHandle = await fs.open(tempFilePath, 'r+');
+        try {
+          await fileHandle.sync();
+        } finally {
+          await fileHandle.close();
+        }
+        
+        // Atomic rename
+        await fs.rename(tempFilePath, filePath);
+        
+        // Verify the file was written correctly with a more thorough approach
+        try {
+          const verifyData = await fs.readFile(filePath, 'utf8');
+          const parsedData = JSON.parse(verifyData);
+          
+          if (!parsedData || !parsedData.clips) {
+            throw new Error('Verification failed: Movie written to disk lacks clips array');
+          }
+          
+          // Verify that all clips are present, with focus on animation IDs
+          const expectedClipCount = optimizedClips.length;
+          const actualClipCount = parsedData.clips.length;
+          
+          if (actualClipCount !== expectedClipCount) {
+            throw new Error(`Verification failed: Expected ${expectedClipCount} clips but found ${actualClipCount}`);
+          }
+          
+          // Verify essential clip properties for each clip
+          parsedData.clips.forEach((clip, index) => {
+            if (!clip.id) {
+              throw new Error(`Verification failed: Clip at index ${index} missing ID`);
+            }
+            
+            // Check if we're supposed to have an animation ID
+            const originalClip = optimizedClips.find(c => c.id === clip.id);
+            if (originalClip?.animationId && !clip.animationId) {
+              throw new Error(`Verification failed: Clip ${clip.id} lost its animation ID during storage`);
+            }
+          });
+          
+          console.log(`[MOVIE_SAVING] Successfully verified movie ${id} file integrity with all ${actualClipCount} clips preserved`);
+        } catch (verifyError) {
+          console.error(`[MOVIE_SAVING] Failed to verify movie ${id} was properly saved:`, verifyError);
+          throw verifyError; // Re-throw to trigger fallback save
+        }
+      } catch (writeError) {
+        console.error(`[MOVIE_SAVING] Error during atomic write for movie ${id}:`, writeError);
+        
+        // Fall back to direct write with extra precautions
+        console.log(`[MOVIE_SAVING] Using fallback direct write for movie ${id}`);
+        
+        // Create a backup of the existing file if it exists
+        try {
+          const backupPath = `${filePath}.bak`;
+          await fs.access(filePath);
+          await fs.copyFile(filePath, backupPath);
+          console.log(`[MOVIE_SAVING] Created backup of existing file at ${backupPath}`);
+        } catch (backupError) {
+          // If the file doesn't exist, no need for backup
+          if (backupError.code !== 'ENOENT') {
+            console.error(`[MOVIE_SAVING] Error creating backup:`, backupError);
+          }
+        }
+        
+        // Fallback write directly to the file
+        await fs.writeFile(filePath, storyboardJSON);
+      }
 
       console.log(`[MOVIE_SAVING] Saved movie ${id} with ${optimizedClips.length} clips`);
 

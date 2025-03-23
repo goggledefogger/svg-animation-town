@@ -546,12 +546,56 @@ export const MovieStorageApi = {
       if (!storyboard.id) {
         throw new Error('Storyboard ID is required');
       }
+      
+      // Validate clip data before sending to server
+      if (storyboard.clips && Array.isArray(storyboard.clips)) {
+        // Log each clip and identify potential issues
+        const clipIssues = storyboard.clips
+          .map((clip, index) => {
+            const hasAnimationId = !!clip.animationId;
+            const hasSvgContent = !!clip.svgContent && clip.svgContent.length > 100;
+            
+            const issue = !hasAnimationId 
+              ? `Clip ${index} (id: ${clip.id}, order: ${clip.order}) missing animation ID` 
+              : !hasSvgContent 
+                ? `Clip ${index} (id: ${clip.id}, order: ${clip.order}) has animation ID ${clip.animationId} but missing SVG content`
+                : null;
+                
+            if (issue) {
+              console.warn(`[API] Movie validation issue: ${issue}`);
+              return issue;
+            }
+            return null;
+          })
+          .filter(Boolean);
+          
+        if (clipIssues.length > 0) {
+          console.warn(`[API] Found ${clipIssues.length} issues with clips before saving to server`);
+        }
+        
+        // Check for gaps in clip ordering
+        const orders = storyboard.clips.map(clip => clip.order).sort((a, b) => a - b);
+        for (let i = 0; i < orders.length - 1; i++) {
+          if (orders[i+1] - orders[i] > 1) {
+            console.warn(`[API] Found gap in clip order sequence: ${orders[i]} to ${orders[i+1]}`);
+          }
+        }
+      }
 
       // Convert dates to ISO strings if they're Date objects
       const preparedStoryboard = {
         ...storyboard,
         createdAt: storyboard.createdAt instanceof Date ? storyboard.createdAt.toISOString() : storyboard.createdAt,
         updatedAt: storyboard.updatedAt instanceof Date ? storyboard.updatedAt.toISOString() : storyboard.updatedAt,
+        generationStatus: storyboard.generationStatus ? {
+          ...storyboard.generationStatus,
+          startedAt: storyboard.generationStatus.startedAt instanceof Date 
+            ? storyboard.generationStatus.startedAt.toISOString() 
+            : storyboard.generationStatus.startedAt,
+          completedAt: storyboard.generationStatus.completedAt instanceof Date 
+            ? storyboard.generationStatus.completedAt.toISOString() 
+            : storyboard.generationStatus.completedAt
+        } : storyboard.generationStatus
       };
 
       const response = await fetchApi<any>(
@@ -561,6 +605,8 @@ export const MovieStorageApi = {
           body: JSON.stringify(preparedStoryboard),
         }
       );
+      
+      console.log(`[API] Movie ${preparedStoryboard.id} saved successfully (ai: ${preparedStoryboard.aiProvider || 'unknown'}, clips: ${preparedStoryboard.clips?.length || 0})`);
 
       return {
         id: response.id || storyboard.id,
@@ -593,9 +639,11 @@ export const MovieStorageApi = {
   },
 
   /**
-   * Get a movie from the server (via backend API)
+   * Get movie data by ID from server
+   * @param id Movie ID
+   * @returns Movie data or null if not found
    */
-  getMovie: async (id: string): Promise<Storyboard | null> => {
+  getMovie: async (id: string): Promise<{ success: boolean; movie: Storyboard } | null> => {
     try {
       console.log(`Fetching movie with ID: ${id} from server`);
       const data = await fetchApi<any>(`/movie/${id}`);
@@ -626,7 +674,10 @@ export const MovieStorageApi = {
           }
         }
 
-        return data.movie;
+        return {
+          success: true,
+          movie: data.movie
+        };
       } else {
         console.error(`Invalid response when loading movie ${id}:`, data);
         throw new Error('Invalid response from server');

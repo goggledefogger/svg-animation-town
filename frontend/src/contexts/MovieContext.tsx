@@ -335,113 +335,172 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     }));
   }, []);
 
-  // Load storyboard from server, falling back to local storage
+  // Update a clip
+  const updateClip = useCallback((clipId: string, updates: Partial<Omit<MovieClip, 'id'>> & { order?: number }) => {
+    setCurrentStoryboard(prev => {
+      const clipIndex = prev.clips.findIndex(clip => clip.id === clipId);
+      if (clipIndex === -1) return prev;
+
+      const updatedClips = [...prev.clips];
+      updatedClips[clipIndex] = {
+        ...updatedClips[clipIndex],
+        ...updates
+      };
+
+      return {
+        ...prev,
+        clips: updatedClips,
+        updatedAt: new Date()
+      };
+    });
+  }, []);
+
+  /**
+   * Validate clip data and ensure animation references are valid
+   */
+  const validateMovieClips = useCallback((clips: MovieClip[]): MovieClip[] => {
+    if (!clips || !Array.isArray(clips)) {
+      console.warn('No clips array provided for validation');
+      return [];
+    }
+
+    console.log(`[Validation] Validating ${clips.length} clips`);
+    
+    // Check for clips with missing animation IDs
+    const missingAnimationIds = clips.filter(clip => !clip.animationId);
+    if (missingAnimationIds.length > 0) {
+      console.warn(`[Validation] Found ${missingAnimationIds.length} clips missing animation IDs`);
+      missingAnimationIds.forEach(clip => {
+        console.warn(`[Validation] Clip ${clip.id} (order: ${clip.order}) missing animation ID`);
+      });
+    }
+    
+    // Verify SVG content sync with animation IDs
+    const svgMismatches = clips.filter(clip => 
+      clip.animationId && 
+      (!clip.svgContent || clip.svgContent.length < 100)
+    );
+    
+    if (svgMismatches.length > 0) {
+      console.warn(`[Validation] Found ${svgMismatches.length} clips with animation IDs but missing/invalid SVG content`);
+    }
+    
+    // Ensure clip orders are sequential and unique
+    const orders = clips.map(clip => clip.order).sort((a, b) => a - b);
+    const expectedOrders = Array.from({ length: orders.length }, (_, i) => i);
+    
+    const orderGaps = expectedOrders.filter(order => !orders.includes(order));
+    if (orderGaps.length > 0) {
+      console.warn(`[Validation] Found gaps in clip order sequence: missing orders ${orderGaps.join(', ')}`);
+    }
+    
+    // Check for duplicate orders
+    const orderCounts = new Map<number, number>();
+    orders.forEach(order => {
+      orderCounts.set(order, (orderCounts.get(order) || 0) + 1);
+    });
+    
+    const duplicateOrders = Array.from(orderCounts.entries())
+      .filter(([_, count]) => count > 1)
+      .map(([order, _]) => order);
+      
+    if (duplicateOrders.length > 0) {
+      console.warn(`[Validation] Found duplicate clip orders: ${duplicateOrders.join(', ')}`);
+    }
+    
+    // Return the validated clips - for now we're just logging issues
+    return clips;
+  }, []);
+
+  // Load storyboard from API or local storage
   const loadStoryboard = useCallback(async (storyboardId: string) => {
+    console.log(`Attempting to load storyboard with ID: ${storyboardId} from server`);
+    
     try {
-      // Clear the active clip state first to prevent any state persistence between loads
-      setActiveClipId(null);
-      setActiveClip(null);
-
-      // Clear SVG content to prevent first clip being replaced by previously viewed clip
-      setSvgContent('');
-      setChatHistory([]);
-
-      // Check if this ID was previously not found on the server to avoid redundant requests
-      const wasNotFound = notFoundMovieIds.current.has(storyboardId);
-
-      // Try loading from server first, unless we already know it doesn't exist
-      if (!wasNotFound) {
-        try {
-          console.log(`Attempting to load storyboard with ID: ${storyboardId} from server`);
-          const serverStoryboard = await MovieStorageApi.getMovie(storyboardId);
-
-          if (serverStoryboard) {
-            // Convert date strings back to Date objects if needed
-            const storyboard = {
-              ...serverStoryboard,
-              createdAt: new Date(serverStoryboard.createdAt),
-              updatedAt: new Date(serverStoryboard.updatedAt)
-            };
-
-            // Check if we have clips data
-            if (!storyboard.clips || storyboard.clips.length === 0) {
-              // Important warning to help debugging
-              console.warn(`Storyboard "${storyboard.name}" loaded with 0 clips despite having ${storyboard.generationStatus?.completedScenes || 0} completed scenes.`);
-            }
-
-            setCurrentStoryboard(storyboard);
-
-            // Find the first clip by order
-            if (storyboard.clips && storyboard.clips.length > 0) {
-              const sortedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
-
-              // Force a clean state update cycle before setting the active clip
-              setTimeout(() => {
-                setActiveClipId(sortedClips[0].id);
-                setActiveClip(sortedClips[0]);
-              }, 0);
-            } else {
-              setActiveClipId(null);
-              setActiveClip(null);
-            }
-
-            console.log(`Loaded storyboard from server: ${storyboard.name}`);
-            return true;
-          }
-        } catch (serverError: any) {
-          // Check if it's a 404 Not Found error
-          if (serverError.status === 404 || (serverError.message && serverError.message.includes('not found'))) {
-            console.warn(`Storyboard with ID ${storyboardId} not found on server`);
-            // Add to not found cache to avoid future requests
-            notFoundMovieIds.current.add(storyboardId);
-          } else {
-            console.error('Failed to load from server, trying local storage:', serverError);
-          }
-        }
-      } else {
-        console.log(`Skipping server request for ID ${storyboardId} (previously not found)`);
-      }
-
-      // Fall back to local storage
-      const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
-      if (!storyboardsString) {
-        console.error('No storyboards found in local storage');
+      const response = await MovieStorageApi.getMovie(storyboardId);
+      
+      if (!response || !response.success || !response.movie) {
+        console.error(`Storyboard with ID ${storyboardId} not found on server`);
         return false;
       }
-
-      const storyboards = JSON.parse(storyboardsString) as Record<string, Storyboard>;
-      const storyboard = storyboards[storyboardId];
-
-      if (!storyboard) {
-        console.error(`Storyboard with ID ${storyboardId} not found in local storage`);
-        return false;
+      
+      // Get the movie data from the API response
+      const { movie } = response;
+      
+      const storyboard: Storyboard = {
+        id: movie.id,
+        name: movie.name,
+        description: movie.description || '',
+        clips: Array.isArray(movie.clips) ? movie.clips : [],
+        createdAt: new Date(movie.createdAt),
+        updatedAt: new Date(movie.updatedAt),
+        // Preserve AI provider and original scenes for resumption
+        aiProvider: movie.aiProvider,
+        originalScenes: movie.originalScenes,
+        // Preserve generation status
+        generationStatus: movie.generationStatus ? {
+          ...movie.generationStatus,
+          startedAt: movie.generationStatus.startedAt ? new Date(movie.generationStatus.startedAt) : undefined,
+          completedAt: movie.generationStatus.completedAt ? new Date(movie.generationStatus.completedAt) : undefined
+        } : undefined
+      };
+      
+      // Validate and synchronize clips if needed
+      if (storyboard.clips && storyboard.clips.length > 0) {
+        // Validate clips for integrity
+        storyboard.clips = validateMovieClips(storyboard.clips);
+        
+        // Sort clips by order to ensure correct sequence
+        storyboard.clips.sort((a, b) => a.order - b.order);
+        
+        // Begin loading clip animations in background
+        const clipLoadPromises = storyboard.clips
+          .filter(clip => clip.animationId && (!clip.svgContent || clip.svgContent.length < 100))
+          .map(async (clip) => {
+            if (!clip.animationId) return;
+            
+            console.log(`[ClipSync] Loading animation content for clip ${clip.id}, animation ID: ${clip.animationId}`);
+            
+            try {
+              const animation = await MovieStorageApi.getClipAnimation(clip.animationId);
+              if (animation && animation.svg) {
+                // Update clip with animation content
+                console.log(`[ClipSync] Successfully loaded animation for clip ${clip.id}`);
+                
+                updateClip(clip.id, { 
+                  svgContent: animation.svg,
+                  chatHistory: animation.chatHistory
+                });
+              }
+            } catch (err) {
+              console.error(`[ClipSync] Failed to load animation for clip ${clip.id}:`, err);
+            }
+          });
+        
+        // Don't await these promises - let them load in the background
+        // Just fire and forget, the UI will update as they complete
+        Promise.all(clipLoadPromises)
+          .then(() => console.log('[ClipSync] Completed background loading of clip animations'))
+          .catch(err => console.error('[ClipSync] Error in background clip loading:', err));
       }
-
-      // Convert date strings back to Date objects
-      storyboard.createdAt = new Date(storyboard.createdAt);
-      storyboard.updatedAt = new Date(storyboard.updatedAt);
-
+      
+      // Update the current storyboard state
       setCurrentStoryboard(storyboard);
-
-      // Force a clean state update cycle before setting the active clip
-      if (storyboard.clips.length > 0) {
-        const sortedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
-        setTimeout(() => {
-          setActiveClipId(sortedClips[0].id);
-          setActiveClip(sortedClips[0]);
-        }, 0);
+      
+      // If there are clips, set the first one as active
+      if (storyboard.clips && storyboard.clips.length > 0) {
+        setActiveClipId(storyboard.clips[0].id);
       } else {
         setActiveClipId(null);
-        setActiveClip(null);
       }
-
-      console.log(`Loaded storyboard from local storage: ${storyboard.name}`);
+      
+      console.log(`Loaded storyboard from server: ${storyboard.name}`);
       return true;
     } catch (error) {
-      console.error('Error loading storyboard:', error);
+      console.error(`Error loading storyboard ${storyboardId}:`, error);
       return false;
     }
-  }, []);
+  }, [updateClip, validateMovieClips]);
 
   // Delete a storyboard from server and local storage
   const deleteStoryboard = useCallback(async (storyboardId: string) => {
@@ -535,26 +594,6 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
     return newClipId;
   }, [addClip, svgContent, chatHistory]);
-
-  // Update a clip
-  const updateClip = useCallback((clipId: string, updates: Partial<Omit<MovieClip, 'id'>> & { order?: number }) => {
-    setCurrentStoryboard(prev => {
-      const clipIndex = prev.clips.findIndex(clip => clip.id === clipId);
-      if (clipIndex === -1) return prev;
-
-      const updatedClips = [...prev.clips];
-      updatedClips[clipIndex] = {
-        ...updatedClips[clipIndex],
-        ...updates
-      };
-
-      return {
-        ...prev,
-        clips: updatedClips,
-        updatedAt: new Date()
-      };
-    });
-  }, []);
 
   // Remove a clip
   const removeClip = useCallback((clipId: string) => {

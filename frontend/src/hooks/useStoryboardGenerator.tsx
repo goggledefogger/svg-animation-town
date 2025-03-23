@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useMovie } from '../contexts/MovieContext';
 import { MovieApi, StoryboardResponse, StoryboardScene } from '../services/movie.api';
@@ -227,6 +227,11 @@ export function useStoryboardGenerator(
           // Instead, return the new state and save outside the state update
           setTimeout(() => {
             MovieStorageApi.saveMovie(finalStoryboard)
+              .then(result => {
+                // Add post-save synchronization for all storyboards, not just Claude
+                console.log(`Running post-generation synchronization for storyboard ${result.id}`);
+                syncClipData(result.id, finalStoryboard.clips);
+              })
               .catch(err => console.error('Error saving completed storyboard:', err));
           }, 0);
 
@@ -292,10 +297,10 @@ export function useStoryboardGenerator(
   ) => {
     console.log('Beginning storyboard generation...');
 
-    // CRITICAL FIX: If there are no scenes to process, bail out early
+    // Validate scenes to ensure they have all required properties
     if (!storyboard.scenes || storyboard.scenes.length === 0) {
       console.log('No scenes to process, skipping generation');
-
+      
       // If we're resuming, just mark the storyboard as complete
       if (isResuming && currentStoryboard) {
         setCurrentStoryboard(prevStoryboard => {
@@ -313,6 +318,11 @@ export function useStoryboardGenerator(
           // Instead, return the new state and save outside the state update
           setTimeout(() => {
             MovieStorageApi.saveMovie(completedStoryboard)
+              .then(result => {
+                // Add post-save synchronization for all storyboards, not just Claude
+                console.log(`Running post-generation synchronization for storyboard ${result.id}`);
+                syncClipData(result.id, completedStoryboard.clips);
+              })
               .catch(err => console.error('Error saving completed storyboard:', err));
           }, 0);
 
@@ -325,6 +335,21 @@ export function useStoryboardGenerator(
       setIsGenerating(false);
       return;
     }
+
+    // Validate scenes have required data for generation
+    const validatedScenes = storyboard.scenes.map((scene, index) => {
+      if (!scene.svgPrompt) {
+        console.warn(`Scene ${index} missing svgPrompt, using description as fallback`);
+        return {
+          ...scene,
+          svgPrompt: scene.description || `Scene ${index+1}`,
+        };
+      }
+      return scene;
+    });
+    
+    // Use the validated scenes from now on
+    storyboard.scenes = validatedScenes;
 
     // If we're starting from the beginning, create a new storyboard
     let storyboardId: string;
@@ -483,6 +508,18 @@ export function useStoryboardGenerator(
                 aiProvider,
                 movieContext
               );
+
+              // Ensure we have valid SVG content regardless of provider
+              if (!result || !result.svg || !result.svg.includes('<svg')) {
+                throw new Error(`Invalid SVG generated for scene ${absoluteSceneIndex+1}`);
+              }
+
+              // Store the animationId if provided - critical for data integrity
+              if (result.animationId) {
+                console.log(`Scene ${absoluteSceneIndex+1} has animation ID: ${result.animationId}`);
+              } else {
+                console.warn(`Scene ${absoluteSceneIndex+1} missing animation ID - may cause issues with playback`);
+              }
 
               // Check if the backend successfully updated the movie JSON
               if (result && result.movieUpdateStatus) {
@@ -665,70 +702,82 @@ export function useStoryboardGenerator(
       };
 
       // Execute scene generation with appropriate concurrency based on provider
-      if (aiProvider === 'openai') {
-        // For OpenAI, process scenes in batches to control concurrency
-        const openAIConcurrencyLimit = 6;
-        console.log(`Using OpenAI with controlled concurrency of ${openAIConcurrencyLimit}`);
+      try {
+        console.log(`Executing scene generation with provider: ${aiProvider}`);
+        
+        if (aiProvider === 'openai') {
+          // For OpenAI, process scenes in batches to control concurrency
+          const openAIConcurrencyLimit = 6;
+          console.log(`Using OpenAI with controlled concurrency of ${openAIConcurrencyLimit}`);
 
-        for (let i = 0; i < scenePromises.length; i += openAIConcurrencyLimit) {
-          const batch = scenePromises.slice(i, i + openAIConcurrencyLimit).map(promiseFn => promiseFn());
-          await Promise.all(batch);
-        }
-      } else {
-        // For Claude, let the server's rate limiter handle throttling
-        // The server is already configured to limit Claude to 2 concurrent requests
-        // with proper token-based throttling
-        console.log('Using Claude with server-side rate limiting');
-
-        // Process all scenes, the server will queue them appropriately
-        await Promise.all(scenePromises.map(promiseFn => promiseFn()));
-      }
-
-      // Create final copy of storyboard with current state
-      setCurrentStoryboard(prevStoryboard => {
-        const finalStoryboard: Storyboard = {
-          ...prevStoryboard,
-          updatedAt: new Date(),
-          generationStatus: {
-            ...prevStoryboard.generationStatus!,
-            inProgress: false,
-            completedAt: new Date()
+          for (let i = 0; i < scenePromises.length; i += openAIConcurrencyLimit) {
+            const batch = scenePromises.slice(i, i + openAIConcurrencyLimit).map(promiseFn => promiseFn());
+            await Promise.all(batch);
           }
-        };
+        } else {
+          // For Claude, let the server's rate limiter handle throttling
+          // The server is already configured to limit Claude to 2 concurrent requests
+          // with proper token-based throttling
+          console.log('Using Claude with server-side rate limiting');
 
-        // Explicitly log the final state to verify clips are present
-        console.log(`Finalizing storyboard ${finalStoryboard.id} with ${finalStoryboard.clips.length} clips`);
+          // Process all scenes, the server will queue them appropriately
+          await Promise.all(scenePromises.map(promiseFn => promiseFn()));
+        }
+      } catch (executionError) {
+        console.error('Error during scene generation execution:', executionError);
+        // Even if there's an error during execution, we should finalize what we have
+      } finally {
+        // Regardless of success or failure, create final copy of storyboard with current state
+        // This ensures we save what we have even if some scenes failed
+        setCurrentStoryboard(prevStoryboard => {
+          const finalStoryboard: Storyboard = {
+            ...prevStoryboard,
+            updatedAt: new Date(),
+            generationStatus: {
+              ...prevStoryboard.generationStatus!,
+              inProgress: false,
+              completedAt: new Date()
+            }
+          };
 
-        // Save the final storyboard and ensure we preserve the current ID
-        setTimeout(() => {
-          MovieStorageApi.saveMovie(finalStoryboard)
-            .then(result => {
-              // Log the saved state
-              console.log(`Final storyboard saved with ID: ${result.id} (original: ${finalStoryboard.id})`);
+          // Explicitly log the final state to verify clips are present
+          console.log(`Finalizing storyboard ${finalStoryboard.id} with ${finalStoryboard.clips.length} clips`);
 
-              // If server assigned a different ID, update our reference but keep all clips
-              if (result.id !== finalStoryboard.id) {
-                console.log(`Server assigned different ID - updating reference only`);
-                finalStoryboard.id = result.id;
-              }
-            })
-            .catch(saveError => {
-              console.error('Failed to save final storyboard:', saveError);
-            });
-        }, 0);
+          // Save the final storyboard and ensure we preserve the current ID
+          setTimeout(() => {
+            MovieStorageApi.saveMovie(finalStoryboard)
+              .then(result => {
+                // Log the saved state
+                console.log(`Final storyboard saved with ID: ${result.id} (original: ${finalStoryboard.id})`);
 
-        return finalStoryboard;
-      });
+                // If server assigned a different ID, update our reference but keep all clips
+                if (result.id !== finalStoryboard.id) {
+                  console.log(`Server assigned different ID - updating reference only`);
+                  finalStoryboard.id = result.id;
+                }
+                
+                // Add post-save synchronization for all storyboards, not just Claude
+                console.log(`Running post-generation synchronization for storyboard ${result.id}`);
+                syncClipData(result.id, finalStoryboard.clips);
+              })
+              .catch(saveError => {
+                console.error('Failed to save final storyboard:', saveError);
+              });
+          }, 0);
 
-      // Log completion success
-      console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
-      if (errors.length > 0) {
-        console.error(`Encountered ${errors.length} errors during generation`);
+          return finalStoryboard;
+        });
+
+        // Log completion success
+        console.log(`Completed storyboard generation with ${successfulClipsCount} clips`);
+        if (errors.length > 0) {
+          console.error(`Encountered ${errors.length} errors during generation`);
+        }
+
+        // IMPORTANT: Reset UI state after successful generation
+        setShowGeneratingClipsModal(false);
+        setIsGenerating(false);
       }
-
-      // IMPORTANT: Reset UI state after successful generation
-      setShowGeneratingClipsModal(false);
-      setIsGenerating(false);
     } catch (error) {
       handleGenerationError(error);
     }
@@ -781,6 +830,131 @@ export function useStoryboardGenerator(
     setIsGenerating(false);
   };
 
+  /**
+   * Add a post-generation synchronization check to ensure all clips
+   * from Claude generations (which may have more network issues) are properly saved
+   */
+  const syncClipData = useCallback(async (storyboardId: string, clips: MovieClip[]) => {
+    if (!storyboardId || !clips || clips.length === 0) {
+      console.log('[POST_GEN_SYNC] No clips to synchronize');
+      return;
+    }
+
+    console.log(`[POST_GEN_SYNC] Beginning clip data synchronization for ${clips.length} clips`);
+
+    try {
+      // Load the storyboard directly from the server to ensure we have the latest data
+      const response = await MovieStorageApi.getMovie(storyboardId);
+      
+      if (!response || !response.success || !response.movie) {
+        console.error(`[POST_GEN_SYNC] Failed to load storyboard ${storyboardId} for synchronization`);
+        return;
+      }
+      
+      const { movie } = response;
+      
+      // Verify all clips have been saved correctly in the movie
+      const serverClips = movie.clips || [];
+      console.log(`[POST_GEN_SYNC] Server has ${serverClips.length} clips vs. ${clips.length} in memory`);
+      
+      // Define a type for clip metadata
+      interface ClipMeta {
+        id: string;
+        animationId?: string;
+        svgContent: boolean;
+      }
+      
+      // Build a map of orders to animationIds from our in-memory clips
+      const memoryClipsMap = new Map<number, ClipMeta>(
+        clips.map(clip => [clip.order, { 
+          id: clip.id, 
+          animationId: clip.animationId,
+          svgContent: clip.svgContent ? true : false
+        }])
+      );
+      
+      // Build a map of orders to animationIds from server clips
+      const serverClipsMap = new Map<number, ClipMeta>(
+        serverClips.map(clip => [clip.order, { 
+          id: clip.id, 
+          animationId: clip.animationId,
+          svgContent: clip.svgContent ? true : false
+        }])
+      );
+      
+      // Check for missing animation IDs in server data
+      let needsUpdate = false;
+      const updatedServerClips = [...serverClips];
+      
+      // Check all potential scene indices
+      const memoryOrders = Array.from(memoryClipsMap.keys());
+      const serverOrders = Array.from(serverClipsMap.keys());
+      const maxOrder = Math.max(
+        ...(memoryOrders.length > 0 ? memoryOrders : [0]),
+        ...(serverOrders.length > 0 ? serverOrders : [0])
+      );
+      
+      for (let order = 0; order <= maxOrder; order++) {
+        const memoryClip = memoryClipsMap.get(order);
+        const serverClip = serverClipsMap.get(order);
+        
+        // Skip if both are missing (no clip at this order)
+        if (!memoryClip && !serverClip) continue;
+        
+        // Case 1: Server clip exists but memory clip doesn't - unexpected
+        if (!memoryClip && serverClip) {
+          console.log(`[POST_GEN_SYNC] Server has clip at order ${order} that's not in memory: ${serverClip.id}`);
+          continue;
+        }
+        
+        // Case 2: Memory clip exists but server clip doesn't - missing clip
+        if (memoryClip && !serverClip) {
+          console.warn(`[POST_GEN_SYNC] Memory has clip at order ${order} missing from server: ${memoryClip.id}`);
+          
+          // Find the clip from our in-memory array to get complete data
+          const fullMemoryClip = clips.find(c => c.id === memoryClip.id);
+          if (fullMemoryClip) {
+            console.log(`[POST_GEN_SYNC] Adding missing clip at order ${order} to server data`);
+            updatedServerClips.push(fullMemoryClip);
+            needsUpdate = true;
+          }
+          continue;
+        }
+        
+        // Case 3: Both exist but animationId is different or missing in server
+        if (memoryClip && serverClip && 
+            (!serverClip.animationId || serverClip.animationId !== memoryClip.animationId)) {
+          console.warn(`[POST_GEN_SYNC] Animation ID mismatch at order ${order}: ` +
+                      `server=${serverClip.animationId || 'MISSING'}, ` +
+                      `memory=${memoryClip.animationId || 'MISSING'}`);
+          
+          // Find server clip to update 
+          const serverClipIndex = updatedServerClips.findIndex(c => c.id === serverClip.id);
+          if (serverClipIndex !== -1 && memoryClip.animationId) {
+            console.log(`[POST_GEN_SYNC] Updating animation ID for clip at order ${order}`);
+            updatedServerClips[serverClipIndex].animationId = memoryClip.animationId;
+            needsUpdate = true;
+          }
+        }
+      }
+      
+      // If any updates were needed, save the changes
+      if (needsUpdate) {
+        console.log(`[POST_GEN_SYNC] Saving updated storyboard with ${updatedServerClips.length} clips`);
+        const updatedMovie = {
+          ...movie,
+          clips: updatedServerClips
+        };
+        await MovieStorageApi.saveMovie(updatedMovie);
+        console.log(`[POST_GEN_SYNC] Successfully saved synchronized clip data`);
+      } else {
+        console.log(`[POST_GEN_SYNC] No synchronization needed, all clips match`);
+      }
+    } catch (error) {
+      console.error(`[POST_GEN_SYNC] Error during clip synchronization:`, error);
+    }
+  }, []);
+
   return {
     isGenerating,
     setIsGenerating,
@@ -792,6 +966,7 @@ export function useStoryboardGenerator(
     handleGenerateStoryboard,
     resumeStoryboardGeneration,
     processStoryboard,
-    handleGenerationError
+    handleGenerationError,
+    syncClipData
   };
 }
