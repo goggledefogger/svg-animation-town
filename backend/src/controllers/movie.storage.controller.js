@@ -55,6 +55,23 @@ const movieStorageController = {
         throw new NotFoundError(`Movie with ID ${id} not found`);
       }
 
+      // Add detailed logging about clip animation references
+      if (movie.clips && Array.isArray(movie.clips)) {
+        console.log(`[MOVIE_LOADING_DEBUG] Retrieved movie ${id} with ${movie.clips.length} clips`);
+        
+        // Log all clip orders and animation references
+        movie.clips.forEach((clip, index) => {
+          console.log(`[MOVIE_LOADING_DEBUG] Clip ${index+1}/${movie.clips.length}: id=${clip.id}, order=${clip.order}, animationId=${clip.animationId || 'MISSING'}`);
+          
+          // If a clip is missing animationId, this is likely a bug
+          if (!clip.animationId) {
+            console.warn(`[MOVIE_LOADING_WARNING] Clip ${clip.id} at order ${clip.order} has no animationId reference!`);
+          }
+        });
+      } else {
+        console.warn(`[MOVIE_LOADING_WARNING] Movie ${id} has no clips or clips is not an array`);
+      }
+
       res.status(200).json({
         success: true,
         movie

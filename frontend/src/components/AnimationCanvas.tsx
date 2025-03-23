@@ -127,7 +127,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     </svg>`;
   }, []);
 
-  // Use our animation loader hook
+  // Initialize animation loader hooks
   const {
     isLoading,
     startLoading,
@@ -142,243 +142,142 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Get the current active clip's SVG content
   const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
-
-  // Create a more stable display content value that doesn't change unnecessarily
-  // We use a ref to store the last valid content to avoid losing it during re-renders
   const lastValidContentRef = useRef<string>('');
 
-  // Create a ref to track dependency changes
-  const lastDepsRef = useRef({
-    activeClipId: null as string | null,
-    svgContentLength: 0
-  });
+  // Create a function to check if we should display empty state
+  const displayEmptyState = useMemo(() => {
+    // Only show empty state if there's no SVG content and no active clip
+    const noActiveClip = !activeClipId || !getActiveClip();
+    const noSvgContent = !propSvgContent && !contextSvgContent && !activeClipSvgContent;
+    return noActiveClip && noSvgContent;
+  }, [activeClipId, getActiveClip, propSvgContent, contextSvgContent, activeClipSvgContent]);
 
-  // Determine which SVG content to use with clear priorities and fallbacks
+  // Determine the SVG content to display based on priority:
+  // 1. Props (highest priority)
+  // 2. Context (medium priority)
+  // 3. Active clip SVG content (lowest priority)
   const displaySvgContent = useMemo(() => {
-    // Priority for content source:
-    // 1. Explicit prop (highest priority)
-    // 2. Active clip's SVG content
-    // 3. Context SVG content
-    // 4. Last valid content we've seen (in case state temporarily becomes empty)
+    // Check if we're displaying placeholder content
+    if (showEmptyState && displayEmptyState) {
+      return null;
+    }
 
-    let content = '';
-    let source = 'none';
-
+    // Priority 1: Content from props overrides everything
     if (propSvgContent) {
-      // Props take highest priority
-      content = propSvgContent;
-      source = 'props';
-    } else if (activeClipSvgContent) {
-      // Then active clip
-      content = activeClipSvgContent;
-      source = 'activeClip';
-    } else if (contextSvgContent) {
-      // Then global context
-      content = contextSvgContent;
-      source = 'context';
-    } else if (lastValidContentRef.current) {
-      // Fallback to last known good content if everything else is empty
-      // This helps during state transitions that might temporarily clear values
-      content = lastValidContentRef.current;
-      source = 'lastValidCache';
+      return propSvgContent;
     }
 
-    // Store any non-empty content as our latest valid content
-    if (content) {
-      lastValidContentRef.current = content;
+    // Priority 2: Content from context (second priority)
+    if (contextSvgContent) {
+      return contextSvgContent;
     }
 
-    return content;
-  }, [propSvgContent, activeClipSvgContent, contextSvgContent]);
+    // Priority 3: Content from the active clip (lowest priority)
+    if (activeClipSvgContent) {
+      return activeClipSvgContent;
+    }
+
+    // No content available
+    return null;
+  }, [propSvgContent, contextSvgContent, activeClipSvgContent, showEmptyState, displayEmptyState]);
 
   // Helper function to get the SVG container
-  const getSvgContainer = useCallback((): HTMLDivElement | null => {
-    if (!containerRef.current) return null;
-    return containerRef.current.querySelector('[data-testid="svg-container"]') as HTMLDivElement;
-  }, []);
+  const getSvgContainer = useCallback(() => {
+    return svgContainerRef.current;
+  }, [svgContainerRef]);
 
-  // Effect for handling active clip changes
-  useEffect(() => {
-    // Log dependency changes to track render triggers
-    const displaySvgLength = displaySvgContent?.length || 0;
-    const hasChanged = activeClipId !== lastDepsRef.current.activeClipId ||
-                     displaySvgLength !== lastDepsRef.current.svgContentLength;
+  // Add support for forcing a refresh of the animation content
+  const handleForceRefresh = useCallback(() => {
+    console.log(`[Refresh] Animation refresh requested at ${new Date().toISOString()}`);
 
-    if (hasChanged) {
-      // Update the ref
-      lastDepsRef.current = {
-        activeClipId,
-        svgContentLength: displaySvgLength
-      };
-    }
+    // Get the active clip
+    const activeClip = getActiveClip();
 
-    if (propSvgContent) return; // Skip if prop was provided
+    if (activeClip) {
+      console.log(`[Refresh] Refreshing animation for clip ${activeClip.id}`);
 
-    const activeClip = activeClipId ? getActiveClip() : null;
+      // If we have animationId but content is missing, fetch it
+      if (activeClip.animationId && (!activeClip.svgContent || !displaySvgContent)) {
+        console.log(`[Refresh] Fetching animation from server for clip ${activeClip.id}`);
 
-    if (!activeClip) {
-      // If no active clip and we don't already have content, clear the display
-      if (!contextSvgContent) {
-        setSvgContent('');
+        // Show loading state for first-time loads
+        if (!hasBeenLoaded(activeClip.animationId || null)) {
+          setSvgContent(createPlaceholderSvg('Loading animation content...'));
+          startLoading(true);
+          markLoadingInProgress(activeClip.animationId || null);
+        }
+
+        // Fetch animation directly using the API
+        MovieStorageApi.getClipAnimation(activeClip.animationId)
+          .then(animation => {
+            if (animation && animation.svg) {
+              console.log(`[Refresh] Successfully loaded animation: ${activeClip.animationId}, ${animation.svg.length} bytes`);
+              setSvgContent(animation.svg);
+              updateClip(activeClip.id, { svgContent: animation.svg });
+              trackLoadedAnimation(activeClip.animationId || null);
+              endLoading();
+            } else {
+              console.warn(`[Refresh] Animation loaded but SVG content is missing: ${activeClip.animationId}`);
+              setSvgContent(createPlaceholderSvg('Animation content is unavailable. Try again.'));
+              endLoading();
+            }
+          })
+          .catch(error => {
+            console.error(`[Refresh] Error loading animation ${activeClip.animationId}: ${error.message}`);
+            setSvgContent(createPlaceholderSvg(`Failed to load animation: ${error.message}`));
+            endLoading();
+          });
       }
+      // If we already have SVG content, just make sure it's displayed
+      else if (activeClip.svgContent) {
+        console.log(`[Refresh] Using existing SVG content: ${activeClip.svgContent.length} bytes`);
+        setSvgContent(activeClip.svgContent);
+      }
+    }
+  }, [displaySvgContent, getActiveClip, updateClip, setSvgContent, contextSvgContent, 
+      hasBeenLoaded, startLoading, markLoadingInProgress, trackLoadedAnimation, 
+      endLoading, createPlaceholderSvg]);
+
+  // Main effect to update SVG content when clip changes
+  useEffect(() => {
+    // Get the active clip for this render cycle
+    const activeClip = getActiveClip();
+    
+    // If no active clip is available, show a placeholder
+    if (!activeClip) {
+      setSvgContent(createPlaceholderSvg('Select a clip to view animation'));
       return;
     }
 
-    // Only process clip content if we've just changed to this clip or the clip is the same but content changed
-    const isNewClip = activeClipId !== lastDepsRef.current.activeClipId || clipChangePendingRef.current;
-
-    // Keep track of active clip for updates
-    if (activeClip.svgContent) {
-      // Avoid unnecessary state updates by checking against displaySvgContent
-      // This is crucial because displaySvgContent includes the combined sources
-      if (displaySvgContent !== activeClip.svgContent) {
-        // Don't show loading for content we already have cached - this is a client-side operation
-        console.log(`[Animation] Using cached SVG content for clip ${activeClip.id} (${activeClip.svgContent.length} bytes)`);
-
-        // We'll use a timeout to ensure we're not setting state too rapidly
-        // This prevents React from batching multiple state updates that could cause flicker
-        setTimeout(() => {
-          // Mark that we're actively updating this clip to prevent stale renders
-          clipChangePendingRef.current = true;
-
-          setSvgContent(activeClip.svgContent);
-
-          // Clear the clip change pending flag once we've settled
-          setTimeout(() => {
-            clipChangePendingRef.current = false;
-          }, 50);
-        }, 10);
-      }
-    } else if (activeClip.animationId) {
-      // If no SVG content but we have an animation ID, fetch it from server
-      clipChangePendingRef.current = true;
-
-      // Add detailed logging about this animation loading attempt
-      const loadAttemptTime = new Date().toISOString();
-      console.log(`[Animation Loading] Attempt at ${loadAttemptTime} for clip:`, {
-        clipId: activeClip.id,
-        animationId: activeClip.animationId,
-        name: activeClip.name,
-        createdAt: activeClip.createdAt,
-        timeSinceCreated: activeClip.createdAt ?
-          `${Math.round((new Date().getTime() - new Date(activeClip.createdAt).getTime()) / 1000)}s` : 'unknown',
-        order: activeClip.order
-      });
-
-      // First mark this animation as loading to prevent duplicate loads
-      markLoadingInProgress(activeClip.animationId);
-
-      // Check if this animation has been loaded before (should now return true since we marked it as loading)
-      const alreadyLoaded = hasBeenLoaded(activeClip.animationId);
-
-      // Always hide empty state and mark message as sent for active clips
-      setShowEmptyState(false);
-      setHasMessageBeenSent(true);
-
-      // Only show loading animation for animations never loaded before
-      if (!alreadyLoaded) {
-        // Show loading animation for first-time loads only
-        console.log(`[Animation] Animation ${activeClip.animationId} not loaded before, showing loading animation`);
-        // Let the loadAnimation function handle the loading state
-      } else {
-        console.log(`[Animation] Animation ${activeClip.animationId} already loaded or loading, skipping loading animation`);
-        // Don't show loading animation
-      }
-
-      // Use our custom hook to load the animation
-      loadAnimation(activeClip.animationId || null)
-        .then(success => {
-          if (success) {
-            // If we successfully loaded the animation, update the clip in the storyboard
-            updateClip(activeClip.id, { svgContent: contextSvgContent || '' });
+    // If we have SVG content in the clip, use it
+    if (activeClip.svgContent && activeClip.svgContent.length > 100) {
+      setSvgContent(activeClip.svgContent);
+    }
+    // If no SVG content but we have an animationId, try to load from the server
+    else if (activeClip.animationId) {
+      // Show loading indicator
+      setSvgContent(createPlaceholderSvg('Loading animation content...'));
+      
+      // Load the animation
+      MovieStorageApi.getClipAnimation(activeClip.animationId)
+        .then(animation => {
+          if (animation && animation.svg) {
+            // Save in memory and update the clip reference
+            setSvgContent(animation.svg);
+            updateClip(activeClip.id, { svgContent: animation.svg });
+          } else {
+            setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the "Load" button.'));
           }
         })
-        .finally(() => {
-          // Clear the pending flag after a delay
-          setTimeout(() => {
-            clipChangePendingRef.current = false;
-          }, 300);
+        .catch(error => {
+          console.error(`Error loading animation: ${error.message}`);
+          setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the "Load" button.'));
         });
-
     } else {
-      // Neither SVG content nor animation ID available
-      console.log(`[RESUME_DEBUG] No content for clip - ActiveClipId: ${activeClipId}, HasAnimationId: ${Boolean(activeClip?.animationId)}, HasSvgContent: ${Boolean(activeClip?.svgContent)}, IsMobile: ${/Mobi|Android/i.test(navigator.userAgent)}, Timestamp: ${new Date().toISOString()}`);
-
-      // Only set placeholder if we don't have an animationId - otherwise try loading content
-      if (activeClip?.animationId) {
-        console.log(`[RESUME_DEBUG] Animation ID exists but no content, attempting immediate load: ${activeClip.animationId}`);
-
-        // Start loading in the background
-        loadAnimation(activeClip.animationId).then(success => {
-          if (success) {
-            updateClip(activeClip.id, { svgContent: contextSvgContent || '' });
-          }
-        });
-
-        // Show loading placeholder instead of error
-        setSvgContent(createPlaceholderSvg('Loading animation content...'));
-      } else {
-        // No animation ID available
-        setSvgContent(createPlaceholderSvg('No animation content available'));
-      }
+      // No animation ID reference at all
+      setSvgContent(createPlaceholderSvg('No animation content available'));
     }
-  }, [activeClipId, getActiveClip, updateClip, propSvgContent, contextSvgContent, displaySvgContent, setSvgContent, hasBeenLoaded, markLoadingInProgress]);
-
-  // Helper to load animation with caching
-  const loadAnimation = useCallback(async (animationId: string | null): Promise<boolean> => {
-    if (!animationId) {
-      console.log('[Animation] No animation ID provided for loading');
-      return false;
-    }
-
-    // Check if we've already loaded this animation before
-    const alreadyLoaded = hasBeenLoaded(animationId);
-
-    if (alreadyLoaded) {
-      console.log(`[Animation] Animation ${animationId} was previously loaded or is loading, skipping duplicate load`);
-      // Still make the API call but don't show loading animation
-      try {
-        const animation = await MovieStorageApi.getClipAnimation(animationId);
-        if (animation && animation.svg) {
-          console.log(`[Animation] Successfully loaded cached animation: ${animationId}`);
-          setSvgContent(animation.svg);
-          return true;
-        }
-      } catch (error) {
-        console.error(`[Animation] Error loading cached animation: ${animationId}`, error);
-      }
-      return false;
-    }
-
-    // Mark this animation as in progress to prevent duplicate loading attempts
-    markLoadingInProgress(animationId);
-
-    // Show loading animation for new animations only
-    console.log(`[Animation] Loading animation from server: ${animationId}`);
-    startLoading(true);
-
-    try {
-      const animation = await MovieStorageApi.getClipAnimation(animationId);
-      if (animation && animation.svg) {
-        console.log(`[Animation] Successfully loaded animation: ${animationId}`);
-        setSvgContent(animation.svg);
-
-        // Track this animation as loaded for future reference
-        trackLoadedAnimation(animationId);
-
-        return true;
-      } else {
-        console.error(`[Animation] Failed to load animation: ${animationId} - No SVG content returned`);
-        return false;
-      }
-    } catch (error) {
-      console.error(`[Animation] Error loading animation: ${animationId}`, error);
-      return false;
-    } finally {
-      // Hide loading animation with a small delay
-      endLoading();
-    }
-  }, [setSvgContent, startLoading, endLoading, trackLoadedAnimation, markLoadingInProgress, hasBeenLoaded]);
+  }, [activeClipId, getActiveClip, updateClip, setSvgContent, createPlaceholderSvg]);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -483,7 +382,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
       if (currentContent !== displaySvgContent) {
         // Skip rendering old content when we know we're in the middle of a clip change
-        if (clipChangePendingRef.current && activeClipId !== lastDepsRef.current.activeClipId) {
+        if (clipChangePendingRef.current && activeClipId !== lastValidContentRef.current) {
           return;
         }
 
@@ -729,36 +628,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       }
     };
   }, [setSvgRef, getSvgContainer]);
-
-  // Add support for forcing a refresh of the animation content
-  const handleForceRefresh = useCallback(() => {
-    console.log(`[Refresh] Animation refresh requested at ${new Date().toISOString()}`);
-
-    // Get the active clip
-    const activeClip = getActiveClip();
-
-    if (activeClip) {
-      console.log(`[Refresh] Refreshing animation for clip ${activeClip.id}`);
-
-      // If we have animationId but content is missing, fetch it
-      if (activeClip.animationId && (!activeClip.svgContent || !displaySvgContent)) {
-        console.log(`[Refresh] Fetching animation from server for clip ${activeClip.id}`);
-
-        // Use our custom hook to load the animation
-        loadAnimation(activeClip.animationId).then(success => {
-          if (success) {
-            // If loading was successful, update the clip with the new content
-            updateClip(activeClip.id, { svgContent: contextSvgContent || '' });
-          }
-        });
-      }
-      // If we already have SVG content, just make sure it's displayed
-      else if (activeClip.svgContent) {
-        console.log(`[Refresh] Using existing SVG content: ${activeClip.svgContent.length} bytes`);
-        setSvgContent(activeClip.svgContent);
-      }
-    }
-  }, [displaySvgContent, getActiveClip, updateClip, setSvgContent, loadAnimation, contextSvgContent]);
 
   // Register event listener for legacy DOM-based refreshes
   useEffect(() => {

@@ -203,7 +203,7 @@ exports.generateScene = asyncHandler(async (req, res) => {
     movie.updatedAt = new Date();
 
     // 10. Save the updated movie
-    // CRITICAL FIX: Read the freshest movie data before saving to prevent race conditions
+    // Check for race conditions by reading latest movie data before saving
     const currentMovie = await storageService.getMovie(movieContext.storyboardId);
     if (currentMovie && currentMovie.clips && currentMovie.clips.length > 0) {
       // Another request may have added more clips since we loaded the movie
@@ -213,24 +213,33 @@ exports.generateScene = asyncHandler(async (req, res) => {
       const existingOrders = new Set(movie.clips.map(clip => clip.order));
 
       // Find clips that exist in currentMovie but not in our local movie object
-      const missingClips = currentMovie.clips.filter(clip =>
-        !existingOrders.has(clip.order)
-      );
+      const missingClips = currentMovie.clips.filter(clip => !existingOrders.has(clip.order));
 
       // Add the missing clips if needed
       if (missingClips.length > 0) {
         console.log(`[CLIP_LINKING] Adding ${missingClips.length} missing clips to our movie before saving`);
-
-        // Log which orders we're adding
-        const missingOrders = missingClips.map(c => c.order);
-        console.log(`[CLIP_LINKING] Missing clip orders being merged: [${missingOrders.join(',')}]`);
-
+        
+        // Add missing clips to our array
         movie.clips = [...movie.clips, ...missingClips];
+        
         // Sort clips by order for consistency
         movie.clips.sort((a, b) => a.order - b.order);
       }
 
-      // Update completion count based on the combined clips
+      // Find instances where the same order has different animationIds in current vs stored movie
+      // This handles the case where animations were generated while the tab was closed
+      movie.clips.forEach(clip => {
+        if (!clip.animationId) {
+          // Look for a clip with the same order in the current movie that has an animationId
+          const storedClip = currentMovie.clips.find(c => c.order === clip.order && c.animationId);
+          if (storedClip && storedClip.animationId) {
+            console.log(`[CLIP_LINKING] Found matching animation ID ${storedClip.animationId} for clip at order ${clip.order}`);
+            clip.animationId = storedClip.animationId;
+          }
+        }
+      });
+
+      // Update completion count based on the number of clips we have after the merge
       movie.generationStatus.completedScenes = movie.clips.length;
 
       // If we've generated all scenes, mark as complete
@@ -240,9 +249,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
         console.log('[CLIP_LINKING] All scenes completed after merging clips, marked generation as complete');
       }
     }
-
-    // Log all clip orders in final movie before saving
-    console.log(`[CLIP_LINKING] Final clip orders before saving: [${movie.clips.map(c => c.order).join(',')}]`);
 
     const savedMovieId = await storageService.saveMovie(movie);
     console.log(`Saved updated movie with ID ${savedMovieId}, now has ${movie.clips.length} clips`);

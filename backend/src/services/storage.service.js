@@ -118,56 +118,72 @@ class StorageService {
 
   /**
    * Get animation by ID
-   * @param {string} id - Animation ID
-   * @returns {Promise<Object>} Animation data
+   * @param {string} id - Animation ID 
+   * @returns {Promise<Object|null>} Animation data or null if not found
    */
   async getAnimation(id) {
     if (!id) {
-      throw new Error('Animation ID is required');
+      console.warn('STORAGE: Cannot get animation - no ID provided');
+      return null;
     }
 
     try {
       const filePath = path.join(ANIMATIONS_DIR, `${id}.json`);
-
-      // Check if file exists first
+      
+      // Check if file exists
       try {
-        const fileStats = await fs.stat(filePath);
-      } catch (accessError) {
-        console.error(`Animation file for ID ${id} does not exist or is not accessible: ${accessError.message}`);
-        throw new Error(`Animation with ID ${id} not found`);
+        await fs.access(filePath);
+      } catch (err) {
+        console.log(`Animation file ${id} not found, returning null`);
+        return null;
       }
-
-      try {
-        const data = await fs.readFile(filePath, 'utf8');
-
+      
+      // Add retry logic for resilience
+      let retries = 0;
+      const maxRetries = 3;
+      let lastError = null;
+      
+      while (retries < maxRetries) {
         try {
-          const animation = JSON.parse(data);
-
-          // Validate animation data
-          if (!animation) {
-            console.error(`Animation ${id} parsed but is null/undefined`);
-            throw new Error(`Animation ${id} exists but has invalid content (null/undefined)`);
+          // Add a small delay between retries to allow file system to settle
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50 * retries));
           }
-
-          if (!animation.svg) {
-            console.error(`Animation ${id} exists but has no SVG content, keys: ${Object.keys(animation).join(', ')}`);
-            throw new Error(`Animation ${id} exists but has no SVG content`);
+          
+          console.log(`[ANIMATION_LOADING] Reading animation ${id} from ${filePath}, attempt ${retries + 1}/${maxRetries}`);
+          const data = await fs.readFile(filePath, 'utf8');
+          
+          try {
+            const animation = JSON.parse(data);
+            
+            // Validate that we have the essential data
+            if (!animation || !animation.svg) {
+              console.warn(`[ANIMATION_LOADING] Animation ${id} exists but lacks SVG content`);
+              retries++;
+              lastError = new Error('Animation file exists but lacks SVG content');
+              continue;
+            }
+            
+            console.log(`[ANIMATION_LOADING] Successfully loaded animation ${id}, SVG length: ${animation.svg.length}`);
+            return animation;
+          } catch (parseError) {
+            console.error(`[ANIMATION_LOADING] Error parsing animation ${id} JSON:`, parseError);
+            retries++;
+            lastError = parseError;
           }
-
-          return animation;
-        } catch (parseError) {
-          console.error(`Failed to parse JSON for animation ${id}: ${parseError.message}`);
-          throw parseError instanceof SyntaxError
-            ? new Error(`Animation ${id} contains invalid JSON: ${parseError.message}`)
-            : parseError;
+        } catch (readError) {
+          console.error(`[ANIMATION_LOADING] Error reading animation ${id}:`, readError);
+          retries++;
+          lastError = readError;
         }
-      } catch (readError) {
-        console.error(`Error reading animation file ${id}: ${readError.message}`);
-        throw readError;
       }
+      
+      // If we get here, all retries failed
+      console.error(`[ANIMATION_LOADING] Failed to load animation ${id} after ${maxRetries} attempts: ${lastError?.message || 'Unknown error'}`);
+      return null;
     } catch (error) {
-      console.error(`Error getting animation ${id}: ${error.message}`);
-      throw error;
+      console.error(`[ANIMATION_LOADING] Unhandled error getting animation ${id}:`, error);
+      return null;
     }
   }
 
@@ -259,7 +275,7 @@ class StorageService {
 
       if (storyboard.clips && Array.isArray(storyboard.clips)) {
         optimizedClips = storyboard.clips.map((clip) => {
-          // Create an optimized clip object that doesn't include the SVG content
+          // Create an optimized clip object that preserves the critical animationId reference
           return {
             id: clip.id,
             name: clip.name,
@@ -269,6 +285,12 @@ class StorageService {
             animationId: clip.animationId // The key reference to the animation
           };
         });
+        
+        // Check for any clips missing animation IDs
+        const missingIds = optimizedClips.filter(clip => !clip.animationId).length;
+        if (missingIds > 0) {
+          console.warn(`[MOVIE_SAVING] Warning: ${missingIds} clips have no animationId reference`);
+        }
       }
 
       // Store original scenes array for resumable generation
@@ -303,7 +325,7 @@ class StorageService {
       const storyboardJSON = JSON.stringify(optimizedStoryboard, null, 2);
       await fs.writeFile(filePath, storyboardJSON);
 
-      console.log(`[MOVIE_SAVING] Successfully saved movie ${id} with ${optimizedClips.length} clips`);
+      console.log(`[MOVIE_SAVING] Saved movie ${id} with ${optimizedClips.length} clips`);
 
       return id;
     } catch (error) {
