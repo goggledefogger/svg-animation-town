@@ -40,7 +40,7 @@ class StorageService {
       if (!animation) {
         throw new Error('Animation object is required');
       }
-      
+
       // Ensure animation has an ID
       const id = animation.id || uuidv4();
       const filename = `${id}.json`;
@@ -62,19 +62,19 @@ class StorageService {
       // Write the file with error handling
       try {
         console.log(`Saving animation ${id}, SVG length: ${animation.svg?.length || 0}`);
-        
+
         // Use a more reliable write approach with fsync to ensure file is written to disk
         // First, write to a temporary file
         const tempFilePath = `${filePath}.tmp`;
         const jsonData = JSON.stringify(animationData, null, 2);
-        
+
         // Write to temp file
         await fs.writeFile(tempFilePath, jsonData, 'utf8');
-        
+
         try {
           // Get a file handle for the temp file to use fsync
           const fileHandle = await fs.open(tempFilePath, 'r+');
-          
+
           try {
             // Force data to be flushed to the physical storage device
             await fileHandle.sync();
@@ -82,7 +82,7 @@ class StorageService {
             // Always close the file handle
             await fileHandle.close();
           }
-          
+
           // Move the temp file to the actual file (should be atomic on most systems)
           await fs.rename(tempFilePath, filePath);
         } catch (syncError) {
@@ -90,13 +90,13 @@ class StorageService {
           // Fallback to basic write if sync fails
           await fs.writeFile(filePath, jsonData, 'utf8');
         }
-        
+
         // Verify the file was written correctly by reading it back
         // This ensures the file system has fully flushed the data
         try {
           const verifyData = await fs.readFile(filePath, 'utf8');
           const parsedData = JSON.parse(verifyData);
-          
+
           if (!parsedData || !parsedData.svg) {
             throw new Error('Verification failed: Animation written to disk lacks SVG content');
           }
@@ -108,7 +108,7 @@ class StorageService {
         console.error(`Failed to write animation ${id} to disk:`, writeError);
         throw writeError;
       }
-      
+
       return id;
     } catch (error) {
       console.error('Error saving animation:', error);
@@ -125,10 +125,10 @@ class StorageService {
     if (!id) {
       throw new Error('Animation ID is required');
     }
-    
+
     try {
       const filePath = path.join(ANIMATIONS_DIR, `${id}.json`);
-      
+
       // Check if file exists first
       try {
         const fileStats = await fs.stat(filePath);
@@ -136,28 +136,28 @@ class StorageService {
         console.error(`Animation file for ID ${id} does not exist or is not accessible: ${accessError.message}`);
         throw new Error(`Animation with ID ${id} not found`);
       }
-      
+
       try {
         const data = await fs.readFile(filePath, 'utf8');
-        
+
         try {
           const animation = JSON.parse(data);
-          
+
           // Validate animation data
           if (!animation) {
             console.error(`Animation ${id} parsed but is null/undefined`);
             throw new Error(`Animation ${id} exists but has invalid content (null/undefined)`);
           }
-          
+
           if (!animation.svg) {
             console.error(`Animation ${id} exists but has no SVG content, keys: ${Object.keys(animation).join(', ')}`);
             throw new Error(`Animation ${id} exists but has no SVG content`);
           }
-          
+
           return animation;
         } catch (parseError) {
           console.error(`Failed to parse JSON for animation ${id}: ${parseError.message}`);
-          throw parseError instanceof SyntaxError 
+          throw parseError instanceof SyntaxError
             ? new Error(`Animation ${id} contains invalid JSON: ${parseError.message}`)
             : parseError;
         }
@@ -303,6 +303,8 @@ class StorageService {
       const storyboardJSON = JSON.stringify(optimizedStoryboard, null, 2);
       await fs.writeFile(filePath, storyboardJSON);
 
+      console.log(`[MOVIE_SAVING] Successfully saved movie ${id} with ${optimizedClips.length} clips`);
+
       return id;
     } catch (error) {
       console.error('Error saving movie:', error);
@@ -319,6 +321,8 @@ class StorageService {
     try {
       const filePath = path.join(MOVIES_DIR, `${id}.json`);
 
+      console.log(`[MOVIE_LOADING] Loading movie ${id} from storage`);
+
       // Check if file exists first
       try {
         await fs.access(filePath);
@@ -328,6 +332,8 @@ class StorageService {
 
       const data = await fs.readFile(filePath, 'utf8');
       const movie = JSON.parse(data);
+
+      console.log(`[MOVIE_LOADING] Successfully loaded movie ${id} with ${movie.clips ? movie.clips.length : 0} clips`);
 
       return movie;
     } catch (error) {

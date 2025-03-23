@@ -149,6 +149,9 @@ exports.generateScene = asyncHandler(async (req, res) => {
     // Check if a clip with this order already exists
     const existingClipIndex = movie.clips.findIndex(clip => clip.order === movieContext.sceneIndex);
 
+    // Add detailed logging to track clip state before and after linking to movie
+    console.log(`[CLIP_LINKING] Before linking - MovieID: ${movie.id}, ClipID: ${clipId}, Provider: ${provider}, SceneIndex: ${movieContext.sceneIndex}, ExistingClipIndex: ${existingClipIndex}, CurrentClipCount: ${movie.clips.length}`);
+
     if (existingClipIndex >= 0) {
       // Replace existing clip
       movie.clips[existingClipIndex] = newClip;
@@ -161,6 +164,8 @@ exports.generateScene = asyncHandler(async (req, res) => {
 
     // Sort clips by order for consistency
     movie.clips.sort((a, b) => a.order - b.order);
+
+    console.log(`[CLIP_LINKING] After linking - MovieID: ${movie.id}, ClipID: ${clipId}, NewClipCount: ${movie.clips.length}, ClipOrders: ${JSON.stringify(movie.clips.map(c => c.order))}`);
 
     // 8. Update the movie's generation status
     if (!movie.generationStatus) {
@@ -194,6 +199,37 @@ exports.generateScene = asyncHandler(async (req, res) => {
     movie.updatedAt = new Date();
 
     // 10. Save the updated movie
+    // CRITICAL FIX: Read the freshest movie data before saving to prevent race conditions
+    const currentMovie = await storageService.getMovie(movieContext.storyboardId);
+    if (currentMovie && currentMovie.clips && currentMovie.clips.length > movie.clips.length) {
+      // Another request has added more clips since we loaded the movie, preserve them
+      console.log(`[CLIP_LINKING] Race condition detected! Movie has ${currentMovie.clips.length} clips in storage but only ${movie.clips.length} in memory`);
+
+      // Find clips that exist in currentMovie but not in our local movie
+      const currentClipOrders = currentMovie.clips.map(c => c.order);
+      const missingClips = currentMovie.clips.filter(clip =>
+        !movie.clips.some(localClip => localClip.order === clip.order)
+      );
+
+      // Add the missing clips
+      if (missingClips.length > 0) {
+        console.log(`[CLIP_LINKING] Adding ${missingClips.length} missing clips to our movie before saving`);
+        movie.clips = [...movie.clips, ...missingClips];
+        // Sort clips by order for consistency
+        movie.clips.sort((a, b) => a.order - b.order);
+      }
+
+      // Update completion count based on the combined clips
+      movie.generationStatus.completedScenes = movie.clips.length;
+
+      // If we've generated all scenes, mark as complete
+      if (movie.generationStatus.completedScenes >= movie.generationStatus.totalScenes) {
+        movie.generationStatus.inProgress = false;
+        movie.generationStatus.completedAt = new Date();
+        console.log('[CLIP_LINKING] All scenes completed after merging clips, marked generation as complete');
+      }
+    }
+
     const savedMovieId = await storageService.saveMovie(movie);
     console.log(`Saved updated movie with ID ${savedMovieId}, now has ${movie.clips.length} clips`);
 

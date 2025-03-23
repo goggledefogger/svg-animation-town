@@ -499,12 +499,18 @@ export function useStoryboardGenerator(
                 setCurrentStoryboard(prevStoryboard => {
                   const clipExists = prevStoryboard.clips.some(c => c.order === absoluteSceneIndex);
 
+                  // Add detailed logging to track clip state changes
+                  console.log(`[CLIP_HANDLING] Frontend processing - StoryboardID: ${newStoryboard.id}, SceneIndex: ${absoluteSceneIndex}, ClipID: ${clipId}, ClipExists: ${clipExists}, ClipCount: ${prevStoryboard.clips.length}, Provider: ${aiProvider}`);
+
                   if (clipExists) {
+                    console.log(`[CLIP_HANDLING] Skipping clip update for scene index ${absoluteSceneIndex} - clip already exists in frontend state`);
                     return prevStoryboard;
                   }
 
                   const updatedClips = [...prevStoryboard.clips, newClip];
                   updatedClips.sort((a, b) => a.order - b.order);
+
+                  console.log(`[CLIP_HANDLING] Adding new clip to frontend state - SceneIndex: ${absoluteSceneIndex}, New ClipCount: ${updatedClips.length}, ClipOrders: ${JSON.stringify(updatedClips.map(c => c.order))}`);
 
                   const updatedStoryboard = {
                     ...prevStoryboard,
