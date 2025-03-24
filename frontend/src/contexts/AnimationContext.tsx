@@ -276,7 +276,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       return AnimationRegistryHelpers.trackRequest(requestId, request());
     } catch (error) {
       console.error('Error getting saved animations:', error);
-      return [];
+        return [];
     }
   }, []);
 
@@ -951,7 +951,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
         
         // Also cache in the registry if we have an animationId
-        if (clip.animationId) {
+      if (clip.animationId) {
           AnimationRegistryHelpers.storeAnimation(
             clip.animationId,
             clip.svgContent,
@@ -1009,7 +1009,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 // Handle both response formats (direct or wrapped)
                 const animation = response && response.success ? response.animation : response;
                 
-                if (animation?.svg) {
+            if (animation?.svg) {
                   // Store in registry with metadata
                   AnimationRegistryHelpers.storeAnimation(
                     animationId, 
@@ -1021,15 +1021,15 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   );
                   
                   // Set the SVG content
-                  setSvgContent(animation.svg);
+              setSvgContent(animation.svg);
                   
                   // Note: We can't update the clip here as updateClip is not available in this context
-                  
-                  // Set the chat history if available
-                  if (animation.chatHistory) {
-                    setChatHistory(animation.chatHistory);
-                  }
-                  
+
+              // Set the chat history if available
+              if (animation.chatHistory) {
+                setChatHistory(animation.chatHistory);
+              }
+
                   console.log(`[AnimationContext] Animation loaded: ${animationId}`);
                   return animation;
                 } else {
@@ -1038,7 +1038,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   return null;
                 }
               } catch (error) {
-                console.error(`[AnimationContext] Error loading animation: ${error}`);
+            console.error(`[AnimationContext] Error loading animation: ${error}`);
                 AnimationRegistryHelpers.markFailed(animationId);
                 return null;
               }

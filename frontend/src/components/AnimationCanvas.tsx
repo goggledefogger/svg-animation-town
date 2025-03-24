@@ -238,7 +238,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       
       // Show loading indicator
       setSvgContent(createPlaceholderSvg('Loading animation content...'));
-      startLoading(true);
+    startLoading(true);
       markLoadingInProgress(animationId);
 
       MovieStorageApi.getClipAnimation(animationId)
@@ -246,21 +246,21 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           // Check if response is in the correct format
           const animation = response && response.success ? response.animation : response;
           
-          if (animation && animation.svg) {
+      if (animation && animation.svg) {
             console.log(`[AnimationCanvas] Successfully loaded animation ${animationId}: ${animation.svg.length} bytes`);
-            setSvgContent(animation.svg);
+        setSvgContent(animation.svg);
             updateClip(activeClip.id, { svgContent: animation.svg });
             
             // Track in the global cache so other components can use it too
             trackLoadedAnimation(animationId || '', animation.svg);
-          } else {
+      } else {
             console.warn(`[AnimationCanvas] Animation loaded but SVG content is missing: ${animationId}`);
             setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the refresh button.'));
             
             // Track the failed load attempt in cache to prevent repeated failures
             trackLoadedAnimation(animationId || '');
           }
-          endLoading();
+      endLoading();
         })
         .catch(error => {
           console.error(`[AnimationCanvas] Error loading animation ${animationId}: ${error.message}`);
@@ -579,7 +579,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       console.log('[Prefetch] No clip ID provided');
       return;
     }
-    
+
     // Get the clip by ID
     const clip = getActiveClip ? 
       (activeClipId === clipId ? getActiveClip() : null) : 
@@ -828,6 +828,63 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Fallback for browsers without ResizeObserver
     return undefined;
   }, [displaySvgContent, getSvgContainer]);
+
+  // Add a listener for network disconnections to prevent loading spinning forever
+  useEffect(() => {
+    const handleOffline = () => {
+      console.log('[Network] Browser is offline, canceling any in-progress animation loads');
+      endLoading();
+      
+      // If we have an active clip, try to display placeholder content
+      const activeClip = getActiveClip();
+      if (activeClip && activeClip.animationId) {
+        setSvgContent(createPlaceholderSvg('Network connection lost. Animation cannot be loaded.'));
+        
+        // Mark animations as failed in registry
+        AnimationRegistryHelpers.markFailed(activeClip.animationId);
+      }
+    };
+    
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [endLoading, getActiveClip, setSvgContent, createPlaceholderSvg]);
+
+  // Monitor for animation loading timeout and cancel if it takes too long
+  useEffect(() => {
+    // Flag to track if we're in the middle of a load operation
+    let loadTimeoutId: number | null = null;
+    
+    // Set up timeout when loading starts
+    if (isLoading) {
+      console.log('[Loading] Setting up animation load timeout (15s)');
+      
+      loadTimeoutId = window.setTimeout(() => {
+        console.log('[Loading] Animation load timeout reached, canceling');
+        
+        // End loading state
+        endLoading();
+        
+        // Show error message
+        const activeClip = getActiveClip();
+        if (activeClip && activeClip.animationId) {
+          setSvgContent(createPlaceholderSvg('Animation load timed out. Try refreshing.'));
+          
+          // Mark as failed in registry
+          AnimationRegistryHelpers.markFailed(activeClip.animationId);
+        }
+      }, 15000); // 15 second timeout
+    }
+    
+    // Clear timeout when loading ends
+    return () => {
+      if (loadTimeoutId) {
+        clearTimeout(loadTimeoutId);
+      }
+    };
+  }, [isLoading, endLoading, getActiveClip, setSvgContent, createPlaceholderSvg]);
 
   // Main render function with improved responsive sizing
   return (

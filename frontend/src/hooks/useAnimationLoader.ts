@@ -113,9 +113,55 @@ export const AnimationRegistryHelpers = {
    */
   markFailed: (animationId: string) => {
     if (!animationId) return;
-    GLOBAL_ANIMATION_REGISTRY.failedLoads.add(animationId);
+    
+    // If we're marking as failed, ensure it's not in loading state anymore
     GLOBAL_ANIMATION_REGISTRY.loadingStatus.delete(animationId);
-    console.log(`[Registry] Marked animation ${animationId} as failed`);
+    
+    // Only add to failed set if we don't have valid content
+    if (!GLOBAL_ANIMATION_REGISTRY.animations.has(animationId)) {
+      GLOBAL_ANIMATION_REGISTRY.failedLoads.add(animationId);
+      console.log(`[Registry] Marked animation ${animationId} as failed`);
+    } else {
+      console.log(`[Registry] Not marking animation ${animationId} as failed because we have content`);
+    }
+  },
+  
+  /**
+   * Track a loaded animation, with or without content
+   */
+  trackLoadedAnimation: (animationId: string, svgContent?: string, metadata?: any) => {
+    if (!animationId) return;
+    
+    // If content is provided and valid, store it
+    if (svgContent && typeof svgContent === 'string' && svgContent.length > 100) {
+      // Store animation content
+      GLOBAL_ANIMATION_REGISTRY.animations.set(animationId, svgContent);
+      
+      // Store metadata if provided
+      if (metadata) {
+        GLOBAL_ANIMATION_REGISTRY.metadata.set(animationId, {
+          ...GLOBAL_ANIMATION_REGISTRY.metadata.get(animationId),
+          ...metadata
+        });
+      }
+      
+      // Remove from failed and loading sets
+      GLOBAL_ANIMATION_REGISTRY.failedLoads.delete(animationId);
+      GLOBAL_ANIMATION_REGISTRY.loadingStatus.delete(animationId);
+      
+      console.log(`[Registry] Successfully tracked animation ${animationId} with content (${svgContent.length} bytes)`);
+    } else {
+      // If no valid content, mark as failed unless we already have content
+      if (!GLOBAL_ANIMATION_REGISTRY.animations.has(animationId)) {
+        console.log(`[Registry] No valid content provided for ${animationId}, marking as failed`);
+        GLOBAL_ANIMATION_REGISTRY.failedLoads.add(animationId);
+      } else {
+        console.log(`[Registry] Keeping existing content for ${animationId}`);
+      }
+      
+      // Always remove from loading status when tracking is complete
+      GLOBAL_ANIMATION_REGISTRY.loadingStatus.delete(animationId);
+    }
   },
   
   /**
