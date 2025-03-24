@@ -15,5 +15,11 @@ export default defineConfig({
     host: true,
     open: false,
     allowedHosts: ['svg.roytown.net'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
   },
 });

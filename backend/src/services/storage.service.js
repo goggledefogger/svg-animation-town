@@ -118,7 +118,7 @@ class StorageService {
 
   /**
    * Get animation by ID
-   * @param {string} id - Animation ID 
+   * @param {string} id - Animation ID
    * @returns {Promise<Object|null>} Animation data or null if not found
    */
   async getAnimation(id) {
@@ -129,7 +129,7 @@ class StorageService {
 
     try {
       const filePath = path.join(ANIMATIONS_DIR, `${id}.json`);
-      
+
       // Check if file exists
       try {
         await fs.access(filePath);
@@ -137,30 +137,30 @@ class StorageService {
         console.log(`Animation file ${id} not found, returning null`);
         return null;
       }
-      
+
       // Simple approach: Read the file and parse it
       try {
         const data = await fs.readFile(filePath, 'utf8');
-        
+
         const animation = JSON.parse(data);
-        
+
         // Validate that we have the essential data
         if (!animation) {
           console.warn(`[ANIMATION_LOADING] Animation ${id} parsed but resulted in null/undefined value`);
           return null;
         }
-        
+
         if (!animation.svg) {
           console.warn(`[ANIMATION_LOADING] Animation ${id} exists but lacks SVG content`);
           return null;
         }
-        
+
         // Basic validation for SVG content
         if (typeof animation.svg !== 'string' || !animation.svg.includes('<svg')) {
           console.warn(`[ANIMATION_LOADING] Animation ${id} has invalid SVG content`);
           return null;
         }
-        
+
         return animation;
       } catch (error) {
         console.error(`[ANIMATION_LOADING] Error reading/parsing animation ${id}:`, error);
@@ -258,7 +258,7 @@ class StorageService {
 
       // Track any issues with animation references
       const animationIssues = [];
-      
+
       // Process clips to store only references to animations, not the full SVG content
       let optimizedClips = [];
 
@@ -267,7 +267,7 @@ class StorageService {
         storyboard.clips.forEach((clip, index) => {
           console.log(`[MOVIE_SAVING] Clip ${index} (order ${clip.order}): animationId=${clip.animationId || 'MISSING!'}, provider=${clip.provider || 'unknown'}`);
         });
-        
+
         // Validate animation references before saving to ensure integrity
         const clipValidationPromises = storyboard.clips.map(async (clip) => {
           // Skip validation for clips without animationId
@@ -297,13 +297,13 @@ class StorageService {
             console.error(`[MOVIE_SAVING] ${issue}`);
             animationIssues.push(issue);
           }
-          
+
           return clip;
         });
 
         // Wait for all validation checks to complete
         await Promise.all(clipValidationPromises);
-        
+
         // Log any issues found and store them with the storyboard
         if (animationIssues.length > 0) {
           console.warn(`[MOVIE_SAVING] Found ${animationIssues.length} issues with animation references`);
@@ -355,7 +355,7 @@ class StorageService {
         // Store optimized original scenes
         originalScenes: optimizedOriginalScenes,
         // Store validation results for diagnostics
-        validationResults: animationIssues?.length > 0 ? { 
+        validationResults: animationIssues?.length > 0 ? {
           hasIssues: true,
           timestamp: new Date().toISOString(),
           issueCount: animationIssues.length,
@@ -368,11 +368,11 @@ class StorageService {
       // 2. Flush to disk
       // 3. Rename to target file (atomic operation on most file systems)
       const storyboardJSON = JSON.stringify(optimizedStoryboard, null, 2);
-      
+
       try {
         // Write to temp file
         await fs.writeFile(tempFilePath, storyboardJSON, 'utf8');
-        
+
         // Try to force flush to physical storage
         const fileHandle = await fs.open(tempFilePath, 'r+');
         try {
@@ -380,40 +380,40 @@ class StorageService {
         } finally {
           await fileHandle.close();
         }
-        
+
         // Atomic rename
         await fs.rename(tempFilePath, filePath);
-        
+
         // Verify the file was written correctly with a more thorough approach
         try {
           const verifyData = await fs.readFile(filePath, 'utf8');
           const parsedData = JSON.parse(verifyData);
-          
+
           if (!parsedData || !parsedData.clips) {
             throw new Error('Verification failed: Movie written to disk lacks clips array');
           }
-          
+
           // Verify that all clips are present, with focus on animation IDs
           const expectedClipCount = optimizedClips.length;
           const actualClipCount = parsedData.clips.length;
-          
+
           if (actualClipCount !== expectedClipCount) {
             throw new Error(`Verification failed: Expected ${expectedClipCount} clips but found ${actualClipCount}`);
           }
-          
+
           // Verify essential clip properties for each clip
           parsedData.clips.forEach((clip, index) => {
             if (!clip.id) {
               throw new Error(`Verification failed: Clip at index ${index} missing ID`);
             }
-            
+
             // Check if we're supposed to have an animation ID
             const originalClip = optimizedClips.find(c => c.id === clip.id);
             if (originalClip?.animationId && !clip.animationId) {
               throw new Error(`Verification failed: Clip ${clip.id} lost its animation ID during storage`);
             }
           });
-          
+
           console.log(`[MOVIE_SAVING] Successfully verified movie ${id} file integrity with all ${actualClipCount} clips preserved`);
         } catch (verifyError) {
           console.error(`[MOVIE_SAVING] Failed to verify movie ${id} was properly saved:`, verifyError);
@@ -421,10 +421,10 @@ class StorageService {
         }
       } catch (writeError) {
         console.error(`[MOVIE_SAVING] Error during atomic write for movie ${id}:`, writeError);
-        
+
         // Fall back to direct write with extra precautions
         console.log(`[MOVIE_SAVING] Using fallback direct write for movie ${id}`);
-        
+
         // Create a backup of the existing file if it exists
         try {
           const backupPath = `${filePath}.bak`;
@@ -437,7 +437,7 @@ class StorageService {
             console.error(`[MOVIE_SAVING] Error creating backup:`, backupError);
           }
         }
-        
+
         // Fallback write directly to the file
         await fs.writeFile(filePath, storyboardJSON);
       }
@@ -460,8 +460,6 @@ class StorageService {
     try {
       const filePath = path.join(MOVIES_DIR, `${id}.json`);
 
-      console.log(`[MOVIE_LOADING] Loading movie ${id} from storage`);
-
       // Check if file exists first
       try {
         await fs.access(filePath);
@@ -475,8 +473,6 @@ class StorageService {
         const data = await fs.readFile(filePath, 'utf8');
         const movie = JSON.parse(data);
 
-        console.log(`[MOVIE_LOADING] Successfully loaded movie ${id} with ${movie.clips ? movie.clips.length : 0} clips`);
-        
         // Logging to help diagnose clip issues
         if (movie.clips && movie.clips.length > 0) {
           movie.clips.forEach((clip, index) => {

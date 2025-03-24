@@ -9,11 +9,13 @@ import useAnimationLoader, { AnimationRegistryHelpers } from '../hooks/useAnimat
 interface AnimationCanvasProps {
   svgContent?: string;
   style?: React.CSSProperties;
+  isAnimationEditor?: boolean;
 }
 
 const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   svgContent: propSvgContent,
-  style
+  style,
+  isAnimationEditor = false
 }) => {
   const { svgContent: contextSvgContent, setSvgContent } = useAnimation();
   const { currentStoryboard, activeClipId, getActiveClip, updateClip } = useMovie();
@@ -25,7 +27,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Add render counter to track excessive renders
   const renderCountRef = useRef(0);
   // Use a state variable to track whether we're showing the empty state or the SVG
-  const [showEmptyState, setShowEmptyState] = useState(true);
+  const [showEmptyState, setShowEmptyState] = useState(!isAnimationEditor);
   // Track if a message has been sent to hide the empty state
   const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
 
@@ -62,6 +64,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Only show empty state if there's no SVG content and no active clip
     const noActiveClip = !activeClipId || !getActiveClip();
     const noSvgContent = !propSvgContent && !contextSvgContent && !activeClipSvgContent;
+
+    // If we have SVG content from any source, do not show empty state
+    if (propSvgContent || contextSvgContent || activeClipSvgContent) {
+      return false;
+    }
+
     return noActiveClip && noSvgContent;
   }, [activeClipId, getActiveClip, propSvgContent, contextSvgContent, activeClipSvgContent]);
 
@@ -116,6 +124,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     if (activeClip.svgContent && activeClip.svgContent.length > 100) {
       console.log(`[Refresh] Using existing SVG content: ${activeClip.svgContent.length} bytes`);
       setSvgContent(activeClip.svgContent);
+      setShowEmptyState(false);
       return;
     }
 
@@ -137,55 +146,60 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           if (animation && animation.svg) {
             console.log(`[Refresh] Successfully loaded animation: ${activeClip.animationId}, ${animation.svg.length} bytes`);
             setSvgContent(animation.svg);
+            setShowEmptyState(false);
             updateClip(activeClip.id, { svgContent: animation.svg });
-            
+
             // Store in global cache with content
             trackLoadedAnimation(activeClip.animationId || '', animation.svg);
-            
+
             endLoading();
           } else {
             console.warn(`[Refresh] Animation loaded but SVG content is missing: ${activeClip.animationId}`);
             setSvgContent(createPlaceholderSvg('Animation content is unavailable. Try again.'));
-            
+
             // Track the failed attempt
             trackLoadedAnimation(activeClip.animationId || '');
-            
+
             endLoading();
           }
         })
         .catch(error => {
           console.error(`[Refresh] Error loading animation ${activeClip.animationId}: ${error.message}`);
           setSvgContent(createPlaceholderSvg(`Failed to load animation: ${error.message}`));
-          
+
           // Track the failed attempt
           trackLoadedAnimation(activeClip.animationId || '');
-          
+
           endLoading();
         });
       } else {
       console.log(`[Refresh] No animation ID available for clip ${activeClip.id}`);
       setSvgContent(createPlaceholderSvg('No animation ID available for this clip'));
     }
-  }, [getActiveClip, updateClip, setSvgContent, clearLoadingCache, startLoading, 
+  }, [getActiveClip, updateClip, setSvgContent, clearLoadingCache, startLoading,
       markLoadingInProgress, trackLoadedAnimation, endLoading, createPlaceholderSvg]);
 
   // Main effect to update SVG content when clip changes
   useEffect(() => {
     // Increment the render counter
     renderCountRef.current += 1;
-    
+
     // Skip excessive rerenders when clicking quickly through clips
     if (renderCountRef.current % 5 === 0) {
       console.log(`[AnimationCanvas] useEffect calls per activeClipId: ${renderCountRef.current}`);
     }
-    
+
     // Get the active clip for this render cycle
     const activeClip = getActiveClip();
-    
-    // If no active clip is available, show a placeholder
+
+    // If no active clip is available, show a placeholder only in movie editor context
     if (!activeClip) {
-      console.log('[AnimationCanvas] No active clip available, showing placeholder');
-      setSvgContent(createPlaceholderSvg('Select a clip to view animation'));
+      console.log('[AnimationCanvas] No active clip available');
+
+      // Don't show the "Select a clip" placeholder in the animation editor
+      if (!isAnimationEditor) {
+        setSvgContent(createPlaceholderSvg('Select a clip to view animation'));
+      }
       return;
     }
 
@@ -197,35 +211,36 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // If we have SVG content in the clip, use it and avoid server call
     if (activeClip.svgContent && activeClip.svgContent.length > 100) {
       setSvgContent(activeClip.svgContent);
-      
+      setShowEmptyState(false);
+
       // Also add to cache so other components can use it
       if (activeClip.animationId) {
         trackLoadedAnimation(activeClip.animationId || '', activeClip.svgContent);
       }
-      
+
       return; // Explicit return to avoid further processing
     }
-    
+
     // If no SVG content but we have an animationId, check cache first then try server
     if (activeClip.animationId) {
       const animationId = activeClip.animationId;
-      
+
       // First check our global cache for the content
       const cachedContent = getCachedContent(animationId);
       if (cachedContent) {
         setSvgContent(cachedContent);
-        
-        // Also update the clip to have the content for future reference
+        setShowEmptyState(false);
         updateClip(activeClip.id, { svgContent: cachedContent });
         return;
       }
-      
+
       // Check if we've already loaded or attempted to load this animation recently
       if (hasBeenLoaded(animationId)) {
         const animationFromRegistry = AnimationRegistryHelpers.getAnimation(animationId);
         if (animationFromRegistry.status === 'available' && animationFromRegistry.svg) {
           console.log(`[AnimationCanvas] Using previously loaded animation from registry: ${animationId}`);
           setSvgContent(animationFromRegistry.svg);
+          setShowEmptyState(false);
           updateClip(activeClip.id, { svgContent: animationFromRegistry.svg });
         } else if (animationFromRegistry.status === 'failed') {
           console.log(`[AnimationCanvas] Previously failed to load animation: ${animationId}`);
@@ -233,9 +248,9 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         }
         return; // Skip loading if we've already tried recently
       }
-      
+
       console.log(`[AnimationCanvas] Need to load animation from server: ${animationId}`);
-      
+
       // Show loading indicator
       setSvgContent(createPlaceholderSvg('Loading animation content...'));
     startLoading(true);
@@ -245,18 +260,19 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         .then(response => {
           // Check if response is in the correct format
           const animation = response && response.success ? response.animation : response;
-          
+
       if (animation && animation.svg) {
             console.log(`[AnimationCanvas] Successfully loaded animation ${animationId}: ${animation.svg.length} bytes`);
         setSvgContent(animation.svg);
+            setShowEmptyState(false);
             updateClip(activeClip.id, { svgContent: animation.svg });
-            
+
             // Track in the global cache so other components can use it too
             trackLoadedAnimation(animationId || '', animation.svg);
       } else {
             console.warn(`[AnimationCanvas] Animation loaded but SVG content is missing: ${animationId}`);
             setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the refresh button.'));
-            
+
             // Track the failed load attempt in cache to prevent repeated failures
             trackLoadedAnimation(animationId || '');
           }
@@ -265,10 +281,10 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         .catch(error => {
           console.error(`[AnimationCanvas] Error loading animation ${animationId}: ${error.message}`);
           setSvgContent(createPlaceholderSvg(`Failed to load animation: ${error.message}`));
-          
+
           // Track the failed load attempt
           trackLoadedAnimation(animationId || '');
-          
+
           endLoading();
         });
     } else {
@@ -276,7 +292,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       console.log(`[AnimationCanvas] No animation ID available for clip ${activeClip.id}`);
       setSvgContent(createPlaceholderSvg('No animation ID available for this clip'));
     }
-  }, [activeClipId, getActiveClip, updateClip, setSvgContent, createPlaceholderSvg, startLoading, endLoading, 
+  }, [activeClipId, getActiveClip, updateClip, setSvgContent, createPlaceholderSvg, startLoading, endLoading,
      markLoadingInProgress, trackLoadedAnimation, getCachedContent, hasBeenLoaded]);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
@@ -474,7 +490,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     const handleApiCallEnd = (event: any) => {
       const eventData = event?.detail || {};
-      const { type, endpoint, animationId } = eventData;
+      const { type, endpoint, animationId, success = true } = eventData;
 
       // Only handle loading state for animation-related API calls
       const isAnimationCall =
@@ -488,6 +504,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           trackLoadedAnimation(animationId || '');
         }
         endLoading();
+
+        // If the API call was successful, make sure we hide the empty state
+        if (success && displaySvgContent) {
+          setShowEmptyState(false);
+        }
       }
     };
 
@@ -581,15 +602,15 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     }
 
     // Get the clip by ID
-    const clip = getActiveClip ? 
-      (activeClipId === clipId ? getActiveClip() : null) : 
+    const clip = getActiveClip ?
+      (activeClipId === clipId ? getActiveClip() : null) :
       null;
-      
+
     if (!clip) {
       console.log(`[Prefetch] Unable to find clip data for ID: ${clipId}`);
       return;
     }
-    
+
     if (!clip.animationId) {
       console.log(`[Prefetch] No animation ID available for clip ${clipId}`);
       return;
@@ -597,46 +618,46 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     const animationId = clip.animationId;  // Create a non-null local variable
     console.log(`[Prefetch] Starting prefetch for clip ${clip.id} with animationId ${animationId}`);
-    
+
     // Check if already in registry
     const registryResult = AnimationRegistryHelpers.getAnimation(animationId);
     if (registryResult.status === 'available') {
       console.log(`[Prefetch] Animation ${animationId} already available in registry`);
       return;
     }
-    
+
     if (registryResult.status === 'loading') {
       console.log(`[Prefetch] Animation ${animationId} already loading`);
       return;
     }
-    
+
     if (registryResult.status === 'failed') {
       console.log(`[Prefetch] Animation ${animationId} previously failed, trying again`);
     }
-    
+
     // Actually load the animation
     AnimationRegistryHelpers.markLoading(animationId);
-    
+
     MovieStorageApi.getClipAnimation(animationId)
       .then(response => {
         const animation = response && response.success ? response.animation : response;
-        
+
         if (animation && animation.svg) {
           // Store in registry
           AnimationRegistryHelpers.storeAnimation(
-            animationId, 
+            animationId,
             animation.svg,
-            { 
+            {
               timestamp: animation.timestamp,
               chatHistory: animation.chatHistory
             }
           );
-          
+
           // Also update the clip with content
           if (updateClip) {
             updateClip(clip.id, { svgContent: animation.svg });
           }
-          
+
           console.log(`[Prefetch] Successfully loaded animation ${animationId}`);
         } else {
           console.warn(`[Prefetch] Received invalid response for animation ${animationId}`);
@@ -706,33 +727,35 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           console.log('[Visibility] No active clip to restore');
           return;
         }
-        
+
         console.log(`[Visibility] Checking active clip ${activeClip.id} for restoration`);
-        
+
         // Case 1: We have SVG content but container is empty (most common mobile issue)
         if (activeClip.svgContent && activeClip.svgContent.length > 100) {
           const container = getSvgContainer();
           const containerIsEmpty = !container || !container.innerHTML || container.innerHTML.length < 100;
-          
+
           if (containerIsEmpty) {
             console.log(`[Visibility] Restoring SVG content for clip ${activeClip.id} - container was empty`);
             setSvgContent(activeClip.svgContent);
+            setShowEmptyState(false);
             return;
           }
         }
-        
+
         // Case 2: We have animationId but no SVG content - check registry first
         if (activeClip.animationId && (!activeClip.svgContent || activeClip.svgContent.length < 100)) {
           // First check if it's available in the registry
           const registryResult = AnimationRegistryHelpers.getAnimation(activeClip.animationId);
-          
+
           if (registryResult.status === 'available' && registryResult.svg) {
             console.log(`[Visibility] Using registry content for clip ${activeClip.id}`);
             setSvgContent(registryResult.svg);
+            setShowEmptyState(false);
             updateClip(activeClip.id, { svgContent: registryResult.svg });
             return;
           }
-          
+
           // If not available and not already loading, try to load it
           if (registryResult.status !== 'loading' && !isLoading) {
             console.log(`[Visibility] Need to load content for clip ${activeClip.id}`);
@@ -745,12 +768,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Add visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Also run once when component mounts to handle case where content wasn't properly 
+    // Also run once when component mounts to handle case where content wasn't properly
     // loaded during initial render (common with quick navigation)
     setTimeout(() => {
       const activeClip = getActiveClip();
       const svgContainer = getSvgContainer();
-      
+
       if (activeClip && svgContainer && (!svgContainer.innerHTML || svgContainer.innerHTML.length < 100)) {
         console.log('[Mount Check] Running visibility check on mount');
         handleVisibilityChange();
@@ -778,6 +801,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         const clip = getActiveClip();
         if (clip && clip.svgContent) {
           setSvgContent(clip.svgContent);
+          setShowEmptyState(false);
         }
       }
     };
@@ -834,19 +858,19 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     const handleOffline = () => {
       console.log('[Network] Browser is offline, canceling any in-progress animation loads');
       endLoading();
-      
+
       // If we have an active clip, try to display placeholder content
       const activeClip = getActiveClip();
       if (activeClip && activeClip.animationId) {
         setSvgContent(createPlaceholderSvg('Network connection lost. Animation cannot be loaded.'));
-        
+
         // Mark animations as failed in registry
         AnimationRegistryHelpers.markFailed(activeClip.animationId);
       }
     };
-    
+
     window.addEventListener('offline', handleOffline);
-    
+
     return () => {
       window.removeEventListener('offline', handleOffline);
     };
@@ -856,28 +880,28 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   useEffect(() => {
     // Flag to track if we're in the middle of a load operation
     let loadTimeoutId: number | null = null;
-    
+
     // Set up timeout when loading starts
     if (isLoading) {
       console.log('[Loading] Setting up animation load timeout (15s)');
-      
+
       loadTimeoutId = window.setTimeout(() => {
         console.log('[Loading] Animation load timeout reached, canceling');
-        
+
         // End loading state
         endLoading();
-        
+
         // Show error message
         const activeClip = getActiveClip();
         if (activeClip && activeClip.animationId) {
           setSvgContent(createPlaceholderSvg('Animation load timed out. Try refreshing.'));
-          
+
           // Mark as failed in registry
           AnimationRegistryHelpers.markFailed(activeClip.animationId);
         }
       }, 15000); // 15 second timeout
     }
-    
+
     // Clear timeout when loading ends
     return () => {
       if (loadTimeoutId) {
