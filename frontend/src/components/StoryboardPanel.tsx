@@ -137,112 +137,163 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   // Replace failed clip tracking with pending animation tracking
   const [pendingClips, setPendingClips] = useState<Record<string, boolean>>({});
 
-  // Pre-load all clip thumbnails when the component mounts
+  // Effect to update thumbnails when clips change
   useEffect(() => {
-    // Immediately set all clips with SVG content in the thumbnails cache
+    // First, store any existing SVG content in the thumbnails cache
     const newThumbnails = { ...clipThumbnails };
-    
+
+    // Process all clips with existing SVG content
     clips.forEach(clip => {
       if (clip.svgContent) {
         newThumbnails[clip.id] = clip.svgContent;
       }
     });
-    
+
+    // Update state with initial values
     setClipThumbnails(newThumbnails);
-    
-    // Also trigger loading missing thumbnails for all clips that have an animation ID but no SVG content
-    const missingClips = clips.filter(clip => !clip.svgContent && clip.animationId);
-    
-    if (missingClips.length > 0) {
-      // Clear the requested clips cache when manually forcing a load
-      requestedClipsRef.current.clear();
-      
-      // Force thumbnails to load for all clips with animation IDs
-      const loadAllThumbnails = async () => {
+
+    // Track clips that need loading
+    const clipsToLoad = clips.filter(
+      clip => clip.animationId && !clip.svgContent && !clipThumbnails[clip.id]
+    );
+
+    if (clipsToLoad.length > 0) {
+      // Set loading state for all clips that need fetching
+      const newLoadingState = { ...loadingClips };
+      clipsToLoad.forEach(clip => {
+        newLoadingState[clip.id] = true;
+      });
+      setLoadingClips(newLoadingState);
+
+      // Fetch all animations in parallel
+      Promise.all(clipsToLoad.map(async (clip) => {
+        if (!clip.animationId) return;
+
         try {
-          await Promise.all(missingClips.map(async (clip) => {
-            if (!clip.animationId) return;
-            
-            console.log(`Forcing load for clip thumbnail: ${clip.name} (ID: ${clip.id})`);
-            try {
-              const animation = await MovieStorageApi.getClipAnimation(clip.animationId);
-              if (animation && animation.svg) {
-                setClipThumbnails(prev => ({
-                  ...prev,
-                  [clip.id]: animation.svg
-                }));
-                
-                // Dispatch event to inform the system this thumbnail is now loaded
-                window.dispatchEvent(new CustomEvent('thumbnail-loaded', {
-                  detail: { clipId: clip.id }
-                }));
-              }
-            } catch (error) {
-              console.error(`Error pre-loading clip thumbnail: ${clip.id}`, error);
-            }
-          }));
+          // Try to get the animation from the server
+          const animation = await MovieStorageApi.getClipAnimation(clip.animationId);
+          if (animation && animation.svg) {
+            // Successfully got SVG content - update cache
+            setClipThumbnails(prev => ({
+              ...prev,
+              [clip.id]: animation.svg
+            }));
+          }
         } catch (error) {
-          console.error("Error pre-loading thumbnails:", error);
+          console.error(`Error loading clip thumbnail: ${clip.id}`, error);
+        } finally {
+          // Always update loading state
+          setLoadingClips(prev => ({
+            ...prev,
+            [clip.id]: false
+          }));
         }
-      };
-      
-      loadAllThumbnails();
+      }));
     }
   }, [clips]);
 
-  // Force reload thumbnails when storyboard changes or active clip changes
+  // Effect to listen for animation-loaded events from the registry
   useEffect(() => {
-    if (!clips.length) return;
-    
-    // Prioritize loading the active clip's thumbnail if it exists
-    if (activeClipId) {
-      const activeClip = clips.find(clip => clip.id === activeClipId);
-      if (activeClip && activeClip.animationId && !activeClip.svgContent) {
-        console.log(`Prioritizing load of active clip thumbnail: ${activeClipId}`);
-        
-        const loadActiveThumbnail = async () => {
-          try {
-            const animation = await MovieStorageApi.getClipAnimation(activeClip.animationId!);
-            if (animation && animation.svg) {
-              setClipThumbnails(prev => ({
-                ...prev,
-                [activeClip.id]: animation.svg
-              }));
-              
-              // Inform the system this thumbnail is loaded
-              window.dispatchEvent(new CustomEvent('thumbnail-loaded', {
-                detail: { clipId: activeClip.id }
-              }));
-            }
-          } catch (error) {
-            console.error(`Error loading active clip thumbnail: ${activeClip.id}`, error);
-          }
-        };
-        
-        loadActiveThumbnail();
-      }
-    }
-  }, [storyboard, activeClipId, clips]);
+    // Function to handle animation loaded events
+    const handleAnimationLoaded = (event: Event) => {
+      const customEvent = event as CustomEvent<{animationId: string, svg: string}>;
+      if (!customEvent.detail) return;
 
-  // Helper to get SVG content for a clip (from content or cache)
+      const { animationId, svg } = customEvent.detail;
+
+      // Find any clips using this animation ID
+      clips.forEach(clip => {
+        if (clip.animationId === animationId) {
+          // Update our thumbnails cache with the SVG content
+          setClipThumbnails(prev => ({
+            ...prev,
+            [clip.id]: svg
+          }));
+
+          // Mark as not loading anymore
+          setLoadingClips(prev => ({
+            ...prev,
+            [clip.id]: false
+          }));
+        }
+      });
+    };
+
+    // Listen for animation-loaded events
+    window.addEventListener('animation-loaded', handleAnimationLoaded);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('animation-loaded', handleAnimationLoaded);
+    };
+  }, [clips]);
+
+  // Helper to get SVG content for a clip
   const getClipSvgContent = (clip: MovieClip): string => {
+    // Direct SVG content takes precedence
     if (clip.svgContent) {
       return clip.svgContent;
     }
 
+    // Check our local thumbnail cache
     if (clipThumbnails[clip.id]) {
       return clipThumbnails[clip.id];
     }
 
+    // If we have an animation ID but no content yet
     if (clip.animationId) {
+      // Try to get from the registry directly as a last resort
+      try {
+        // This is a synchronous check to see if animation is already in registry
+        const registryCheck = MovieStorageApi.getClipAnimationFromRegistry(clip.animationId);
+        if (registryCheck && registryCheck.svg) {
+          // If found in registry, update our cache for next time and return the SVG
+          setTimeout(() => {
+            setClipThumbnails(prev => ({
+              ...prev,
+              [clip.id]: registryCheck.svg
+            }));
+          }, 0);
+
+          return registryCheck.svg;
+        }
+      } catch (e) {
+        // Ignore registry lookup errors
+      }
+
+      // Show loading state if we're actively loading
+      if (loadingClips[clip.id]) {
+        return createPlaceholderSvg("Loading...");
+      }
+
+      // Pending or needs manual load
       const isPending = pendingClips[clip.id];
-      return createPlaceholderSvg(loadingClips[clip.id] 
-        ? "Loading..." 
-        : (isPending ? "Animation in progress..." : "Click to load"));
+      return createPlaceholderSvg(isPending ? "Animation in progress..." : "Click to load");
     }
 
+    // Fallback for clips with no content
     return createPlaceholderSvg("No Preview");
   };
+
+  // Simple helper to manually load a thumbnail if clicking fails
+  const loadClipThumbnail = useCallback(async (clip: MovieClip) => {
+    if (!clip.animationId || loadingClips[clip.id] || clipThumbnails[clip.id]) {
+      return;
+    }
+
+    setLoadingClips(prev => ({ ...prev, [clip.id]: true }));
+
+    try {
+      const animation = await MovieStorageApi.getClipAnimation(clip.animationId);
+      if (animation && animation.svg) {
+        setClipThumbnails(prev => ({ ...prev, [clip.id]: animation.svg }));
+      }
+    } catch (error) {
+      console.error(`Error loading thumbnail: ${clip.id}`, error);
+    } finally {
+      setLoadingClips(prev => ({ ...prev, [clip.id]: false }));
+    }
+  }, [clipThumbnails, loadingClips]);
 
   // Function to handle selecting an existing animation
   const handleSelectExistingAnimation = useCallback((animation: AnimationItem, animationSvg?: string) => {
@@ -375,7 +426,13 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
                   onClick={() => onClipSelect(clip.id)}
                 >
                   {/* Clip thumbnail preview with overlaid info */}
-                  <div className="aspect-video overflow-hidden relative group">
+                  <div className="aspect-video overflow-hidden relative group" onClick={(e) => {
+                    // Don't stop propagation - we want the parent onClick to fire too
+                    // Only manually load the thumbnail if it's not already loaded
+                    if (clip.animationId && !clipThumbnails[clip.id] && !clip.svgContent) {
+                      loadClipThumbnail(clip);
+                    }
+                  }}>
                     <SvgThumbnail svgContent={getClipSvgContent(clip)} />
 
                     {/* Top overlay with clip name and number */}
