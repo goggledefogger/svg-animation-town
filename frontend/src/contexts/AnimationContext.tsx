@@ -1098,98 +1098,116 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           const result = AnimationRegistryHelpers.getAnimation(animationId);
           
           if (result.status === 'available' && result.svg) {
-            console.log(`[AnimationContext] Using cached animation from registry: ${animationId}`);
+            console.log(`Using animation from registry: ${animationId}`);
             setSvgContent(result.svg);
             
-            // Return data with metadata from registry
+            // Set chat history if available
+            if (result.metadata?.chatHistory) {
+              setChatHistory(result.metadata.chatHistory);
+            }
+            
             return {
               svg: result.svg,
-              chatHistory: result.metadata?.chatHistory || [],
+              chatHistory: result.metadata?.chatHistory,
               timestamp: result.metadata?.timestamp || new Date().toISOString()
             };
           }
-          
-          // Skip if already failed
-          if (result.status === 'failed') {
-            console.log(`[AnimationContext] Animation previously failed to load: ${animationId}`);
-            return null;
-          }
-          
-          // Mark as loading if not already loading
-          if (result.status !== 'loading') {
-            AnimationRegistryHelpers.markLoading(animationId);
-          }
         }
-
-        // Log progress
-        console.log(`[AnimationLoading] Loading animation: ${name}`);
-
-        // Dispatch event to show that API call is starting
-        window.dispatchEvent(new CustomEvent('api-call-start', {
-          detail: { type: 'animation-load', name }
-        }));
-
+        
         try {
-          // Try to get the animation from the server
-          const animation = await AnimationStorageApi.getAnimation(name);
-
-          // Dispatch event to show that API call has completed
-          window.dispatchEvent(new CustomEvent('api-call-end', {
-            detail: { type: 'animation-load', name }
-          }));
-
-          if (animation && animation.svg) {
-            // Get the animation ID if returned from server
-            const id = animation.id || animationId;
-            
-            // Store in registry if we have an ID
-            if (id) {
-              AnimationRegistryHelpers.storeAnimation(id, animation.svg, {
-                name: animation.name || name,
-                timestamp: animation.timestamp,
-                chatHistory: animation.chatHistory
-              });
-            }
-            
-            // Update state with loaded animation
-            setSvgContent(animation.svg);
-            
-            // Update context if the animation has a chat history
-            if (animation.chatHistory) {
-              setChatHistory(animation.chatHistory);
-            } else {
-              setChatHistory([]);
-            }
-
-            return {
-              svg: animation.svg,
-              chatHistory: animation.chatHistory || [],
-              timestamp: animation.timestamp || new Date().toISOString()
-            };
-          }
+          // Load from server
+          console.log(`Loading animation by name: ${name}, id: ${animationId || 'none'}`);
           
-          // Mark as failed if no content
+          let response;
           if (animationId) {
-            AnimationRegistryHelpers.markFailed(animationId);
+            // If we have a direct ID, use the storage API
+            response = await AnimationStorageApi.getAnimation(animationId);
+            
+            // Check if response has the new format with success and animation properties
+            const animationData = response && response.success ? response.animation : response;
+            
+            if (animationData && animationData.svg) {
+              console.log(`Animation loaded from server: ${name}, ${animationData.svg.length} bytes`);
+              setSvgContent(animationData.svg);
+              
+              if (animationData.chatHistory) {
+                setChatHistory(animationData.chatHistory);
+              }
+              
+              // Also store in registry for future use
+              AnimationRegistryHelpers.storeAnimation(
+                animationId,
+                animationData.svg,
+                {
+                  chatHistory: animationData.chatHistory,
+                  timestamp: animationData.timestamp
+                }
+              );
+              
+              return {
+                svg: animationData.svg,
+                chatHistory: animationData.chatHistory,
+                timestamp: animationData.timestamp
+              };
+            }
+          } else {
+            // We don't have an ID, search by name
+            response = await AnimationStorageApi.listAnimations();
+            
+            if (response && Array.isArray(response)) {
+              // Filter animations by name
+              const matches = response.filter(anim => 
+                anim.name.toLowerCase().includes(name.toLowerCase())
+              );
+              
+              if (matches.length > 0) {
+                // Get the first matching animation
+                const match = matches[0];
+                
+                // Load full animation details
+                const animation = await AnimationStorageApi.getAnimation(match.id);
+                const animationData = animation && animation.success ? animation.animation : animation;
+                
+                if (animationData && animationData.svg) {
+                  console.log(`Animation found and loaded from search: ${name}, id: ${match.id}`);
+                  setSvgContent(animationData.svg);
+                  
+                  if (animationData.chatHistory) {
+                    setChatHistory(animationData.chatHistory);
+                  }
+                  
+                  // Store in registry
+                  AnimationRegistryHelpers.storeAnimation(
+                    match.id,
+                    animationData.svg,
+                    {
+                      chatHistory: animationData.chatHistory,
+                      timestamp: animationData.timestamp
+                    }
+                  );
+                  
+                  return {
+                    svg: animationData.svg,
+                    chatHistory: animationData.chatHistory,
+                    timestamp: animationData.timestamp
+                  };
+                }
+              }
+            }
           }
           
+          console.warn(`Animation not found: ${name}`);
           return null;
         } catch (error) {
-          console.error(`Error loading animation ${name}:`, error);
-          
-          // Mark as failed in the registry if we have an ID
-          if (animationId) {
-            AnimationRegistryHelpers.markFailed(animationId);
-          }
-          
+          console.error(`Error loading animation: ${error}`);
           return null;
         }
       };
       
-      // Use registry to track and deduplicate requests
-      return AnimationRegistryHelpers.trackRequest(requestId, loadRequest());
+      // Track the request to prevent duplicates
+      return await AnimationRegistryHelpers.trackRequest(requestId, loadRequest());
     } catch (error) {
-      console.error(`Error in loadAnimation wrapper: ${error}`);
+      console.error(`Error in loadAnimation: ${error}`);
       return null;
     }
   }, [setSvgContent, setChatHistory]);

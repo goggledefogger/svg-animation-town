@@ -794,7 +794,10 @@ export const MovieStorageApi = {
           AnimationRegistryHelpers.storeAnimation(animationId, data.animation.svg, metadata);
           console.log(`[API] Successfully fetched animation ${animationId}: ${data.animation.svg.length} bytes`);
           
-          return data.animation;
+          return {
+            success: true,
+            animation: data.animation
+          };
         } else {
           AnimationRegistryHelpers.markFailed(animationId);
           throw new Error('Invalid response from server');
