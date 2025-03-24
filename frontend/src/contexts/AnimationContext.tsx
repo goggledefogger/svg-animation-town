@@ -926,11 +926,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Skip if no clip data
       if (!clip) return;
 
-      console.log(`[AnimationContext] Clip changed: ${clip.name}`);
-
-      // Reset state before loading new content
-      setSvgContent('');
-      setChatHistory([]);
+      console.log(`[AnimationContext] Clip changed: ${clip.name || clip.id}`);
 
       // First stop any existing animations
       if (svgRef) {
@@ -941,62 +937,82 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }
 
-      // If the clip has an animationId, check registry first, then try server as fallback
+      // Reset state before loading new content
+      setSvgContent('');
+      setChatHistory([]);
+      
+      // First - check if we have SVG content directly in the clip
+      if (clip.svgContent && clip.svgContent.length > 100) {
+        console.log(`[AnimationContext] Using clip's SVG content directly (${clip.svgContent.length} bytes)`);
+        setSvgContent(clip.svgContent);
+        
+        if (clip.chatHistory) {
+          setChatHistory(clip.chatHistory);
+        }
+        
+        // Also cache in the registry if we have an animationId
+        if (clip.animationId) {
+          AnimationRegistryHelpers.storeAnimation(
+            clip.animationId,
+            clip.svgContent,
+            { chatHistory: clip.chatHistory }
+          );
+        }
+        
+        return;
+      }
+
+      // Second - if animationId exists, check registry first
       if (clip.animationId) {
-        // Get animation status from registry
-        const result = AnimationRegistryHelpers.getAnimation(clip.animationId);
+        const animationId = clip.animationId;
+        const result = AnimationRegistryHelpers.getAnimation(animationId);
         
         // Handle each possible status
         switch (result.status) {
           case 'available':
             if (result.svg) {
-              console.log(`[AnimationContext] Using cached animation from registry: ${clip.animationId}`);
+              console.log(`[AnimationContext] Using cached animation from registry: ${animationId}`);
               setSvgContent(result.svg);
               
-              // Set the chat history if available from either registry or clip
-              const chatHistory = result.metadata?.chatHistory || clip.chatHistory;
-              if (chatHistory) {
-                setChatHistory(chatHistory);
+              // Set the chat history if available from registry
+              if (result.metadata?.chatHistory) {
+                setChatHistory(result.metadata.chatHistory);
               }
+              
+              // Note: We can't update the clip here as updateClip is not available in this context
             }
             break;
             
           case 'loading':
-            console.log(`[AnimationContext] Animation ${clip.animationId} is already loading, waiting`);
+            console.log(`[AnimationContext] Animation ${animationId} is already loading, waiting`);
             break;
             
           case 'failed':
-            console.log(`[AnimationContext] Animation previously failed to load: ${clip.animationId}`);
-            
-            // Use clip's SVG content as fallback
-            if (clip.svgContent) {
-              setSvgContent(clip.svgContent);
-              
-              if (clip.chatHistory) {
-                setChatHistory(clip.chatHistory);
-              }
-            }
+            console.log(`[AnimationContext] Animation previously failed to load: ${animationId}`);
             break;
             
           case 'not_found':
             // Not in registry, need to load it
-            console.log(`[AnimationContext] Loading animation from server: ${clip.animationId}`);
+            console.log(`[AnimationContext] Loading animation from server: ${animationId}`);
             
             // Create a request ID for this animation load
-            const requestId = `load-animation-${clip.animationId}`;
+            const requestId = `load-animation-${animationId}`;
             
             // Mark as loading
-            AnimationRegistryHelpers.markLoading(clip.animationId);
+            AnimationRegistryHelpers.markLoading(animationId);
             
             // Create and track the request
             const loadRequest = async () => {
               try {
-                const animation = await AnimationStorageApi.getAnimation(clip.animationId);
+                const response = await AnimationStorageApi.getAnimation(animationId);
+                
+                // Handle both response formats (direct or wrapped)
+                const animation = response && response.success ? response.animation : response;
                 
                 if (animation?.svg) {
                   // Store in registry with metadata
                   AnimationRegistryHelpers.storeAnimation(
-                    clip.animationId, 
+                    animationId, 
                     animation.svg, 
                     {
                       chatHistory: animation.chatHistory, 
@@ -1007,57 +1023,29 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   // Set the SVG content
                   setSvgContent(animation.svg);
                   
+                  // Note: We can't update the clip here as updateClip is not available in this context
+                  
                   // Set the chat history if available
                   if (animation.chatHistory) {
                     setChatHistory(animation.chatHistory);
                   }
                   
-                  console.log(`[AnimationContext] Animation loaded: ${clip.animationId}`);
+                  console.log(`[AnimationContext] Animation loaded: ${animationId}`);
                   return animation;
                 } else {
-                  console.warn(`[AnimationContext] Animation loaded but no SVG content: ${clip.animationId}`);
-                  AnimationRegistryHelpers.markFailed(clip.animationId);
-                  
-                  // Use clip's SVG content as fallback
-                  if (clip.svgContent) {
-                    setSvgContent(clip.svgContent);
-                    
-                    if (clip.chatHistory) {
-                      setChatHistory(clip.chatHistory);
-                    }
-                  }
+                  console.warn(`[AnimationContext] Animation loaded but no SVG content: ${animationId}`);
+                  AnimationRegistryHelpers.markFailed(animationId);
                   return null;
                 }
               } catch (error) {
                 console.error(`[AnimationContext] Error loading animation: ${error}`);
-                AnimationRegistryHelpers.markFailed(clip.animationId);
-                
-                // Use clip's SVG content as fallback
-                if (clip.svgContent) {
-                  setSvgContent(clip.svgContent);
-                  
-                  if (clip.chatHistory) {
-                    setChatHistory(clip.chatHistory);
-                  }
-                }
+                AnimationRegistryHelpers.markFailed(animationId);
                 return null;
               }
             };
             
             AnimationRegistryHelpers.trackRequest(requestId, loadRequest());
             break;
-        }
-      }
-      // Use the clip's SVG content directly if it has no animationId
-      else if (clip.svgContent) {
-        console.log(`[AnimationContext] Using clip's SVG content directly`);
-
-        // Set content directly
-        setSvgContent(clip.svgContent);
-
-        // Set chat history if available
-        if (clip.chatHistory) {
-          setChatHistory(clip.chatHistory);
         }
       }
     };
@@ -1069,7 +1057,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     return () => {
       window.removeEventListener('clip-changed', handleClipChanged);
     };
-  }, [svgRef]);
+  }, [svgRef, setSvgContent, setChatHistory]);
 
   // Load an animation from server by name
   const loadAnimation = useCallback(async (name: string): Promise<ChatData | null> => {

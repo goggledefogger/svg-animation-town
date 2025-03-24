@@ -574,18 +574,80 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   }, [displaySvgContent, getSvgContainer]);
 
   // Handle prefetching animation when a clip is selected
-  const prefetchClipAnimation = useCallback((clip: MovieClip) => {
-    if (!clip || !clip.animationId) {
-      console.log('[Clip Change] No animation ID available for this clip');
+  const prefetchClipAnimation = useCallback((clipId: string) => {
+    if (!clipId) {
+      console.log('[Prefetch] No clip ID provided');
+      return;
+    }
+    
+    // Get the clip by ID
+    const clip = getActiveClip ? 
+      (activeClipId === clipId ? getActiveClip() : null) : 
+      null;
+      
+    if (!clip) {
+      console.log(`[Prefetch] Unable to find clip data for ID: ${clipId}`);
+      return;
+    }
+    
+    if (!clip.animationId) {
+      console.log(`[Prefetch] No animation ID available for clip ${clipId}`);
       return;
     }
 
-    console.log(`[Clip Change] Will prefetch animation for clip ${clip.id} with animationId ${clip.animationId}`);
-
-    // No need to show loading state for client-side clip changes
-    // The clip change effect will handle loading if needed
-    // (Only actual API calls will show loading animation)
-  }, []);
+    const animationId = clip.animationId;  // Create a non-null local variable
+    console.log(`[Prefetch] Starting prefetch for clip ${clip.id} with animationId ${animationId}`);
+    
+    // Check if already in registry
+    const registryResult = AnimationRegistryHelpers.getAnimation(animationId);
+    if (registryResult.status === 'available') {
+      console.log(`[Prefetch] Animation ${animationId} already available in registry`);
+      return;
+    }
+    
+    if (registryResult.status === 'loading') {
+      console.log(`[Prefetch] Animation ${animationId} already loading`);
+      return;
+    }
+    
+    if (registryResult.status === 'failed') {
+      console.log(`[Prefetch] Animation ${animationId} previously failed, trying again`);
+    }
+    
+    // Actually load the animation
+    AnimationRegistryHelpers.markLoading(animationId);
+    
+    MovieStorageApi.getClipAnimation(animationId)
+      .then(response => {
+        const animation = response && response.success ? response.animation : response;
+        
+        if (animation && animation.svg) {
+          // Store in registry
+          AnimationRegistryHelpers.storeAnimation(
+            animationId, 
+            animation.svg,
+            { 
+              timestamp: animation.timestamp,
+              chatHistory: animation.chatHistory
+            }
+          );
+          
+          // Also update the clip with content
+          if (updateClip) {
+            updateClip(clip.id, { svgContent: animation.svg });
+          }
+          
+          console.log(`[Prefetch] Successfully loaded animation ${animationId}`);
+        } else {
+          console.warn(`[Prefetch] Received invalid response for animation ${animationId}`);
+          AnimationRegistryHelpers.markFailed(animationId);
+        }
+      })
+      .catch(error => {
+        console.error(`[Prefetch] Failed to load animation ${animationId}:`, error);
+        AnimationRegistryHelpers.markFailed(animationId);
+      });
+  }, [getActiveClip, activeClipId, updateClip]);
 
   // Monitor for clip change events (only for prefetching)
   useEffect(() => {
@@ -640,40 +702,41 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
         // Check if we have an active clip that needs content restored
         const activeClip = getActiveClip();
-        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-
-        // On mobile, briefly check if the active clip needs loading
-        if (isMobile && activeClip) {
-          console.log(`[Visibility] Mobile device detected, checking active clip ${activeClip.id}`);
+        if (!activeClip) {
+          console.log('[Visibility] No active clip to restore');
+          return;
+        }
+        
+        console.log(`[Visibility] Checking active clip ${activeClip.id} for restoration`);
+        
+        // Case 1: We have SVG content but container is empty (most common mobile issue)
+        if (activeClip.svgContent && activeClip.svgContent.length > 100) {
+          const container = getSvgContainer();
+          const containerIsEmpty = !container || !container.innerHTML || container.innerHTML.length < 100;
           
-          // If we have SVG content but container is empty, restore it
-          if (activeClip.svgContent && activeClip.svgContent.length > 100) {
-            const container = getSvgContainer();
-            const containerIsEmpty = !container || !container.innerHTML || container.innerHTML.length < 50;
-            
-            if (containerIsEmpty) {
-              console.log(`[Visibility] Restoring SVG content for active clip ${activeClip.id}`);
-              setSvgContent(activeClip.svgContent);
-            }
+          if (containerIsEmpty) {
+            console.log(`[Visibility] Restoring SVG content for clip ${activeClip.id} - container was empty`);
+            setSvgContent(activeClip.svgContent);
+            return;
+          }
+        }
+        
+        // Case 2: We have animationId but no SVG content - check registry first
+        if (activeClip.animationId && (!activeClip.svgContent || activeClip.svgContent.length < 100)) {
+          // First check if it's available in the registry
+          const registryResult = AnimationRegistryHelpers.getAnimation(activeClip.animationId);
+          
+          if (registryResult.status === 'available' && registryResult.svg) {
+            console.log(`[Visibility] Using registry content for clip ${activeClip.id}`);
+            setSvgContent(registryResult.svg);
+            updateClip(activeClip.id, { svgContent: registryResult.svg });
             return;
           }
           
-          // If we have animationId but missing content, try to load it
-          if (activeClip.animationId && (!activeClip.svgContent || activeClip.svgContent.length < 100)) {
-            // First check the cache
-            const cachedContent = getCachedContent(activeClip.animationId || '');
-            if (cachedContent) {
-              console.log(`[Visibility] Using cached content for active clip ${activeClip.id}`);
-              setSvgContent(cachedContent);
-              updateClip(activeClip.id, { svgContent: cachedContent });
-              return;
-            }
-            
-            // If not previously loaded, trigger refresh
-            if (!hasBeenLoaded(activeClip.animationId || '')) {
-              console.log(`[Visibility] Need to load content for active clip ${activeClip.id}`);
-              handleForceRefresh();
-            }
+          // If not available and not already loading, try to load it
+          if (registryResult.status !== 'loading' && !isLoading) {
+            console.log(`[Visibility] Need to load content for clip ${activeClip.id}`);
+            handleForceRefresh();
           }
         }
       }
@@ -682,12 +745,23 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Add visibility change listener
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // Also run once when component mounts to handle case where content wasn't properly 
+    // loaded during initial render (common with quick navigation)
+    setTimeout(() => {
+      const activeClip = getActiveClip();
+      const svgContainer = getSvgContainer();
+      
+      if (activeClip && svgContainer && (!svgContainer.innerHTML || svgContainer.innerHTML.length < 100)) {
+        console.log('[Mount Check] Running visibility check on mount');
+        handleVisibilityChange();
+      }
+    }, 500);
+
     // Clean up
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [getActiveClip, setupSvgElement, handleForceRefresh, getSvgContainer, 
-      getCachedContent, hasBeenLoaded, setSvgContent, updateClip]);
+  }, [getActiveClip, setSvgContent, updateClip, handleForceRefresh, getSvgContainer, isLoading]);
 
   // Add an event listener for thumbnail updates
   useEffect(() => {
