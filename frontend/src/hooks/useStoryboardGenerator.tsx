@@ -54,7 +54,8 @@ export function useStoryboardGenerator(
     currentStoryboard,
     setCurrentStoryboard,
     addClip,
-    setActiveClipId
+    setActiveClipId,
+    activeClipId
   } = useMovie();
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -93,21 +94,7 @@ export function useStoryboardGenerator(
       setShowGeneratingClipsModal(true);
       setGenerationError(null);
 
-      // Create a new storyboard first
-      const newStoryboard: Storyboard = {
-        id: uuidv4(),
-        name: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
-        description: prompt,
-        clips: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        aiProvider: provider
-      };
-
-      // Set as current storyboard
-      setCurrentStoryboard(newStoryboard);
-
-      // Initialize generation session
+      // Initialize generation session and create storyboard
       const initResponse = await fetch('/api/movie/generate/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -118,42 +105,34 @@ export function useStoryboardGenerator(
         throw new Error('Failed to initialize generation');
       }
 
-      const { sessionId } = await initResponse.json();
+      const { sessionId, storyboard } = await initResponse.json();
       setCurrentSession(sessionId);
+
+      // Set initial storyboard state
+      setCurrentStoryboard(storyboard);
 
       // Set up SSE connection for progress updates
       const events = new EventSource(`/api/movie/generate/${sessionId}/progress`);
 
       events.onmessage = (event) => {
         const update = JSON.parse(event.data);
+
         if (update.type === 'progress') {
           setGenerationProgress(update.data);
 
-          // Handle completed scenes
-          if (update.data.scenes) {
-            update.data.scenes.forEach((scene: any) => {
-              if (scene.svg) {
-                const clipName = `Scene ${scene.index + 1}`;
-                const clipId = addClip({
-                  name: clipName,
-                  svgContent: scene.svg,
-                  duration: 5,
-                  prompt: scene.prompt || prompt,
-                  animationId: scene.animationId,
-                  chatHistory: [{
-                    id: uuidv4(),
-                    sender: 'user',
-                    text: scene.prompt || prompt,
-                    timestamp: new Date()
-                  }, {
-                    id: uuidv4(),
-                    sender: 'ai',
-                    text: scene.message || 'Scene generated successfully',
-                    timestamp: new Date()
-                  }]
-                });
-              }
-            });
+          // Handle new clip updates
+          if (update.data.newClip) {
+            const { clip } = update.data.newClip;
+            // Add clip to storyboard
+            setCurrentStoryboard(prev => ({
+              ...prev,
+              clips: [...prev.clips, clip].sort((a, b) => a.order - b.order)
+            }));
+
+            // Select first clip if none selected
+            if (!activeClipId) {
+              setActiveClipId(clip.id);
+            }
           }
 
           // Handle completion
@@ -163,11 +142,8 @@ export function useStoryboardGenerator(
             setShowGeneratingClipsModal(false);
             setShowStoryboardGeneratorModal(false);
 
-            // Select the first clip if we have any
-            if (currentStoryboard.clips.length > 0) {
-              const sortedClips = [...currentStoryboard.clips].sort((a, b) => (a.order || 0) - (b.order || 0));
-              setActiveClipId(sortedClips[0].id);
-            }
+            // Verify final state with backend
+            verifyFinalState(storyboard.id);
 
             cleanupSession(sessionId);
           }
@@ -195,11 +171,9 @@ export function useStoryboardGenerator(
         }
       };
 
-      // Start generation with movieId
+      // Start generation
       const startResponse = await fetch(`/api/movie/generate/${sessionId}/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ movieId: newStoryboard.id })
+        method: 'POST'
       });
 
       if (!startResponse.ok) {
@@ -212,6 +186,25 @@ export function useStoryboardGenerator(
       setShowErrorModal(true);
       setIsGenerating(false);
       setShowGeneratingClipsModal(false);
+    }
+  };
+
+  // Verify final state matches backend
+  const verifyFinalState = async (storyboardId: string) => {
+    try {
+      const response = await MovieStorageApi.getMovie(storyboardId);
+      if (response?.success && response.movie) {
+        // Only update if there's a mismatch
+        setCurrentStoryboard(prev => {
+          if (JSON.stringify(prev.clips) !== JSON.stringify(response.movie.clips)) {
+            console.log('Fixing clip state mismatch with backend');
+            return response.movie;
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Error verifying final state:', error);
     }
   };
 

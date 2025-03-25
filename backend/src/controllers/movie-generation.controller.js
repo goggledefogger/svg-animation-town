@@ -18,18 +18,32 @@ exports.initializeGeneration = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
+    // Create new storyboard
+    const storyboard = {
+      id: uuidv4(),
+      name: prompt.substring(0, 50) + (prompt.length > 50 ? '...' : ''),
+      description: prompt,
+      clips: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      aiProvider: provider
+    };
+
+    // Save initial storyboard
+    await storageService.saveMovie(storyboard);
+
     // Create a new session
     const sessionId = uuidv4();
     const session = {
       id: sessionId,
+      storyboardId: storyboard.id,
       prompt,
       provider: provider || 'openai',
       numScenes: numScenes || 5,
       progress: {
         current: 0,
         total: numScenes || 5,
-        status: 'initializing',
-        scenes: []
+        status: 'initializing'
       },
       clients: new Set(),
       errors: []
@@ -38,10 +52,11 @@ exports.initializeGeneration = async (req, res) => {
     // Store the session
     activeSessions.set(sessionId, session);
 
-    // Return the session ID
+    // Return the session ID and storyboard
     res.json({
       success: true,
       sessionId,
+      storyboard,
       message: 'Generation session initialized'
     });
   } catch (error) {
@@ -99,7 +114,6 @@ exports.subscribeToProgress = async (req, res) => {
  */
 exports.startGeneration = async (req, res) => {
   const { sessionId } = req.params;
-  const { movieId } = req.body; // Add movieId to request body
   const session = activeSessions.get(sessionId);
 
   if (!session) {
@@ -110,20 +124,6 @@ exports.startGeneration = async (req, res) => {
   }
 
   try {
-    // Load existing movie if movieId provided
-    let movie = movieId ? await storageService.getMovie(movieId) : null;
-    if (!movie) {
-      // Create new movie if none exists
-      movie = {
-        id: movieId || uuidv4(),
-        name: session.prompt.substring(0, 50) + (session.prompt.length > 50 ? '...' : ''),
-        description: session.prompt,
-        clips: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-    }
-
     // Update session status
     session.progress.status = 'generating';
     notifyClients(session);
@@ -153,39 +153,46 @@ exports.startGeneration = async (req, res) => {
         });
 
         // Create clip
-        const clipId = uuidv4();
         const clip = {
-          id: clipId,
+          id: uuidv4(),
           name: `Scene ${i + 1}`,
           svgContent: result.svg,
-          duration: 5, // Default duration
+          duration: 5,
           order: i,
           prompt: scenePrompt,
           animationId: animationId,
           createdAt: new Date(),
-          provider: session.provider
+          provider: session.provider,
+          chatHistory: [{
+            id: uuidv4(),
+            sender: 'user',
+            text: scenePrompt,
+            timestamp: new Date()
+          }, {
+            id: uuidv4(),
+            sender: 'ai',
+            text: result.message || 'Scene generated successfully',
+            timestamp: new Date()
+          }]
         };
 
-        // Add clip to movie
-        movie.clips.push(clip);
+        // Load current storyboard
+        const storyboard = await storageService.getMovie(session.storyboardId);
+        if (!storyboard) {
+          throw new Error('Storyboard not found');
+        }
 
-        // Store scene with animationId
-        session.progress.scenes.push({
-          index: i,
-          svg: result.svg,
-          message: result.message,
-          animationId: animationId,
-          prompt: scenePrompt
-        });
+        // Add clip to storyboard
+        storyboard.clips.push(clip);
+        storyboard.updatedAt = new Date();
 
-        // Update progress
+        // Save updated storyboard
+        await storageService.saveMovie(storyboard);
+
+        // Update progress and notify clients with new clip
         session.progress.current = i + 1;
         session.progress.status = 'in_progress';
-        notifyClients(session);
-
-        // Save movie after each successful clip generation
-        movie.updatedAt = new Date();
-        await storageService.saveMovie(movie);
+        notifyClients(session, { newClip: { clip } });
 
       } catch (error) {
         console.error(`Error generating scene ${i + 1}:`, error);
@@ -200,15 +207,10 @@ exports.startGeneration = async (req, res) => {
     session.progress.status = session.errors.length > 0 ? 'completed_with_errors' : 'completed';
     notifyClients(session);
 
-    // Save final movie state
-    movie.updatedAt = new Date();
-    const savedMovieId = await storageService.saveMovie(movie);
-
     // Return final status
     res.json({
       success: true,
       sessionId,
-      movieId: savedMovieId,
       progress: session.progress,
       errors: session.errors
     });
@@ -231,14 +233,15 @@ exports.startGeneration = async (req, res) => {
 /**
  * Helper to notify all clients of a session update
  */
-function notifyClients(session) {
+function notifyClients(session, additionalData = {}) {
   const update = {
     type: 'progress',
     data: {
       current: session.progress.current,
       total: session.progress.total,
       status: session.progress.status,
-      errors: session.errors
+      errors: session.errors,
+      ...additionalData
     }
   };
 
