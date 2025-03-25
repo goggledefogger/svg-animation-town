@@ -104,7 +104,6 @@ const MovieEditorPage: React.FC = () => {
                   await loadStoryboard(newestStoryboard.id);
                 } catch (loadError) {
                   console.error('Error loading most recent storyboard:', loadError);
-                  // Display an error toast or notification to the user
                   alert(`Failed to load storyboard: ${loadError instanceof Error ? loadError.message : 'Unknown error'}`);
                 }
               }
@@ -252,175 +251,6 @@ const MovieEditorPage: React.FC = () => {
     }
   };
 
-  // Add a new effect to check for incomplete generations when the page loads
-  useEffect(() => {
-    // Skip if we don't have a storyboard yet or if we're already generating something
-    if (!currentStoryboard || storyboardGenerator.isGenerating) return;
-
-    // Use storyboard ID in the check to avoid checking the same board multiple times
-    const checkKey = `hasCheckedIncompleteGeneration_${currentStoryboard.id}`;
-    const hasCheckedIncomplete = sessionStorage.getItem(checkKey);
-
-    if (hasCheckedIncomplete === 'true') {
-      // Already checked this specific storyboard
-      return;
-    }
-
-    const checkIncompleteGenerations = async () => {
-      try {
-        // Check if there's a current storyboard that's incomplete
-        if (currentStoryboard.generationStatus?.inProgress) {
-          console.log('Found incomplete storyboard generation:', {
-            id: currentStoryboard.id,
-            name: currentStoryboard.name,
-          });
-
-          // Set the flag to prevent checking this storyboard again
-          sessionStorage.setItem(checkKey, 'true');
-
-          // Show a confirmation to the user
-          const shouldResume = window.confirm(
-            `It looks like you have an incomplete movie generation "${currentStoryboard.name}". Would you like to resume where you left off?`
-          );
-
-          if (shouldResume) {
-            console.log('Resuming generation for storyboard:', currentStoryboard.id);
-            // Show the generating clips modal
-            modalManager.setShowGeneratingClipsModal(true);
-            storyboardGenerator.setIsGenerating(true);
-
-            // Determine which AI provider was being used
-            const aiProvider = currentStoryboard.aiProvider || 'openai';
-
-            // We need to create a faux storyboard response from the existing storyboard
-            const resumeStoryboardResponse = {
-              title: currentStoryboard.name,
-              description: currentStoryboard.description || '',
-              scenes: [] as StoryboardScene[] // Properly typed as StoryboardScene[]
-            };
-
-            // If we have the original scenes data stored, use it
-            if (currentStoryboard.originalScenes && currentStoryboard.originalScenes.length > 0) {
-              resumeStoryboardResponse.scenes = currentStoryboard.originalScenes;
-            } else {
-              // Attempt to reconstruct scenes from existing clips
-              currentStoryboard.clips.forEach((clip, index) => {
-                // Only add if we have the necessary data
-                if (clip.prompt) {
-                  resumeStoryboardResponse.scenes.push({
-                    id: clip.id,
-                    description: clip.name,
-                    svgPrompt: clip.prompt,
-                    duration: clip.duration || 5,
-                    provider: aiProvider as 'openai' | 'claude'
-                  });
-                }
-              });
-
-              // If we still couldn't reconstruct any scenes, show an error
-              if (resumeStoryboardResponse.scenes.length === 0) {
-                console.error('Could not reconstruct scenes from existing clips');
-                modalManager.showToastNotification('Could not resume generation - missing scene data', 'error');
-                modalManager.setShowGeneratingClipsModal(false);
-                storyboardGenerator.setIsGenerating(false);
-
-                // Clear the inProgress flag to prevent future attempts
-                const updatedStoryboard = {
-                  ...currentStoryboard,
-                  generationStatus: {
-                    ...currentStoryboard.generationStatus,
-                    inProgress: false,
-                    error: 'Missing scene data for resume'
-                  }
-                };
-                setCurrentStoryboard(updatedStoryboard);
-                saveStoryboard();
-                return;
-              }
-            }
-
-            // Check if we actually have scenes remaining based on clips already generated
-            const clipCount = currentStoryboard.clips?.length || 0;
-            const sceneCount = resumeStoryboardResponse.scenes.length;
-
-            console.log(`[RESUME_FLOW] Resume evaluation - MovieID: ${currentStoryboard.id}, MovieName: "${currentStoryboard.name}", ExistingClips: ${clipCount}, TotalScenes: ${sceneCount}, ClipOrders: [${currentStoryboard.clips.map(c => c.order).join(',')}], HasOriginalScenes: ${Boolean(currentStoryboard.originalScenes)}`);
-            if (currentStoryboard.originalScenes) {
-              console.log(`[RESUME_FLOW] Original scenes: ${currentStoryboard.originalScenes.length}, Resume scenes: ${resumeStoryboardResponse.scenes.length}`);
-            }
-
-            if (clipCount >= sceneCount) {
-              modalManager.showToastNotification('All scenes already completed, no need to resume', 'info');
-              modalManager.setShowGeneratingClipsModal(false);
-              storyboardGenerator.setIsGenerating(false);
-
-              // Mark as completed
-              const updatedStoryboard = {
-                ...currentStoryboard,
-                generationStatus: {
-                  ...currentStoryboard.generationStatus,
-                  inProgress: false,
-                  completedAt: new Date()
-                }
-              };
-              setCurrentStoryboard(updatedStoryboard);
-              saveStoryboard();
-              return;
-            }
-
-            // Resume from the last completed scene
-            try {
-              await storyboardGenerator.resumeStoryboardGeneration(currentStoryboard, resumeStoryboardResponse, aiProvider);
-            } catch (error) {
-              console.error('Error during resume generation:', error);
-              // Clear the inProgress flag to prevent future attempts
-              const updatedStoryboard = {
-                ...currentStoryboard,
-                generationStatus: {
-                  ...currentStoryboard.generationStatus,
-                  inProgress: false,
-                  error: error instanceof Error ? error.message : 'Unknown error during resume'
-                }
-              };
-              setCurrentStoryboard(updatedStoryboard);
-              saveStoryboard();
-
-              modalManager.showToastNotification('Failed to resume generation', 'error');
-            } finally {
-              modalManager.setShowGeneratingClipsModal(false);
-              storyboardGenerator.setIsGenerating(false);
-            }
-          } else {
-            // User declined to resume - clear the inProgress flag
-            const updatedStoryboard = {
-              ...currentStoryboard,
-              generationStatus: {
-                ...currentStoryboard.generationStatus,
-                inProgress: false
-              }
-            };
-            setCurrentStoryboard(updatedStoryboard);
-            saveStoryboard();
-          }
-        }
-      } catch (error) {
-        console.error('Error checking for incomplete generations:', error);
-        // Set the flag to prevent infinite loop
-        sessionStorage.setItem(checkKey, 'true');
-      }
-    };
-
-    // Run the check
-    checkIncompleteGenerations();
-  }, [currentStoryboard?.id, storyboardGenerator.isGenerating]); // Only depend on storyboard ID, not the entire object
-
-  // Add a reset function to clear the incomplete check flag when creating a new storyboard
-  useEffect(() => {
-    // Clear the incomplete check flag when creating a new storyboard
-    if (currentStoryboard && !currentStoryboard.generationStatus?.inProgress) {
-      sessionStorage.removeItem('hasCheckedIncompleteGeneration');
-    }
-  }, [currentStoryboard?.id]);
-
   // Function to reset application state
   const resetApplication = useCallback(() => {
     // Clear localStorage
@@ -550,10 +380,7 @@ const MovieEditorPage: React.FC = () => {
           message={
             <div className="mt-2">
               <p className="text-center mb-4">
-                {storyboardGenerator.generationProgress.resumedFrom ?
-                  `Resuming animation generation from scene ${storyboardGenerator.generationProgress.resumedFrom + 1}...` :
-                  `Creating animations for each scene in your storyboard...`
-                }
+                Creating animations for your storyboard...
               </p>
               <div className="w-full bg-gray-700 rounded-full h-2.5">
                 <div
@@ -566,19 +393,10 @@ const MovieEditorPage: React.FC = () => {
               </div>
               <p className="text-center mt-2 text-sm text-gray-400">
                 {Math.floor(storyboardGenerator.generationProgress.current)} of {storyboardGenerator.generationProgress.total} scenes completed
-                {storyboardGenerator.generationProgress.resumedFrom ?
-                  ` (resumed from scene ${storyboardGenerator.generationProgress.resumedFrom + 1})` :
-                  ''
-                }
               </p>
               <p className="text-center mt-2 text-sm text-gray-400">
                 This may take a few minutes. Please don't close this window.
               </p>
-              {storyboardGenerator.generationProgress.resumedFrom && (
-                <p className="text-center mt-2 text-sm text-yellow-400">
-                  Your previous progress was saved. Generation will continue where it left off.
-                </p>
-              )}
             </div>
           }
           confirmText="Please wait..."
