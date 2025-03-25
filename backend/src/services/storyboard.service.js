@@ -1,11 +1,10 @@
-const OpenAI = require('openai');
+const openai = require('./shared-openai-client');
 const { ServiceUnavailableError, BadRequestError } = require('../utils/errors');
 const config = require('../config');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: config.openai.apiKey
-});
+// Add a unique identifier for this client instance
+const clientId = Math.random().toString(36).substring(7);
+console.log(`[Storyboard Service] Created OpenAI client instance ${clientId}`);
 
 /**
  * Create system prompt for storyboard generation
@@ -124,8 +123,8 @@ exports.generateStoryboardWithOpenAI = async (prompt, numScenes) => {
     const systemPrompt = createSystemPrompt();
     const userPrompt = createUserPrompt(prompt, numScenes);
 
-    console.log('Sending storyboard generation request to OpenAI');
-    console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
+    console.log(`[Storyboard Service ${clientId}] Starting request with client instance ${clientId}`);
+    console.log(`[Storyboard Service ${clientId}] Current active requests: ${openai.activeRequests || 0}`);
 
     // Use the OpenAI API with JSON response format
     const completion = await openai.chat.completions.create({
@@ -137,6 +136,8 @@ exports.generateStoryboardWithOpenAI = async (prompt, numScenes) => {
       temperature: 0.7,
       response_format: { type: "json_object" }
     });
+
+    console.log(`[Storyboard Service ${clientId}] Request completed`);
 
     if (!completion.choices || !completion.choices.length) {
       console.error('Empty response from OpenAI API');

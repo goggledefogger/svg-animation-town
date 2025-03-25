@@ -1,12 +1,11 @@
-const OpenAI = require('openai');
+const openai = require('./shared-openai-client');
 const { getCommonInstructions, addExistingSvgToPrompt, getJsonResponseStructure, formatParsedResponse, generateErrorSvg } = require('../utils/prompt-builder');
 const { ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: config.openai.apiKey
-});
+// Add a unique identifier for this client instance
+const clientId = Math.random().toString(36).substring(7);
+console.log(`[OpenAI Service] Created OpenAI client instance ${clientId}`);
 
 /**
  * Build OpenAI-specific system prompt
@@ -63,7 +62,8 @@ const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false) =
     const systemPrompt = buildOpenAISystemPrompt(isUpdate);
     const userPrompt = buildOpenAIUserPrompt(prompt, currentSvg, isUpdate);
 
-    console.log(`Sending ${isUpdate ? 'update' : 'creation'} request to OpenAI (${config.openai.model})`);
+    console.log(`[OpenAI Service ${clientId}] Starting request with client instance ${clientId}`);
+    console.log(`[OpenAI Service ${clientId}] Current active requests: ${openai.activeRequests || 0}`);
 
     // Adjust temperature slightly lower for updates to improve consistency
     const temperature = isUpdate
@@ -80,6 +80,8 @@ const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false) =
       temperature: temperature,
       response_format: { type: "json_object" }
     });
+
+    console.log(`[OpenAI Service ${clientId}] Request completed`);
 
     if (!completion.choices || !completion.choices.length) {
       console.warn('Empty response from OpenAI API');

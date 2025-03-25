@@ -40,7 +40,7 @@ const AIService = {
     const service = getAIService();
     const provider = config.aiProvider.toLowerCase();
 
-    return rateLimiter.enqueueRequest(
+    return rateLimiter.executeRequest(
       service.generateAnimation.bind(service),
       [prompt],
       provider
@@ -57,7 +57,7 @@ const AIService = {
     const service = getAIService();
     const provider = config.aiProvider.toLowerCase();
 
-    return rateLimiter.enqueueRequest(
+    return rateLimiter.executeRequest(
       service.updateAnimation.bind(service),
       [prompt, currentSvg],
       provider

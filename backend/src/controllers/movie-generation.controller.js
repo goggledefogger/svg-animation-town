@@ -6,6 +6,9 @@ const { ServiceUnavailableError } = require('../utils/errors');
 // Store active generation sessions
 const activeSessions = new Map();
 
+// Track completed scenes per session
+const sessionProgress = new Map();
+
 /**
  * Initialize a new movie generation session
  */
@@ -110,6 +113,48 @@ exports.subscribeToProgress = async (req, res) => {
 };
 
 /**
+ * Helper to notify all clients of a session update
+ */
+function notifyClients(session, additionalData = {}) {
+  const update = {
+    type: 'progress',
+    data: {
+      current: session.progress.current,
+      total: session.progress.total,
+      status: session.progress.status,
+      errors: session.errors,
+      ...additionalData
+    }
+  };
+
+  session.clients.forEach(client => {
+    client.write(`data: ${JSON.stringify(update)}\n\n`);
+  });
+}
+
+/**
+ * Helper to update session progress atomically
+ */
+function updateSessionProgress(session, newClip = null) {
+  // Get or initialize progress set for this session
+  let progressSet = sessionProgress.get(session.id);
+  if (!progressSet) {
+    progressSet = new Set();
+    sessionProgress.set(session.id, progressSet);
+  }
+
+  if (newClip) {
+    progressSet.add(newClip.order);
+  }
+
+  // Update progress count atomically
+  session.progress.current = progressSet.size;
+
+  // Notify clients of progress
+  notifyClients(session, newClip ? { newClip: { clip: newClip } } : undefined);
+}
+
+/**
  * Start the generation process for a session
  */
 exports.startGeneration = async (req, res) => {
@@ -124,13 +169,18 @@ exports.startGeneration = async (req, res) => {
   }
 
   try {
+    // Initialize progress tracking for this session
+    sessionProgress.set(session.id, new Set());
+
     // Update session status
     session.progress.status = 'generating';
+    session.progress.current = 0;
     notifyClients(session);
 
-    // Process each scene
-    for (let i = 0; i < session.progress.total; i++) {
+    // Create array of scene generation promises
+    const scenePromises = Array.from({ length: session.progress.total }, async (_, i) => {
       try {
+        console.log(`Starting generation of scene ${i + 1}`);
         // Generate scene
         const scenePrompt = `Scene ${i + 1} of ${session.progress.total}: ${session.prompt}`;
         const result = await animationService.generateAnimation(scenePrompt, session.provider);
@@ -176,32 +226,49 @@ exports.startGeneration = async (req, res) => {
           }]
         };
 
-        // Load current storyboard
-        const storyboard = await storageService.getMovie(session.storyboardId);
-        if (!storyboard) {
-          throw new Error('Storyboard not found');
-        }
+        console.log(`Completed generation of scene ${i + 1}`);
 
-        // Add clip to storyboard
-        storyboard.clips.push(clip);
-        storyboard.updatedAt = new Date();
+        // Update progress atomically and notify clients
+        updateSessionProgress(session, clip);
 
-        // Save updated storyboard
-        await storageService.saveMovie(storyboard);
-
-        // Update progress and notify clients with new clip
-        session.progress.current = i + 1;
-        session.progress.status = 'in_progress';
-        notifyClients(session, { newClip: { clip } });
-
+        return clip;
       } catch (error) {
         console.error(`Error generating scene ${i + 1}:`, error);
         session.errors.push({
           scene: i + 1,
           error: error.message
         });
+        notifyClients(session);
+        return null;
       }
+    });
+
+    console.log(`Started parallel generation of ${session.progress.total} scenes`);
+
+    // Wait for all scenes to be generated
+    const clips = await Promise.all(scenePromises);
+
+    // Clean up progress tracking
+    sessionProgress.delete(session.id);
+
+    // Filter out failed clips and add successful ones to storyboard
+    const validClips = clips.filter(clip => clip !== null);
+
+    // Sort clips by order to maintain sequence
+    validClips.sort((a, b) => a.order - b.order);
+
+    // Load current storyboard
+    const storyboard = await storageService.getMovie(session.storyboardId);
+    if (!storyboard) {
+      throw new Error('Storyboard not found');
     }
+
+    // Add all successful clips to storyboard
+    storyboard.clips.push(...validClips);
+    storyboard.updatedAt = new Date();
+
+    // Save updated storyboard
+    await storageService.saveMovie(storyboard);
 
     // Mark as complete
     session.progress.status = session.errors.length > 0 ? 'completed_with_errors' : 'completed';
@@ -222,6 +289,7 @@ exports.startGeneration = async (req, res) => {
       error: error.message
     });
     notifyClients(session);
+    sessionProgress.delete(session.id);
 
     res.status(500).json({
       success: false,
@@ -229,26 +297,6 @@ exports.startGeneration = async (req, res) => {
     });
   }
 };
-
-/**
- * Helper to notify all clients of a session update
- */
-function notifyClients(session, additionalData = {}) {
-  const update = {
-    type: 'progress',
-    data: {
-      current: session.progress.current,
-      total: session.progress.total,
-      status: session.progress.status,
-      errors: session.errors,
-      ...additionalData
-    }
-  };
-
-  session.clients.forEach(client => {
-    client.write(`data: ${JSON.stringify(update)}\n\n`);
-  });
-}
 
 /**
  * Clean up a completed session

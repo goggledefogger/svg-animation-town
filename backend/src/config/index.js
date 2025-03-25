@@ -19,7 +19,7 @@ const config = {
     rateLimiter: {
       tokensPerMinute: parseInt(process.env.OPENAI_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 10000,
       tokensPerRequest: parseInt(process.env.OPENAI_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 2000,
-      maxConcurrentRequests: parseInt(process.env.OPENAI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 3
+      maxConcurrentRequests: parseInt(process.env.OPENAI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 10
     }
   },
 
@@ -33,7 +33,7 @@ const config = {
     rateLimiter: {
       tokensPerMinute: parseInt(process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 8000,
       tokensPerRequest: parseInt(process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 1600,
-      maxConcurrentRequests: parseInt(process.env.CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 2
+      maxConcurrentRequests: parseInt(process.env.CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 10
     }
   },
 
