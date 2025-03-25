@@ -473,13 +473,6 @@ class StorageService {
         const data = await fs.readFile(filePath, 'utf8');
         const movie = JSON.parse(data);
 
-        // Logging to help diagnose clip issues
-        if (movie.clips && movie.clips.length > 0) {
-          movie.clips.forEach((clip, index) => {
-            console.log(`[MOVIE_LOADING] Clip ${index}: order=${clip.order}, animationId=${clip.animationId || 'MISSING'}`);
-          });
-        }
-
         return movie;
       } catch (error) {
         console.error(`Error reading or parsing movie file ${id}:`, error);
