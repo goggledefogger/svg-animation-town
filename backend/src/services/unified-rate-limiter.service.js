@@ -6,33 +6,43 @@ const config = require('../config');
  */
 class UnifiedRateLimiter {
   constructor() {
-    // Initialize buckets for each provider
+    // Ensure maxConcurrent has default values
+    const claudeMaxConcurrent = config.claude.rateLimiter.maxConcurrent || 2;
+    const openaiMaxConcurrent = config.openai.rateLimiter.maxConcurrent || 10;
+
     this.buckets = {
       claude: {
         tokens: config.claude.rateLimiter.tokensPerMinute,
-        tokensPerRequest: config.claude.rateLimiter.tokensPerRequest,
-        maxConcurrent: config.claude.rateLimiter.maxConcurrentRequests,
+        maxTokens: config.claude.rateLimiter.tokensPerMinute,
+        tokensPerRequest: 1600, // Claude uses about 1600 tokens per request
         currentRequests: 0,
-        lastRefill: Date.now()
+        maxConcurrent: claudeMaxConcurrent,
+        lastRefill: Date.now(),
+        pendingRequests: new Set(),
+        activePromises: new Map()
       },
       openai: {
         tokens: config.openai.rateLimiter.tokensPerMinute,
-        tokensPerRequest: config.openai.rateLimiter.tokensPerRequest,
-        maxConcurrent: config.openai.rateLimiter.maxConcurrentRequests,
+        maxTokens: config.openai.rateLimiter.tokensPerMinute,
+        tokensPerRequest: 2000, // OpenAI uses about 2000 tokens per request
         currentRequests: 0,
-        lastRefill: Date.now()
+        maxConcurrent: openaiMaxConcurrent,
+        lastRefill: Date.now(),
+        pendingRequests: new Set(),
+        activePromises: new Map()
       }
     };
 
-    // Debug logging
     console.log('[Rate Limiter] Initialized with config:', {
       claude: {
         tokensPerMinute: config.claude.rateLimiter.tokensPerMinute,
-        maxConcurrent: config.claude.rateLimiter.maxConcurrentRequests
+        maxConcurrent: claudeMaxConcurrent,
+        tokensPerRequest: this.buckets.claude.tokensPerRequest
       },
       openai: {
         tokensPerMinute: config.openai.rateLimiter.tokensPerMinute,
-        maxConcurrent: config.openai.rateLimiter.maxConcurrentRequests
+        maxConcurrent: openaiMaxConcurrent,
+        tokensPerRequest: this.buckets.openai.tokensPerRequest
       }
     });
   }
@@ -44,19 +54,18 @@ class UnifiedRateLimiter {
   refillTokens(provider) {
     const bucket = this.buckets[provider];
     const now = Date.now();
-    const elapsedMinutes = (now - bucket.lastRefill) / 60000;
+    const timePassed = now - bucket.lastRefill;
+    const tokensToAdd = Math.floor((timePassed / 60000) * bucket.maxTokens);
 
-    if (elapsedMinutes > 0) {
-      const tokensToAdd = Math.floor(elapsedMinutes * bucket.tokensPerRequest);
-      const maxTokens = config[provider].rateLimiter.tokensPerMinute;
-
-      bucket.tokens = Math.min(maxTokens, bucket.tokens + tokensToAdd);
+    if (tokensToAdd > 0) {
+      const oldTokens = bucket.tokens;
+      bucket.tokens = Math.min(bucket.maxTokens, bucket.tokens + tokensToAdd);
       bucket.lastRefill = now;
-
       console.log(`[Rate Limiter] Refilled ${provider} tokens:`, {
         added: tokensToAdd,
-        current: bucket.tokens,
-        max: maxTokens
+        before: oldTokens,
+        after: bucket.tokens,
+        max: bucket.maxTokens
       });
     }
   }
@@ -70,8 +79,69 @@ class UnifiedRateLimiter {
     const bucket = this.buckets[provider];
     this.refillTokens(provider);
 
-    return bucket.currentRequests < bucket.maxConcurrent &&
-           bucket.tokens >= bucket.tokensPerRequest;
+    const hasCapacity = bucket.currentRequests < bucket.maxConcurrent;
+    const hasTokens = bucket.tokens >= bucket.tokensPerRequest;
+
+    console.log(`[Rate Limiter] Checking ${provider} capacity:`, {
+      hasCapacity,
+      hasTokens,
+      currentRequests: bucket.currentRequests,
+      maxConcurrent: bucket.maxConcurrent,
+      currentTokens: bucket.tokens,
+      neededTokens: bucket.tokensPerRequest
+    });
+
+    return hasCapacity && hasTokens;
+  }
+
+  /**
+   * Calculate time until next token refill
+   * @param {string} provider - The provider to check
+   * @returns {number} Milliseconds until next refill
+   */
+  getTimeUntilNextRefill(provider) {
+    const bucket = this.buckets[provider];
+    const now = Date.now();
+    const timeSinceLastRefill = now - bucket.lastRefill;
+    const msPerMinute = 60000;
+
+    // If we've passed a minute, tokens will be refilled immediately
+    if (timeSinceLastRefill >= msPerMinute) {
+      return 0;
+    }
+
+    // Otherwise, wait for the remainder of the minute
+    return msPerMinute - timeSinceLastRefill;
+  }
+
+  /**
+   * Wait for capacity based on token bucket timing
+   * @param {string} provider - The provider to wait for
+   */
+  async waitForCapacity(provider) {
+    const bucket = this.buckets[provider];
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (!this.canMakeRequest(provider)) {
+      attempts++;
+      if (attempts > maxAttempts) {
+        throw new Error(`Rate limit exceeded for ${provider} after ${maxAttempts} attempts`);
+      }
+
+      const waitTime = this.getTimeUntilNextRefill(provider);
+
+      console.log(`[Rate Limiter] Waiting ${Math.round(waitTime)}ms for ${provider} token refill:`, {
+        currentTokens: bucket.tokens,
+        maxTokens: bucket.maxTokens,
+        currentRequests: bucket.currentRequests,
+        maxConcurrent: bucket.maxConcurrent,
+        attempt: attempts,
+        maxAttempts
+      });
+
+      await new Promise(resolve => setTimeout(resolve, waitTime + 100));
+    }
   }
 
   /**
@@ -83,43 +153,66 @@ class UnifiedRateLimiter {
    */
   async executeRequest(fn, args, provider) {
     if (!this.buckets[provider]) {
-      throw new Error(`Invalid provider: ${provider}`);
+      throw new Error(`Unknown provider: ${provider}`);
     }
 
-    // Wait for capacity using exponential backoff
-    let attempts = 0;
-    const maxAttempts = 5;
-    const baseDelay = 1000;
-
-    while (!this.canMakeRequest(provider)) {
-      attempts++;
-      if (attempts > maxAttempts) {
-        throw new Error(`Rate limit exceeded for ${provider} after ${maxAttempts} attempts`);
-      }
-
-      const delay = Math.min(baseDelay * Math.pow(2, attempts), 10000);
-      console.log(`[Rate Limiter] Waiting ${delay}ms for ${provider} capacity (attempt ${attempts}/${maxAttempts})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    // Update bucket state
     const bucket = this.buckets[provider];
-    bucket.currentRequests++;
-    bucket.tokens -= bucket.tokensPerRequest;
+    const requestId = Math.random().toString(36).substring(7);
 
-    console.log(`[Rate Limiter] Starting ${provider} request:`, {
-      concurrent: bucket.currentRequests,
-      maxConcurrent: bucket.maxConcurrent,
-      remainingTokens: bucket.tokens
-    });
-
-    try {
-      const result = await fn(...args);
-      return result;
-    } finally {
-      bucket.currentRequests--;
-      console.log(`[Rate Limiter] Completed ${provider} request. Current requests: ${bucket.currentRequests}`);
+    // If we already have a promise for this exact request, return it
+    const requestKey = JSON.stringify({ args, requestId });
+    if (bucket.activePromises.has(requestKey)) {
+      console.log(`[Rate Limiter] Reusing existing request for ${provider}`);
+      return bucket.activePromises.get(requestKey);
     }
+
+    const promise = (async () => {
+      // Wait for capacity before starting
+      await this.waitForCapacity(provider);
+
+      // Track that we're about to start a request
+      bucket.currentRequests++;
+      bucket.tokens -= bucket.tokensPerRequest;
+      bucket.pendingRequests.add(requestId);
+
+      console.log(`[Rate Limiter] Starting ${provider} request:`, {
+        concurrent: bucket.currentRequests,
+        maxConcurrent: bucket.maxConcurrent,
+        remainingTokens: bucket.tokens,
+        requestId
+      });
+
+      let requestError = null;
+      try {
+        // Execute the actual request
+        const result = await Promise.race([
+          fn(...args),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timeout')), 300000) // 5 min timeout
+          )
+        ]);
+        return result;
+      } catch (error) {
+        requestError = error;
+        console.error(`[Rate Limiter] ${provider} request failed:`, error);
+        throw error;
+      } finally {
+        // Always clean up, even if the request failed
+        bucket.currentRequests = Math.max(0, bucket.currentRequests - 1);
+        bucket.pendingRequests.delete(requestId);
+        bucket.activePromises.delete(requestKey);
+
+        console.log(`[Rate Limiter] Completed ${provider} request:`, {
+          newCount: bucket.currentRequests,
+          remainingTokens: bucket.tokens,
+          requestId,
+          success: !requestError
+        });
+      }
+    })();
+
+    bucket.activePromises.set(requestKey, promise);
+    return promise;
   }
 }
 

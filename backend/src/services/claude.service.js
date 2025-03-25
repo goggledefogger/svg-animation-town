@@ -181,48 +181,45 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
 
     console.log(`[Claude Service ${clientId}] Starting request with client instance ${clientId}`);
 
-    // Use the rate limiter to control API request flow
-    const makeClaudeRequest = async () => {
-      // Call Claude API without response_format parameter
-      const completion = await anthropic.messages.create({
-        model: config.claude.model,
-        max_tokens: config.claude.maxTokens,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: isUpdate ? Math.max(0.1, config.claude.temperature - 0.2) : config.claude.temperature
-      });
+    // Call Claude API directly - rate limiting is handled at the AI service level
+    const response = await anthropic.messages.create({
+      model: config.claude.model,
+      max_tokens: config.claude.maxTokens,
+      system: systemPrompt,
+      messages: [
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: isUpdate ? Math.max(0.1, config.claude.temperature - 0.2) : config.claude.temperature
+    });
 
-      console.log(`[Claude Service ${clientId}] Request completed`);
+    console.log(`[Claude Service ${clientId}] Request completed`);
 
-      // Extract the content from the response
-      if (completion.content && completion.content.length > 0) {
-        const textBlock = completion.content.find(block => block.type === 'text');
+    // Extract the content from the response
+    if (response.content && response.content.length > 0) {
+      const textBlock = response.content.find(block => block.type === 'text');
 
-        if (textBlock && textBlock.text) {
-          try {
-            // Parse and validate response
-            const parsedResponse = await parseClaudeResponse(textBlock.text);
-            return formatParsedResponse(parsedResponse);
-          } catch (parseError) {
-            console.error('Failed to parse Claude response:', parseError);
-            return formatParsedResponse(generateBasicSvg(prompt, isUpdate));
-          }
+      if (textBlock && textBlock.text) {
+        try {
+          const parsedResponse = await parseClaudeResponse(textBlock.text);
+          console.log('Parsed response:', {
+            hasExplanation: !!parsedResponse.explanation,
+            svgLength: parsedResponse.svg?.length || 0
+          });
+          return parsedResponse.svg;
+        } catch (parseError) {
+          console.error('Failed to parse Claude response:', parseError);
+          return generateBasicSvg(prompt, isUpdate);
         }
       }
+    }
 
-      throw new ServiceUnavailableError('Claude response missing text content');
-    };
-
-    return await rateLimiter.enqueueRequest(makeClaudeRequest, [], 'claude');
+    throw new ServiceUnavailableError('Claude response missing text content');
   } catch (error) {
     console.error('Claude API Error:', error);
 
-    // If we get rate limit errors, provide a basic SVG fallback
     if (error?.status === 429 || error?.message?.includes('rate_limit')) {
       console.log('Providing fallback SVG due to rate limiting');
-      return formatParsedResponse(generateBasicSvg(prompt, isUpdate));
+      return generateBasicSvg(prompt, isUpdate);
     }
 
     throw new ServiceUnavailableError(`Claude API Error: ${error.message}`);
