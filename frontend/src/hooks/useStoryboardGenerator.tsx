@@ -139,7 +139,7 @@ export function useStoryboardGenerator(
           if (update.data.status === 'completed' || update.data.status === 'completed_with_errors') {
             events.close();
             setIsGenerating(false);
-            setShowGeneratingClipsModal(false);
+      setShowGeneratingClipsModal(false);
             setShowStoryboardGeneratorModal(false);
 
             // Verify final state with backend

@@ -1,10 +1,23 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
-import { MovieClip } from '../contexts/MovieContext';
+import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 import { MovieStorageApi } from '../services/api';
 import useAnimationLoader, { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
+
+// Add type for API response
+interface MovieResponse {
+  success: boolean;
+  movie?: Storyboard;
+}
+
+interface AnimationResponse {
+  id: string;
+  svg: string;
+  timestamp?: string;
+  chatHistory?: any[];
+}
 
 interface AnimationCanvasProps {
   svgContent?: string;
@@ -18,7 +31,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   isAnimationEditor = false
 }) => {
   const { svgContent: contextSvgContent, setSvgContent } = useAnimation();
-  const { currentStoryboard, activeClipId, getActiveClip, updateClip } = useMovie();
+  const { currentStoryboard, activeClipId, getActiveClip, updateClip, setCurrentStoryboard } = useMovie();
   const setSvgRef = useSvgRef();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -257,26 +270,28 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       markLoadingInProgress(animationId);
 
       MovieStorageApi.getClipAnimation(animationId)
-        .then(response => {
-          // Check if response is in the correct format
-          const animation = response && response.success ? response.animation : response;
+        .then((response: AnimationResponse | null) => {
+          if (!response) {
+            console.warn(`[AnimationCanvas] Received null response for animation ${animationId}`);
+            return;
+          }
 
-      if (animation && animation.svg) {
-            console.log(`[AnimationCanvas] Successfully loaded animation ${animationId}: ${animation.svg.length} bytes`);
-        setSvgContent(animation.svg);
+          if (response.svg) {
+            console.log(`[AnimationCanvas] Successfully loaded animation ${animationId}: ${response.svg.length} bytes`);
+            setSvgContent(response.svg);
             setShowEmptyState(false);
-            updateClip(activeClip.id, { svgContent: animation.svg });
+            updateClip(activeClip.id, { svgContent: response.svg });
 
             // Track in the global cache so other components can use it too
-            trackLoadedAnimation(animationId || '', animation.svg);
-      } else {
+            trackLoadedAnimation(animationId || '', response.svg);
+          } else {
             console.warn(`[AnimationCanvas] Animation loaded but SVG content is missing: ${animationId}`);
             setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the refresh button.'));
 
             // Track the failed load attempt in cache to prevent repeated failures
             trackLoadedAnimation(animationId || '');
           }
-      endLoading();
+          endLoading();
         })
         .catch(error => {
           console.error(`[AnimationCanvas] Error loading animation ${animationId}: ${error.message}`);
@@ -639,23 +654,27 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     AnimationRegistryHelpers.markLoading(animationId);
 
     MovieStorageApi.getClipAnimation(animationId)
-      .then(response => {
-        const animation = response && response.success ? response.animation : response;
+      .then((response: AnimationResponse | null) => {
+        if (!response) {
+          console.warn(`[Prefetch] Received null response for animation ${animationId}`);
+          AnimationRegistryHelpers.markFailed(animationId);
+          return;
+        }
 
-        if (animation && animation.svg) {
+        if (response.svg) {
           // Store in registry
           AnimationRegistryHelpers.storeAnimation(
             animationId,
-            animation.svg,
+            response.svg,
             {
-              timestamp: animation.timestamp,
-              chatHistory: animation.chatHistory
+              timestamp: response.timestamp,
+              chatHistory: response.chatHistory
             }
           );
 
           // Also update the clip with content
           if (updateClip) {
-            updateClip(clip.id, { svgContent: animation.svg });
+            updateClip(clip.id, { svgContent: response.svg });
           }
 
           console.log(`[Prefetch] Successfully loaded animation ${animationId}`);
@@ -717,11 +736,61 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Add an event listener to handle page visibility changes for resuming content
   useEffect(() => {
     // Handle page visibility changes to resume content
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         console.log(`[Visibility] Page became visible at ${new Date().toISOString()}`);
 
-        // Check if we have an active clip that needs content restored
+        // First check if there's a movie to load
+        if (currentStoryboard?.id) {
+          try {
+            console.log('[Visibility] Checking movie state from server');
+            const response = await MovieStorageApi.getMovie(currentStoryboard.id) as MovieResponse;
+
+            if (response?.success && response.movie) {
+              // Update storyboard state if needed
+              setCurrentStoryboard(prev => {
+                if (JSON.stringify(prev.clips) !== JSON.stringify(response.movie?.clips)) {
+                  console.log('[Visibility] Found updated movie state, updating storyboard');
+                  // Ensure we always return a valid Storyboard
+                  return response.movie as Storyboard;
+                }
+                return prev;
+              });
+
+              // If we have clips but no active content, try to restore the active clip
+              const activeClip = getActiveClip();
+              if (activeClip && (!svgContainerRef.current?.innerHTML || svgContainerRef.current.innerHTML.length < 100)) {
+                if (activeClip.svgContent && activeClip.svgContent.length > 100) {
+                  console.log(`[Visibility] Restoring SVG content for clip ${activeClip.id}`);
+                  setSvgContent(activeClip.svgContent);
+                  setShowEmptyState(false);
+                  return;
+                } else if (activeClip.animationId) {
+                  // Try to load from registry first
+                  const registryResult = AnimationRegistryHelpers.getAnimation(activeClip.animationId);
+                  if (registryResult.status === 'available' && registryResult.svg) {
+                    console.log(`[Visibility] Using registry content for clip ${activeClip.id}`);
+                    setSvgContent(registryResult.svg);
+                    setShowEmptyState(false);
+                    updateClip(activeClip.id, { svgContent: registryResult.svg });
+                    return;
+                  }
+
+                  // If not in registry and not loading, try to load it
+                  if (registryResult.status !== 'loading' && !isLoading) {
+                    console.log(`[Visibility] Need to load content for clip ${activeClip.id}`);
+                    handleForceRefresh();
+                  }
+                }
+              }
+              return;
+            }
+          } catch (error) {
+            console.error('[Visibility] Error checking movie status:', error);
+          }
+        }
+
+        // Only proceed with empty state handling if we couldn't restore from server
         const activeClip = getActiveClip();
         if (!activeClip) {
           console.log('[Visibility] No active clip to restore');
@@ -729,7 +798,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         }
 
         console.log(`[Visibility] Checking active clip ${activeClip.id} for restoration`);
-
         // Case 1: We have SVG content but container is empty (most common mobile issue)
         if (activeClip.svgContent && activeClip.svgContent.length > 100) {
           const container = getSvgContainer();
@@ -784,7 +852,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [getActiveClip, setSvgContent, updateClip, handleForceRefresh, getSvgContainer, isLoading]);
+  }, [getActiveClip, setSvgContent, updateClip, handleForceRefresh, getSvgContainer, isLoading, currentStoryboard, setCurrentStoryboard]);
 
   // Add an event listener for thumbnail updates
   useEffect(() => {
