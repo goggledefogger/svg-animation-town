@@ -12,7 +12,20 @@ console.log(`[Storyboard Service] Created OpenAI client instance ${clientId}`);
  */
 const createSystemPrompt = () => {
   return `You are a storyboard generator for movies.
-Your only job is to create a JSON storyboard based on a movie concept.
+Your job is to create a cohesive, engaging storyboard based on a movie concept.
+You will return a JSON structure that describes the complete movie and its scenes.
+
+Each scene should:
+1. Tell part of a cohesive story that flows naturally from one scene to the next
+2. Have a clear description of what happens in that scene
+3. Include a detailed SVG prompt that will be used to generate the animation
+
+The SVG prompts should:
+1. Be detailed and specific about what elements should be in the scene
+2. Describe any motion or animation that should occur
+3. Focus on simple, clear visuals that can be represented in SVG format
+4. Avoid complex textures, gradients, or photorealistic elements
+
 NEVER generate SVG content or code. Only generate a JSON structure.`;
 };
 
@@ -39,12 +52,12 @@ IMPORTANT INSTRUCTIONS:
 1. ONLY return valid JSON with this EXACT structure (no other text):
 {
   "title": "Movie title",
-  "description": "Overall description of the movie",
+  "description": "Overall description of the movie and its story arc",
   "scenes": [
     {
       "id": "scene1",
-      "description": "Description of the scene",
-      "svgPrompt": "Prompt to generate an animation for this scene",
+      "description": "Detailed description of what happens in this scene",
+      "svgPrompt": "Detailed prompt for generating an SVG animation of this scene",
       "duration": 5
     }
   ]
@@ -52,8 +65,13 @@ IMPORTANT INSTRUCTIONS:
 
 2. Each scene needs those exact fields.
 ${scenesInstruction}
-4. For each scene's "svgPrompt", write a detailed prompt that describes what should be in that scene's animation.
-5. DO NOT include any SVG code or XML tags.`;
+4. Make each scene's "description" tell part of a cohesive story that flows naturally from one scene to the next.
+5. For each scene's "svgPrompt", write a detailed prompt that describes:
+   - What visual elements should be in the scene
+   - How those elements should move or animate
+   - Keep the visuals simple and SVG-friendly (basic shapes, lines, paths)
+   - Avoid complex textures, gradients, or photorealistic elements
+6. Set appropriate "duration" for each scene (in seconds) based on its complexity.`;
 };
 
 /**
