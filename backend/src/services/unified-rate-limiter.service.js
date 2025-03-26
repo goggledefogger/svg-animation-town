@@ -157,12 +157,13 @@ class UnifiedRateLimiter {
     }
 
     const bucket = this.buckets[provider];
-    const requestId = Math.random().toString(36).substring(7);
+    const requestKey = JSON.stringify(args);  // Simplified key based just on args
 
     // If we already have a promise for this exact request, return it
-    const requestKey = JSON.stringify({ args, requestId });
     if (bucket.activePromises.has(requestKey)) {
-      console.log(`[Rate Limiter] Reusing existing request for ${provider}`);
+      console.log(`[Rate Limiter] Reusing existing request for ${provider}:`, {
+        args: args.map(arg => typeof arg === 'string' ? arg.substring(0, 50) : typeof arg)
+      });
       return bucket.activePromises.get(requestKey);
     }
 
@@ -173,16 +174,14 @@ class UnifiedRateLimiter {
       // Track that we're about to start a request
       bucket.currentRequests++;
       bucket.tokens -= bucket.tokensPerRequest;
-      bucket.pendingRequests.add(requestId);
 
       console.log(`[Rate Limiter] Starting ${provider} request:`, {
         concurrent: bucket.currentRequests,
         maxConcurrent: bucket.maxConcurrent,
         remainingTokens: bucket.tokens,
-        requestId
+        args: args.map(arg => typeof arg === 'string' ? arg.substring(0, 50) : typeof arg)
       });
 
-      let requestError = null;
       try {
         // Execute the actual request
         const result = await Promise.race([
@@ -193,24 +192,16 @@ class UnifiedRateLimiter {
         ]);
         return result;
       } catch (error) {
-        requestError = error;
         console.error(`[Rate Limiter] ${provider} request failed:`, error);
         throw error;
       } finally {
         // Always clean up, even if the request failed
-        bucket.currentRequests = Math.max(0, bucket.currentRequests - 1);
-        bucket.pendingRequests.delete(requestId);
+        bucket.currentRequests--;
         bucket.activePromises.delete(requestKey);
-
-        console.log(`[Rate Limiter] Completed ${provider} request:`, {
-          newCount: bucket.currentRequests,
-          remainingTokens: bucket.tokens,
-          requestId,
-          success: !requestError
-        });
       }
     })();
 
+    // Store the promise so we can reuse it for identical requests
     bucket.activePromises.set(requestKey, promise);
     return promise;
   }
