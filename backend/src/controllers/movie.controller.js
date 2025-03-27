@@ -92,14 +92,14 @@ exports.generateScene = asyncHandler(async (req, res) => {
       // Add more detailed logging for provider-specific debugging
       console.log(`Successfully generated animation for scene ${movieContext.sceneIndex + 1} with animation ID: ${animationResult.animationId || 'None'}`);
       console.log(`Animation provider: ${provider || config.aiProvider}, SVG content length: ${animationResult.svg.length}`);
-      
+
       // Explicitly validate that we have a valid animationId for tracking
       if (!animationResult.animationId) {
         console.warn(`WARNING: Generated animation has no animationId. Provider: ${provider || config.aiProvider}`);
         // Generate a fallback ID to ensure tracking works
         animationResult.animationId = uuidv4();
         console.log(`Created fallback animation ID: ${animationResult.animationId}`);
-        
+
         // Save the animation with the new ID
         await storageService.saveAnimation({
           id: animationResult.animationId,
@@ -204,10 +204,10 @@ exports.generateScene = asyncHandler(async (req, res) => {
       // Add the missing clips if needed
       if (missingClips.length > 0) {
         console.log(`[CLIP_LINKING] Adding ${missingClips.length} missing clips to our movie before saving`);
-        
+
         // Add missing clips to our array
         movie.clips = [...movie.clips, ...missingClips];
-        
+
         // Sort clips by order for consistency
         movie.clips.sort((a, b) => a.order - b.order);
       }
@@ -224,7 +224,7 @@ exports.generateScene = asyncHandler(async (req, res) => {
           }
         }
       });
-      
+
       // Additional check: Verify animation files exist for all referenced animationIds
       // This helps catch provider-specific issues with animation storage
       const animationVerificationPromises = movie.clips
@@ -246,11 +246,11 @@ exports.generateScene = asyncHandler(async (req, res) => {
             return false;
           }
         });
-      
+
       // Wait for all verification checks to complete
       const animationVerificationResults = await Promise.all(animationVerificationPromises);
       const missingAnimationsCount = animationVerificationResults.filter(result => !result).length;
-      
+
       if (missingAnimationsCount > 0) {
         console.warn(`[ANIMATION_VERIFY] Found ${missingAnimationsCount} clips with missing or invalid animations`);
       } else {
@@ -258,7 +258,21 @@ exports.generateScene = asyncHandler(async (req, res) => {
       }
 
       // Update completion count based on the number of clips we have after the merge
+      movie.generationStatus = movie.generationStatus || {
+        inProgress: true,
+        completedScenes: 0,
+        totalScenes: movie.originalScenes?.length || 0,
+        status: 'in_progress',
+        startedAt: new Date()
+      };
+
       movie.generationStatus.completedScenes = movie.clips.length;
+      movie.generationStatus.inProgress = movie.clips.length < (movie.originalScenes?.length || 0);
+      movie.generationStatus.status = movie.generationStatus.inProgress ? 'in_progress' : 'completed';
+
+      if (!movie.generationStatus.inProgress && !movie.generationStatus.completedAt) {
+        movie.generationStatus.completedAt = new Date();
+      }
 
       // If we've generated all scenes, mark as complete
       if (movie.generationStatus.completedScenes >= movie.generationStatus.totalScenes) {

@@ -36,7 +36,15 @@ exports.initializeGeneration = async (req, res) => {
       updatedAt: new Date(),
       aiProvider: provider,
       // Store the scene descriptions for generating clips
-      originalScenes: storyboardResponse.scenes
+      originalScenes: storyboardResponse.scenes,
+      // Initialize generation status
+      generationStatus: {
+        inProgress: true,
+        completedScenes: 0,
+        totalScenes: storyboardResponse.scenes.length,
+        status: 'initializing',
+        startedAt: new Date()
+      }
     };
 
     // Save initial storyboard
@@ -186,13 +194,26 @@ exports.startGeneration = async (req, res) => {
       throw new Error('Storyboard or scene descriptions not found');
     }
 
+    // Initialize storyboard status
+    storyboard.generationStatus = {
+      ...storyboard.generationStatus,
+      status: 'generating',
+      inProgress: true,
+      completedScenes: 0,
+      totalScenes: storyboard.originalScenes.length,
+      startedAt: new Date()
+    };
+    await storageService.saveMovie(storyboard);
+
     // Generate clips for each scene in parallel
     const scenePromises = storyboard.originalScenes.map(async (scene, i) => {
       try {
+        console.log(`[GENERATION] Starting generation of scene ${i + 1}/${storyboard.originalScenes.length}`);
+
         // Use the scene's specific prompt for generation
         const result = await animationService.generateAnimation(scene.svgPrompt, session.provider);
 
-        // Save the animation
+        // Save the animation first
         const animationId = uuidv4();
         await storageService.saveAnimation({
           id: animationId,
@@ -227,14 +248,16 @@ exports.startGeneration = async (req, res) => {
           }]
         };
 
-        console.log(`Completed generation of scene ${i + 1}`);
-
-        // Update progress atomically and notify clients
+        // Update progress atomically
         updateSessionProgress(session, clip);
+
+        // Save clip to storyboard atomically
+        await storageService.addClipToMovie(storyboard.id, clip);
+        console.log(`[GENERATION] Successfully saved scene ${i + 1}/${storyboard.originalScenes.length}`);
 
         return clip;
       } catch (error) {
-        console.error(`Error generating scene ${i + 1}:`, error);
+        console.error(`[GENERATION] Error generating scene ${i + 1}:`, error);
         session.errors.push({
           scene: i + 1,
           error: error.message
@@ -244,7 +267,7 @@ exports.startGeneration = async (req, res) => {
       }
     });
 
-    console.log(`Started parallel generation of ${session.progress.total} scenes`);
+    console.log(`[GENERATION] Started parallel generation of ${session.progress.total} scenes`);
 
     // Wait for all scenes to be generated
     const clips = await Promise.all(scenePromises);
@@ -252,18 +275,23 @@ exports.startGeneration = async (req, res) => {
     // Clean up progress tracking
     sessionProgress.delete(session.id);
 
-    // Filter out failed clips and add successful ones to storyboard
-    const validClips = clips.filter(clip => clip !== null);
+    // Get final storyboard state with all clips
+    const finalStoryboard = await storageService.getMovie(storyboard.id);
+    const validClips = finalStoryboard.clips.filter(clip => clip !== null);
 
-    // Sort clips by order to maintain sequence
-    validClips.sort((a, b) => a.order - b.order);
+    // Update final status
+    finalStoryboard.generationStatus = {
+      inProgress: validClips.length < storyboard.originalScenes.length,
+      completedScenes: validClips.length,
+      totalScenes: storyboard.originalScenes.length,
+      status: session.errors.length > 0 ? 'completed_with_errors' :
+        validClips.length < storyboard.originalScenes.length ? 'in_progress' : 'completed',
+      startedAt: storyboard.generationStatus.startedAt,
+      completedAt: validClips.length >= storyboard.originalScenes.length ? new Date() : undefined
+    };
 
-    // Update storyboard with generated clips
-    storyboard.clips.push(...validClips);
-    storyboard.updatedAt = new Date();
-
-    // Save updated storyboard
-    await storageService.saveMovie(storyboard);
+    // Save final state
+    await storageService.saveMovie(finalStoryboard);
 
     // Update session status
     session.progress.status = session.errors.length > 0 ? 'completed_with_errors' : 'completed';
@@ -278,7 +306,7 @@ exports.startGeneration = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error during generation:', error);
+    console.error('[GENERATION] Error during generation:', error);
     session.progress.status = 'failed';
     session.errors.push({
       scene: 'all',

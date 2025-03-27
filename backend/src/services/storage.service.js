@@ -8,6 +8,23 @@ const OUTPUT_DIR = path.join(__dirname, '..', 'output');
 const ANIMATIONS_DIR = path.join(OUTPUT_DIR, 'animations');
 const MOVIES_DIR = path.join(OUTPUT_DIR, 'movies');
 
+// Track locks for movie updates to prevent race conditions
+const movieLocks = new Map();
+
+/**
+ * Get a lock for a movie
+ * @param {string} movieId - The ID of the movie to lock
+ * @returns {Promise<Function>} A function to release the lock
+ */
+async function acquireMovieLock(movieId) {
+  while (movieLocks.get(movieId)) {
+    // Wait for the lock to be released
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  movieLocks.set(movieId, true);
+  return () => movieLocks.delete(movieId);
+}
+
 /**
  * Storage service for file operations
  */
@@ -457,10 +474,15 @@ class StorageService {
    * @returns {Promise<Object|null>} Movie data or null if not found
    */
   async getMovie(id) {
+    if (!id) {
+      console.warn('STORAGE: Cannot get movie - no ID provided');
+      return null;
+    }
+
     try {
       const filePath = path.join(MOVIES_DIR, `${id}.json`);
 
-      // Check if file exists first
+      // Check if file exists
       try {
         await fs.access(filePath);
       } catch (err) {
@@ -468,25 +490,35 @@ class StorageService {
         return null;
       }
 
-      // Simple direct read approach
-      try {
-        const data = await fs.readFile(filePath, 'utf8');
-        const movie = JSON.parse(data);
+      const data = await fs.readFile(filePath, 'utf8');
+      const movie = JSON.parse(data);
 
-        return movie;
-      } catch (error) {
-        console.error(`Error reading or parsing movie file ${id}:`, error);
-        return null;
+      // Add or update generation status
+      const totalScenes = movie.originalScenes?.length || 0;
+      const completedScenes = movie.clips?.length || 0;
+
+      // If no generation status exists, or if it's missing key fields, create/update it
+      if (!movie.generationStatus || !movie.generationStatus.totalScenes) {
+        movie.generationStatus = {
+          inProgress: completedScenes < totalScenes,
+          completedScenes,
+          totalScenes,
+          status: completedScenes < totalScenes ? 'in_progress' : 'completed',
+          startedAt: movie.generationStatus?.startedAt || movie.createdAt,
+          completedAt: completedScenes >= totalScenes ? (movie.generationStatus?.completedAt || movie.updatedAt) : undefined
+        };
       }
+
+      return movie;
     } catch (error) {
-      console.error(`Unhandled error getting movie ${id}:`, error);
+      console.error('Error getting movie:', error);
       return null;
     }
   }
 
   /**
-   * List all movies/storyboards
-   * @returns {Promise<Array>} Array of movie metadata objects
+   * List all movies
+   * @returns {Promise<Array>} List of movies
    */
   async listMovies() {
     try {
@@ -494,7 +526,7 @@ class StorageService {
       try {
         await fs.access(MOVIES_DIR);
       } catch (err) {
-        console.error('Movies directory does not exist or is not accessible:', err);
+        console.error('Storage: Movies directory does not exist or is not accessible:', err);
         await this._ensureDirectoryExists(MOVIES_DIR);
         return []; // Return empty array if directory was just created
       }
@@ -508,14 +540,24 @@ class StorageService {
             const filePath = path.join(MOVIES_DIR, file);
             const data = await fs.readFile(filePath, 'utf8');
             const movie = JSON.parse(data);
-            // Return minimal metadata
-            return {
-              id: movie.id,
-              name: movie.name,
-              description: movie.description || '',
-              clipCount: movie.clips ? movie.clips.length : 0,
-              updatedAt: movie.updatedAt || movie.timestamp || new Date().toISOString()
-            };
+
+            // Add or update generation status
+            const totalScenes = movie.originalScenes?.length || 0;
+            const completedScenes = movie.clips?.length || 0;
+
+            // If no generation status exists, or if it's missing key fields, create/update it
+            if (!movie.generationStatus || !movie.generationStatus.totalScenes) {
+              movie.generationStatus = {
+                inProgress: completedScenes < totalScenes,
+                completedScenes,
+                totalScenes,
+                status: completedScenes < totalScenes ? 'in_progress' : 'completed',
+                startedAt: movie.generationStatus?.startedAt || movie.createdAt,
+                completedAt: completedScenes >= totalScenes ? (movie.generationStatus?.completedAt || movie.updatedAt) : undefined
+              };
+            }
+
+            return movie;
           } catch (error) {
             console.error(`Error reading movie file ${file}:`, error);
             return null;
@@ -523,20 +565,11 @@ class StorageService {
         })
       );
 
-      // Filter out any nulls from errors
-      const validMovies = movies.filter(Boolean);
-
-      // Sort by updatedAt in descending order (newest first)
-      validMovies.sort((a, b) => {
-        const dateA = new Date(a.updatedAt);
-        const dateB = new Date(b.updatedAt);
-        return dateB - dateA; // Descending order (newest first)
-      });
-
-      return validMovies;
+      // Filter out any null results from errors
+      return movies.filter(movie => movie !== null);
     } catch (error) {
       console.error('Error listing movies:', error);
-      throw error;
+      return [];
     }
   }
 
@@ -586,6 +619,75 @@ class StorageService {
     } catch (error) {
       console.error(`STORAGE: Error getting animation ${animationId} for clip:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Add a clip to a movie atomically
+   * @param {string} movieId - The ID of the movie to add the clip to
+   * @param {Object} clip - The clip to add
+   */
+  async addClipToMovie(movieId, clip) {
+    if (!movieId || !clip) {
+      console.warn('STORAGE: Cannot add clip - missing movieId or clip data');
+      return;
+    }
+
+    let releaseLock;
+    try {
+      // Acquire lock for this movie
+      releaseLock = await acquireMovieLock(movieId);
+      console.log(`[MOVIE_SAVING] Acquired lock for movie ${movieId}`);
+
+      const filePath = path.join(MOVIES_DIR, `${movieId}.json`);
+      const tempFilePath = `${filePath}.tmp`;
+
+      // Read current movie state
+      const data = await fs.readFile(filePath, 'utf8');
+      const movie = JSON.parse(data);
+
+      // Initialize clips array if it doesn't exist
+      if (!movie.clips) {
+        movie.clips = [];
+      }
+
+      // Add new clip, ensuring no duplicates by order
+      const existingClipIndex = movie.clips.findIndex(c => c.order === clip.order);
+      if (existingClipIndex >= 0) {
+        movie.clips[existingClipIndex] = clip;
+      } else {
+        movie.clips.push(clip);
+      }
+
+      // Sort clips by order
+      movie.clips.sort((a, b) => a.order - b.order);
+
+      // Update movie metadata
+      movie.updatedAt = new Date();
+      movie.generationStatus = {
+        ...movie.generationStatus,
+        completedScenes: movie.clips.length,
+        inProgress: movie.clips.length < movie.originalScenes?.length,
+        status: movie.clips.length < movie.originalScenes?.length ? 'generating' : 'completed',
+        completedAt: movie.clips.length >= movie.originalScenes?.length ? new Date() : undefined
+      };
+
+      // Write to temp file first
+      await fs.writeFile(tempFilePath, JSON.stringify(movie, null, 2));
+
+      // Atomic rename
+      await fs.rename(tempFilePath, filePath);
+
+      console.log(`[MOVIE_SAVING] Successfully added clip ${clip.order + 1} to movie ${movieId} (total clips: ${movie.clips.length})`);
+    } catch (error) {
+      console.error(`[MOVIE_SAVING] Error adding clip to movie ${movieId}:`, error);
+      throw error;
+    } finally {
+      // Always release the lock
+      if (releaseLock) {
+        releaseLock();
+        console.log(`[MOVIE_SAVING] Released lock for movie ${movieId}`);
+      }
     }
   }
 }
