@@ -373,7 +373,7 @@ export function useStoryboardGenerator(
       } catch (error) {
         console.error("Error refreshing movie status:", error);
       }
-    }, 2000); // Check every 2 seconds
+    }, 4000); // Check every 4 seconds
 
     // Clean up the interval when the component unmounts or when the currentStoryboard changes
     return () => {
