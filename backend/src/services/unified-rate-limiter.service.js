@@ -123,7 +123,23 @@ class UnifiedRateLimiter {
     let attempts = 0;
     const maxAttempts = 10;
 
-    while (!this.canMakeRequest(provider)) {
+    // Keep trying until we successfully acquire capacity
+    while (true) {
+      // Atomically check and acquire capacity
+      if (this.canMakeRequest(provider)) {
+        // Immediately claim the capacity
+        bucket.currentRequests++;
+        bucket.tokens -= bucket.tokensPerRequest;
+
+        console.log(`[Rate Limiter] Acquired capacity for ${provider}:`, {
+          newCount: bucket.currentRequests,
+          maxConcurrent: bucket.maxConcurrent,
+          remainingTokens: bucket.tokens
+        });
+
+        return;
+      }
+
       attempts++;
       if (attempts > maxAttempts) {
         throw new Error(`Rate limit exceeded for ${provider} after ${maxAttempts} attempts`);
@@ -157,7 +173,7 @@ class UnifiedRateLimiter {
     }
 
     const bucket = this.buckets[provider];
-    const requestKey = JSON.stringify(args);  // Simplified key based just on args
+    const requestKey = JSON.stringify(args);
 
     // If we already have a promise for this exact request, return it
     if (bucket.activePromises.has(requestKey)) {
@@ -168,12 +184,8 @@ class UnifiedRateLimiter {
     }
 
     const promise = (async () => {
-      // Wait for capacity before starting
+      // Wait for and acquire capacity atomically
       await this.waitForCapacity(provider);
-
-      // Track that we're about to start a request
-      bucket.currentRequests++;
-      bucket.tokens -= bucket.tokensPerRequest;
 
       console.log(`[Rate Limiter] Starting ${provider} request:`, {
         concurrent: bucket.currentRequests,

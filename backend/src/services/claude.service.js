@@ -208,7 +208,8 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
           return parsedResponse.svg;
         } catch (parseError) {
           console.error('Failed to parse Claude response:', parseError);
-          return generateBasicSvg(prompt, isUpdate);
+          const fallback = generateBasicSvg(prompt, isUpdate);
+          return fallback.svg;
         }
       }
     }
@@ -219,7 +220,8 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
 
     if (error?.status === 429 || error?.message?.includes('rate_limit')) {
       console.log('Providing fallback SVG due to rate limiting');
-      return generateBasicSvg(prompt, isUpdate);
+      const fallback = generateBasicSvg(prompt, isUpdate);
+      return fallback.svg;
     }
 
     throw new ServiceUnavailableError(`Claude API Error: ${error.message}`);
