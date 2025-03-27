@@ -37,5 +37,7 @@ router.post('/generate/initialize', asyncHandler(movieGenerationController.initi
 router.get('/generate/:sessionId/progress', asyncHandler(movieGenerationController.subscribeToProgress));
 router.post('/generate/:sessionId/start', asyncHandler(movieGenerationController.startGeneration));
 router.delete('/generate/:sessionId', asyncHandler(movieGenerationController.cleanupSession));
+// Add recovery endpoint
+router.post('/generate/recovery', asyncHandler(movieGenerationController.recoveryHandler));
 
 module.exports = router;

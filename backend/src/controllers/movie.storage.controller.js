@@ -68,6 +68,23 @@ const movieStorageController = {
         console.warn(`[MOVIE_LOADING_WARNING] Movie ${id} has no clips or clips is not an array`);
       }
 
+      // Log generation status information for debugging
+      if (movie.generationStatus) {
+        console.log(`[MOVIE_LOADING] Movie ${id} generation status:`, {
+          inProgress: movie.generationStatus.inProgress,
+          completedScenes: movie.generationStatus.completedScenes,
+          totalScenes: movie.generationStatus.totalScenes,
+          status: movie.generationStatus.status,
+          hasActiveSession: !!movie.generationStatus.activeSessionId
+        });
+
+        // Validate if activeSessionId exists and matches an actual session
+        if (movie.generationStatus.activeSessionId) {
+          // This will be used by the frontend to connect to SSE
+          console.log(`[MOVIE_LOADING] Movie ${id} has active session: ${movie.generationStatus.activeSessionId}`);
+        }
+      }
+
       res.status(200).json({
         success: true,
         movie

@@ -36,6 +36,9 @@ type GenerationStatus = {
   totalScenes: number;
   completedScenes: number;
   startingFromScene?: number;
+  status?: string;
+  activeSessionId?: string;
+  currentSceneIndex?: number;
 };
 
 type SceneGenerationError = {
@@ -64,6 +67,17 @@ export function useStoryboardGenerator(
 
   // Use a ref to track if we're already polling an in-progress movie
   const isPollingRef = useRef<boolean>(false);
+  // Track the polling interval ID for conditional polling
+  const conditionalPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clear any existing conditional polling
+  const clearConditionalPolling = useCallback(() => {
+    if (conditionalPollingIntervalRef.current) {
+      console.log("Clearing conditional polling interval");
+      clearInterval(conditionalPollingIntervalRef.current);
+      conditionalPollingIntervalRef.current = null;
+    }
+  }, []);
 
   // Verify final state matches backend
   const verifyFinalState = useCallback(async (storyboardId: string) => {
@@ -212,12 +226,6 @@ export function useStoryboardGenerator(
       return;
     }
 
-    // Also skip if we're already polling
-    if (isPollingRef.current) {
-      console.log("Already polling for movie updates, skipping duplicate setup");
-      return;
-    }
-
     // Skip if we don't have a storyboard or it has no generation status
     if (!currentStoryboard || !currentStoryboard.generationStatus) {
       console.log("No storyboard or generation status available, skipping");
@@ -232,8 +240,7 @@ export function useStoryboardGenerator(
       completedScenes: currentStoryboard.generationStatus.completedScenes,
       totalScenes: currentStoryboard.generationStatus.totalScenes,
       currentSession,
-      isGenerating,
-      isPolling: isPollingRef.current
+      isGenerating
     });
 
     // Only proceed if we have a storyboard with in-progress generation
@@ -244,22 +251,17 @@ export function useStoryboardGenerator(
 
     console.log("Detected in-progress generation for movie:", currentStoryboard.name);
 
-    // For reopened movies, we need to set up polling since we don't have a valid session
-    console.log("Setting up polling for reopened in-progress movie");
+    // Clear any existing conditional polling
+    clearConditionalPolling();
 
-    // Mark that we're now polling before setting up the interval
-    // This prevents race conditions with multiple effect runs
-    isPollingRef.current = true;
+    // Set isGenerating to ensure we show progress UI
+    if (!isGenerating) {
+      console.log("Setting isGenerating to true for UI");
+      setIsGenerating(true);
+    }
 
     // But we still want to show the modal
     setShowGeneratingClipsModal(true);
-
-    // Set isGenerating to ensure we show progress UI - do this outside the effect
-    // to avoid effect re-runs
-    if (!isGenerating) {
-      console.log("Setting isGenerating to true for polling UI");
-      setIsGenerating(true);
-    }
 
     // Initialize progress from current storyboard status
     setGenerationProgress({
@@ -268,128 +270,105 @@ export function useStoryboardGenerator(
       status: 'in_progress' as const
     });
 
-    console.log("Setting initial generation progress:", {
-      current: currentStoryboard.generationStatus.completedScenes,
-      total: currentStoryboard.generationStatus.totalScenes
-    });
+    // Check if we have an activeSessionId
+    if (currentStoryboard.generationStatus.activeSessionId) {
+      // If we have an active session ID, connect to SSE directly
+      console.log(`Found active session ID: ${currentStoryboard.generationStatus.activeSessionId}. Connecting to SSE.`);
+      setCurrentSession(currentStoryboard.generationStatus.activeSessionId);
+
+      // No need for polling
+      return;
+    }
+
+    // If no activeSessionId, set up conditional polling to discover when one becomes available
+    console.log("In progress, but no active session. Starting conditional polling...");
 
     // Create a stable storyboard ID reference to use in the interval
-    // This prevents issues with stale closures
     const storyboardId = currentStoryboard.id;
 
-    // Set up an interval to check for updates - this is the same approach
-    // we use with SSE but with direct API calls instead
-    const intervalId = setInterval(async () => {
+    // Start conditional polling interval
+    conditionalPollingIntervalRef.current = setInterval(async () => {
       try {
-        // Only check if we're still polling
-        if (!isPollingRef.current) {
-          console.log("Polling stopped, cleaning up interval");
-          clearInterval(intervalId);
-          return;
-        }
-
-        console.log(`Polling for updates on movie ${storyboardId}`);
+        console.log(`Conditional polling for updates on movie ${storyboardId}`);
 
         // Get latest movie data from server
         const response = await MovieStorageApi.getMovie(storyboardId);
-        if (response?.success && response.movie) {
-          console.log("Refreshed movie from server:", {
-            name: response.movie.name,
-            clipCount: response.movie.clips?.length || 0,
-            completedScenes: response.movie.generationStatus?.completedScenes,
-            inProgress: response.movie.generationStatus?.inProgress
-          });
 
-          // Only update if there's a change in generation status
+        if (!response?.success || !response.movie) {
+          console.warn("Failed to refresh movie data from server");
+          return;
+        }
+
+        console.log("Refreshed movie from server:", {
+          name: response.movie.name,
+          clipCount: response.movie.clips?.length || 0,
+          completedScenes: response.movie.generationStatus?.completedScenes,
+          inProgress: response.movie.generationStatus?.inProgress,
+          hasActiveSession: !!response.movie.generationStatus?.activeSessionId
+        });
+
+        // Check if generation has completed
+        if (response.movie.generationStatus && !response.movie.generationStatus.inProgress) {
+          console.log("Polling detected generation completion, cleaning up");
+
+          // Update our storyboard with the server state
+          setCurrentStoryboard(response.movie);
+
+          // Update UI state
+          setIsGenerating(false);
+          setShowGeneratingClipsModal(false);
+
+          // Clear the polling interval
+          clearConditionalPolling();
+          return;
+        }
+
+        // Check if an activeSessionId is now available
+        if (response.movie.generationStatus?.activeSessionId) {
+          console.log(`Polling discovered active session ID: ${response.movie.generationStatus.activeSessionId}`);
+
+          // Set the session ID to connect to SSE
+          setCurrentSession(response.movie.generationStatus.activeSessionId);
+
+          // Update our storyboard with the server state
+          setCurrentStoryboard(response.movie);
+
+          // Make sure UI state is correct
+          setIsGenerating(true);
+
+          // Clear the polling interval since SSE will take over
+          clearConditionalPolling();
+          return;
+        }
+
+        // If we get here, the movie is still in progress but no activeSessionId yet
+        // Continue polling until one of the above conditions is met
+        console.log("Still in progress, no active session yet. Continuing to poll...");
+
+        // Update our storyboard with any changes from the server (like new clips)
+        if (response.movie.clips?.length !== currentStoryboard.clips?.length) {
+          console.log(`Found ${response.movie.clips?.length || 0} clips vs our ${currentStoryboard.clips?.length || 0}`);
+          setCurrentStoryboard(response.movie);
+
+          // Update progress display
           if (response.movie.generationStatus) {
-            const { inProgress, completedScenes, totalScenes } = response.movie.generationStatus;
-
-            // Update our state with the new data
-            setCurrentStoryboard(currentStoryboard => {
-              // Skip if the storyboard has changed while polling
-              if (!currentStoryboard || currentStoryboard.id !== storyboardId) {
-                return currentStoryboard;
-              }
-
-              // Find new clips since our last update
-              const existingClipIds = new Set(currentStoryboard.clips.map(c => c.id));
-              const newClips = response.movie.clips.filter(c => !existingClipIds.has(c.id));
-
-              if (newClips.length > 0) {
-                console.log(`Found ${newClips.length} new clips in polling`);
-
-                // Create updated clips by adding new clips and sorting by order
-                const updatedClips = [...currentStoryboard.clips, ...newClips].sort((a, b) => a.order - b.order);
-
-                // Select first clip if none selected
-                if (!activeClipId && newClips.length > 0) {
-                  setActiveClipId(newClips[0].id);
-                }
-
-                return {
-                  ...currentStoryboard,
-                  clips: updatedClips,
-                  generationStatus: {
-                    ...currentStoryboard.generationStatus,
-                    completedScenes,
-                    totalScenes,
-                    inProgress
-                  }
-                };
-              } else {
-                // If no new clips but status changed, update status only
-                return {
-                  ...currentStoryboard,
-                  generationStatus: {
-                    ...currentStoryboard.generationStatus,
-                    completedScenes,
-                    totalScenes,
-                    inProgress
-                  }
-                };
-              }
-            });
-
-            // Also update progress display
             setGenerationProgress(prev => ({
               ...prev,
-              current: completedScenes,
-              total: totalScenes,
-              status: !inProgress ? 'completed' : 'in_progress'
+              current: response.movie.generationStatus?.completedScenes || 0,
+              total: response.movie.generationStatus?.totalScenes || 0
             }));
-
-            // If generation is complete, clean up
-            if (!inProgress) {
-              console.log("Polling detected generation completion, cleaning up");
-              setIsGenerating(false);
-              setShowGeneratingClipsModal(false);
-              isPollingRef.current = false;
-              clearInterval(intervalId);
-            }
           }
-        } else {
-          console.warn("Failed to refresh movie data from server");
         }
       } catch (error) {
-        console.error("Error refreshing movie status:", error);
+        console.error("Error in conditional polling:", error);
       }
-    }, 4000); // Check every 4 seconds
+    }, 6000); // Poll every 6 seconds
 
-    // Clean up the interval when the component unmounts or when the currentStoryboard changes
+    // Clean up interval when component unmounts or when the currentStoryboard changes
     return () => {
-      console.log("Effect cleanup running, isPolling:", isPollingRef.current);
-      // Only clean up if we're actually cleaning up an active interval
-      // AND if the storyboard ID has changed (not just because isGenerating changed)
-      if (isPollingRef.current && currentStoryboard?.id !== storyboardId) {
-        console.log(`Cleaning up polling interval - storyboard changed from ${storyboardId} to ${currentStoryboard?.id}`);
-        isPollingRef.current = false;
-        clearInterval(intervalId);
-      } else {
-        console.log(`Skipping cleanup - polling is still active for storyboard ${storyboardId}`);
-      }
+      clearConditionalPolling();
     };
   }, [
-    // Remove isGenerating from dependencies to prevent re-runs when it changes
     currentStoryboard?.id,
     currentSession,
     setShowGeneratingClipsModal,
@@ -397,7 +376,8 @@ export function useStoryboardGenerator(
     setGenerationProgress,
     activeClipId,
     setActiveClipId,
-    setCurrentStoryboard
+    setCurrentStoryboard,
+    clearConditionalPolling
   ]);
 
   /**

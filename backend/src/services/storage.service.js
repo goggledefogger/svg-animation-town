@@ -271,6 +271,24 @@ class StorageService {
         if (generationStatus.completedAt instanceof Date) {
           generationStatus.completedAt = generationStatus.completedAt.toISOString();
         }
+        // Ensure we have detailed generation status fields if they exist
+        if (generationStatus.status && typeof generationStatus.status === 'string') {
+          // Keep the status field
+        } else if (generationStatus.inProgress) {
+          // Add a default status if not present but generation is in progress
+          generationStatus.status = 'generating';
+        }
+
+        // Make sure currentSceneIndex is included if it exists
+        if (generationStatus.currentSceneIndex !== undefined) {
+          // Ensure it's stored as a number
+          generationStatus.currentSceneIndex = Number(generationStatus.currentSceneIndex);
+        }
+
+        // Store activeSessionId if it exists
+        if (generationStatus.activeSessionId) {
+          // Keep the session ID for recovery
+        }
       }
 
       // Track any issues with animation references

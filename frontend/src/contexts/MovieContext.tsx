@@ -37,6 +37,12 @@ export interface Storyboard {
     totalScenes: number;
     startedAt?: Date;
     completedAt?: Date;
+    // Add new fields
+    status?: string;
+    activeSessionId?: string;
+    currentSceneIndex?: number;
+    pausedAt?: Date;
+    pausedReason?: string;
   };
 }
 
