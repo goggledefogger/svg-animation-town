@@ -1,5 +1,6 @@
 import React from 'react';
 import { Storyboard } from '../contexts/MovieContext';
+import { GenerationStatusBadge } from './StoryboardPanel';
 
 interface StoryboardItemProps {
   storyboard: Storyboard;
@@ -13,6 +14,12 @@ const StoryboardItem = React.forwardRef<HTMLDivElement, StoryboardItemProps>(
     const firstClip = storyboard.clips && storyboard.clips.length > 0
       ? storyboard.clips[0]
       : null;
+
+    // Calculate generation status values
+    const isGenerating = storyboard.generationStatus?.inProgress === true;
+    const completedScenes = storyboard.generationStatus?.completedScenes || 0;
+    const totalScenes = storyboard.generationStatus?.totalScenes || 0;
+    const hasGenerationStatus = storyboard.generationStatus !== undefined;
 
     const handleClick = async () => {
       await onLoadStoryboard(storyboard.id);
@@ -67,7 +74,18 @@ const StoryboardItem = React.forwardRef<HTMLDivElement, StoryboardItemProps>(
           <div>
             <div className="font-medium text-bat-yellow text-sm">{storyboard.name}</div>
             <div className="text-xs text-gray-400 mt-1 flex items-center justify-between">
-              <span>{storyboard.clips?.length || 0} clips</span>
+              <div className="flex items-center gap-2">
+                <span>{storyboard.clips?.length || 0} clips</span>
+                {hasGenerationStatus && (
+                  <GenerationStatusBadge
+                    isGenerating={isGenerating}
+                    completedScenes={completedScenes}
+                    totalScenes={totalScenes}
+                    showText={false}
+                    className="ml-2"
+                  />
+                )}
+              </div>
               <span>{new Date(storyboard.updatedAt).toLocaleString()}</span>
             </div>
           </div>
@@ -87,4 +105,4 @@ const StoryboardItem = React.forwardRef<HTMLDivElement, StoryboardItemProps>(
   }
 );
 
-export default StoryboardItem; 
+export default StoryboardItem;

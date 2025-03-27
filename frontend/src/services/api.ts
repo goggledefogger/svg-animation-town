@@ -2,6 +2,7 @@ import { ApiResponse, ApiError } from '../types/api';
 import { ApiError as CustomApiError } from './movie.api';
 import { Storyboard } from '../contexts/MovieContext';
 import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
+import { Message } from '../contexts/AnimationContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -710,7 +711,7 @@ export const MovieStorageApi = {
    * @param animationId The animation ID to fetch
    * @returns The animation object or null if not found
    */
-  getClipAnimation: async (animationId: string): Promise<{ id: string; svg: string } | null> => {
+  getClipAnimation: async (animationId: string): Promise<{ id: string; svg: string; chatHistory?: Message[]; timestamp?: string } | null> => {
     if (!animationId) {
       console.error('Animation ID is required');
       return null;
@@ -722,7 +723,9 @@ export const MovieStorageApi = {
       console.log(`[API] Using cached animation from registry: ${animationId} (${registryCheck.svg.length} bytes)`);
       return {
         id: animationId,
-        svg: registryCheck.svg
+        svg: registryCheck.svg,
+        chatHistory: registryCheck.metadata?.chatHistory,
+        timestamp: registryCheck.metadata?.timestamp
       };
     }
 
@@ -757,7 +760,9 @@ export const MovieStorageApi = {
 
             return {
               id: animationId,
-              svg: data.animation.svg
+              svg: data.animation.svg,
+              chatHistory: data.animation.chatHistory,
+              timestamp: data.animation.timestamp
             };
           } else {
             console.error(`Animation ${animationId} not found or invalid`);

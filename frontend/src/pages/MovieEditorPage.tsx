@@ -324,8 +324,8 @@ const MovieEditorPage: React.FC = () => {
               onClipSelect={handleClipSelect}
               onAddClip={handleAddClip}
               storyboard={currentStoryboard}
-              generationProgress={storyboardGenerator.generationProgress}
               isGenerating={storyboardGenerator.isGenerating}
+              generationProgress={storyboardGenerator.generationProgress}
             />
           </div>
 

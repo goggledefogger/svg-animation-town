@@ -30,6 +30,14 @@ export interface Storyboard {
   aiProvider?: 'openai' | 'claude';
   // Store original scenes from the storyboard response
   originalScenes?: any[];
+  // Generation status for in-progress movies
+  generationStatus?: {
+    inProgress: boolean;
+    completedScenes: number;
+    totalScenes: number;
+    startedAt?: Date;
+    completedAt?: Date;
+  };
 }
 
 // Storage key for local storage
