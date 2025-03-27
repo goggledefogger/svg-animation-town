@@ -333,8 +333,8 @@ const MovieEditorPage: React.FC = () => {
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden h-[calc(100vh-var(--header-height)-var(--storyboard-height,40vh)-30px)] md:h-full md:max-h-full order-1 md:order-2">
             {activeClipId ? (
               <>
-                <div className="flex-1 h-full flex items-center justify-center w-full overflow-hidden">
-                  <div className="w-full max-w-full px-2 md:px-0">
+                <div className="flex-1 h-0 flex-grow overflow-hidden flex items-center justify-center">
+                  <div className="w-full h-full">
                     <AnimationCanvas />
                   </div>
                 </div>

@@ -3,7 +3,7 @@ import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
-import { MovieStorageApi } from '../services/api';
+import { AnimationApi, MovieStorageApi } from '../services/api';
 import useAnimationLoader, { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 
 // Add type for API response
@@ -549,65 +549,82 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Adjust SVG to container size when container dimensions change
   useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current && displaySvgContent) {
-        const svgElement = getSvgContainer()?.querySelector('svg');
-        if (svgElement) {
-          // Get container dimensions
+    // Create a ResizeObserver to detect container size changes
+    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+      const resizeObserver = new ResizeObserver(() => {
+        // Get container dimensions
+        if (containerRef.current && displaySvgContent) {
           const containerWidth = containerRef.current.clientWidth;
           const containerHeight = containerRef.current.clientHeight;
 
-          // Get the original viewBox values
-          const viewBox = svgElement.getAttribute('viewBox');
-          if (viewBox) {
-            const [, , vbWidth, vbHeight] = viewBox.split(' ').map(parseFloat);
+          console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
 
-            // Calculate aspect ratios
-            const svgRatio = vbWidth / vbHeight;
-            const containerRatio = containerWidth / containerHeight;
+          // Trigger resize of SVG content
+          const svgElement = getSvgContainer()?.querySelector('svg');
+          if (svgElement) {
+            // Get the original viewBox values
+            const viewBox = svgElement.getAttribute('viewBox');
+            if (viewBox) {
+              const [, , vbWidth, vbHeight] = viewBox.split(' ').map(parseFloat);
 
-            // Determine the best fit approach based on container ratio
-            if (containerRatio > svgRatio) {
-              // Container is wider than SVG - fit to height
-              svgElement.setAttribute('height', `${containerHeight}px`);
-              svgElement.setAttribute('width', `${containerHeight * svgRatio}px`);
+              // Calculate aspect ratios
+              const svgRatio = vbWidth / vbHeight;
+              const containerRatio = containerWidth / containerHeight;
+
+              // Different behavior based on whether we're in the animation editor or movie editor
+              if (isAnimationEditor) {
+                // In Animation Editor - allow more height usage
+                svgElement.setAttribute('width', '100%');
+                svgElement.setAttribute('height', '100%');
+                svgElement.style.maxWidth = '100%';
+                // Don't constrain max-height to allow vertical filling
+                svgElement.style.maxHeight = 'none';
+              } else {
+                // In Movie Editor - ensure it fits completely in the container
+                if (containerRatio > svgRatio) {
+                  // Container is wider than SVG - fit to height
+                  const height = containerHeight;
+                  const width = height * svgRatio;
+                  svgElement.setAttribute('width', `${width}px`);
+                  svgElement.setAttribute('height', `${height}px`);
+                } else {
+                  // Container is taller than SVG - fit to width
+                  const width = containerWidth;
+                  const height = width / svgRatio;
+                  svgElement.setAttribute('width', `${width}px`);
+                  svgElement.setAttribute('height', `${height}px`);
+                }
+
+                // Ensure SVG doesn't overflow container
+                svgElement.style.maxWidth = '100%';
+                svgElement.style.maxHeight = '100%';
+              }
             } else {
-              // Container is taller than SVG - fit to width
-              svgElement.setAttribute('width', `${containerWidth}px`);
-              svgElement.setAttribute('height', `${containerWidth / svgRatio}px`);
+              // If no viewBox, set a default one and use preserveAspectRatio
+              svgElement.setAttribute('viewBox', '0 0 800 600');
+              svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
             }
 
-            // Ensure the SVG is centered in the container
+            // Common styling for both modes
+            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
             svgElement.style.display = 'block';
             svgElement.style.margin = '0 auto';
-
-            // Use relative positioning for better reliability
-            svgElement.style.position = 'relative';
-          } else {
-            // Create a default viewBox if none exists
-            const defaultWidth = 800;
-            const defaultHeight = 450; // 16:9 aspect ratio
-            svgElement.setAttribute('viewBox', `0 0 ${defaultWidth} ${defaultHeight}`);
-            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-            // Then call handleResize again to apply proper sizing
-            setTimeout(handleResize, 10);
           }
         }
-      }
-    };
+      });
 
-    // Set initial size
-    handleResize();
+      // Start observing the container
+      resizeObserver.observe(containerRef.current);
 
-    // Add resize listener
-    window.addEventListener('resize', handleResize);
+      // Clean up
+      return () => {
+        resizeObserver.disconnect();
+      };
+    }
 
-    // Clean up
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [displaySvgContent, getSvgContainer]);
+    // Fallback for browsers without ResizeObserver
+    return undefined;
+  }, [displaySvgContent, getSvgContainer, isAnimationEditor]);
 
   // Handle prefetching animation when a clip is selected
   const prefetchClipAnimation = useCallback((clipId: string) => {
@@ -898,12 +915,44 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           // Trigger resize of SVG content
           const svgElement = getSvgContainer()?.querySelector('svg');
           if (svgElement) {
-            // Ensure preserveAspectRatio is set
+            // Get the original viewBox values
+            const viewBox = svgElement.getAttribute('viewBox');
+            if (viewBox) {
+              const [, , vbWidth, vbHeight] = viewBox.split(' ').map(parseFloat);
+
+              // Calculate aspect ratios
+              const svgRatio = vbWidth / vbHeight;
+              const containerRatio = containerWidth / containerHeight;
+
+              // Ensure the SVG fits within the container while maintaining aspect ratio
+              if (containerRatio > svgRatio) {
+                // Container is wider than SVG - fit to height
+                const height = containerHeight;
+                const width = height * svgRatio;
+                svgElement.setAttribute('width', `${width}px`);
+                svgElement.setAttribute('height', `${height}px`);
+              } else {
+                // Container is taller than SVG - fit to width
+                const width = containerWidth;
+                const height = width / svgRatio;
+                svgElement.setAttribute('width', `${width}px`);
+                svgElement.setAttribute('height', `${height}px`);
+              }
+            } else {
+              // If no viewBox, set a default one and use preserveAspectRatio
+              svgElement.setAttribute('viewBox', '0 0 800 600');
+              svgElement.setAttribute('width', '100%');
+              svgElement.setAttribute('height', '100%');
+            }
+
+            // Ensure preserveAspectRatio is set correctly
             svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
 
-            // Force SVG to use available space
-            svgElement.setAttribute('width', '100%');
-            svgElement.setAttribute('height', '100%');
+            // Ensure proper centering
+            svgElement.style.display = 'block';
+            svgElement.style.margin = '0 auto';
+            svgElement.style.maxWidth = '100%';
+            svgElement.style.maxHeight = '100%';
           }
         }
       });
@@ -982,7 +1031,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full max-w-full max-h-full flex items-center justify-center bg-gotham-black/30 rounded-lg relative"
+      className="w-full h-full flex items-center justify-center bg-gotham-black/30 rounded-lg relative overflow-hidden"
       style={{
         ...style,
         minWidth: '280px',

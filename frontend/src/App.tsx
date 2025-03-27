@@ -65,9 +65,9 @@ const AnimationEditor = () => {
           }`}>
             {/* Animation content wrapper - takes available space minus controls */}
             <div className={`flex-1 w-full flex items-center justify-center overflow-hidden
-              pb-16 md:pb-20 ${showChat ? 'max-h-[calc(100vh-64px-280px)]' : ''} md:max-h-[calc(100vh-64px-60px)]`}>
+              pb-16 md:pb-20 ${showChat ? '' : ''}`}>
               <AnimationCanvas
-                style={{ borderRadius: '12px', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                style={{ borderRadius: '12px', width: '100%', height: '100%' }}
                 isAnimationEditor={true}
               />
             </div>
