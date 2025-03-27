@@ -70,7 +70,9 @@ export function useStoryboardGenerator(
   // Track the polling interval ID for conditional polling
   const conditionalPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Clear any existing conditional polling
+  const lastErrorRef = useRef<string | null>(null);
+
+  // Clear conditional polling interval
   const clearConditionalPolling = useCallback(() => {
     if (conditionalPollingIntervalRef.current) {
       console.log("Clearing conditional polling interval");
@@ -111,10 +113,24 @@ export function useStoryboardGenerator(
 
   // Handle new clip updates
   const handleNewClip = useCallback((clip: MovieClip) => {
-    console.log("Handle new clip called:", clip.id);
+    console.log("[STORYBOARD_UPDATE] Handle new clip called:", clip.id);
+
+    // Check if the clip has an animation ID
+    if (clip.animationId) {
+      console.log(`[STORYBOARD_UPDATE] Clip ${clip.id} has animation ID ${clip.animationId}`);
+    }
 
     // Update the storyboard with the new clip
     setCurrentStoryboard(prev => {
+      // Check if the clip already exists in the storyboard
+      const existingClipIndex = prev.clips.findIndex(c => c.id === clip.id);
+
+      // If the clip already exists, don't add it again
+      if (existingClipIndex !== -1) {
+        console.log(`[STORYBOARD_UPDATE] Clip ${clip.id} already exists in storyboard, not adding again`);
+        return prev;
+      }
+
       // Add the new clip and sort by order
       const updatedClips = [...prev.clips, clip].sort((a, b) => a.order - b.order);
 
@@ -122,7 +138,7 @@ export function useStoryboardGenerator(
       const completedScenes = updatedClips.length;
       const totalScenes = prev.generationStatus?.totalScenes || 0;
 
-      console.log(`Updated clip state: ${completedScenes}/${totalScenes} scenes completed`);
+      console.log(`[STORYBOARD_UPDATE] Updated clip state: ${completedScenes}/${totalScenes} scenes completed`);
 
       // Update the generationStatus to keep UI in sync
       return {
@@ -209,7 +225,8 @@ export function useStoryboardGenerator(
     isGenerating,
     progress: generationProgress,
     setIsGenerating,
-    setProgress: setGenerationProgress
+    setProgress: setGenerationProgress,
+    processedClipIdsRef
   } = useGenerationProgress({
     sessionId: currentSession,
     onNewClip: handleNewClip,

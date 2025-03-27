@@ -58,10 +58,25 @@ class StorageService {
         throw new Error('Animation object is required');
       }
 
-      // Ensure animation has an ID
-      const id = animation.id || uuidv4();
+      const originalId = animation.id;
+
+      if (!originalId) {
+        throw new Error('Animation ID is required - no ID was provided');
+      }
+
+      // Use the provided ID - never generate a new one
+      const id = originalId;
+
       const filename = `${id}.json`;
       const filePath = path.join(ANIMATIONS_DIR, filename);
+
+      // Check if this animation already exists (might be a duplicate save)
+      try {
+        await fs.access(filePath);
+        console.log(`[ANIMATION_STORAGE_DUPLICATE] Animation file for ID ${id} already exists, might be duplicate save attempt`);
+      } catch (notFoundErr) {
+        // This is expected - file doesn't exist yet
+      }
 
       // Create standardized animation data
       const animationData = {
@@ -106,6 +121,14 @@ class StorageService {
           console.error(`Error syncing animation ${id}:`, syncError);
           // Fallback to basic write if sync fails
           await fs.writeFile(filePath, jsonData, 'utf8');
+
+          // Clean up temporary file
+          try {
+            await fs.unlink(tempFilePath);
+            console.log(`[ANIMATION_STORAGE] Cleaned up temporary file after fallback write`);
+          } catch (cleanupError) {
+            console.warn(`[ANIMATION_STORAGE] Failed to clean up temporary file: ${cleanupError.message}`);
+          }
         }
 
         // Verify the file was written correctly by reading it back
@@ -461,8 +484,9 @@ class StorageService {
         console.log(`[MOVIE_SAVING] Using fallback direct write for movie ${id}`);
 
         // Create a backup of the existing file if it exists
+        let backupPath;
         try {
-          const backupPath = `${filePath}.bak`;
+          backupPath = `${filePath}.bak`;
           await fs.access(filePath);
           await fs.copyFile(filePath, backupPath);
           console.log(`[MOVIE_SAVING] Created backup of existing file at ${backupPath}`);
@@ -475,6 +499,39 @@ class StorageService {
 
         // Fallback write directly to the file
         await fs.writeFile(filePath, storyboardJSON);
+
+        // Clean up temporary file
+        try {
+          await fs.unlink(tempFilePath);
+          console.log(`[MOVIE_SAVING] Cleaned up temporary file after fallback write`);
+        } catch (cleanupError) {
+          console.warn(`[MOVIE_SAVING] Failed to clean up temporary file: ${cleanupError.message}`);
+        }
+
+        // Clean up backup file if write was successful and backup exists
+        if (backupPath) {
+          try {
+            // First check if the backup file exists
+            try {
+              await fs.access(backupPath);
+
+              // If we get here, the file exists, so try to delete it
+              await fs.unlink(backupPath);
+              console.log(`[MOVIE_SAVING] Cleaned up backup file after successful write`);
+            } catch (accessError) {
+              // File doesn't exist, which is fine - no need to log this as an error
+              if (accessError.code === 'ENOENT') {
+                console.log(`[MOVIE_SAVING] No backup file to clean up (not found)`);
+              } else {
+                // Some other access error
+                console.warn(`[MOVIE_SAVING] Error accessing backup file: ${accessError.message}`);
+              }
+            }
+          } catch (deleteError) {
+            // This catches errors from the unlink operation
+            console.warn(`[MOVIE_SAVING] Failed to delete existing backup file: ${deleteError.message}`);
+          }
+        }
       }
 
       console.log(`[MOVIE_SAVING] Saved movie ${id} with ${optimizedClips.length} clips`);
@@ -651,6 +708,8 @@ class StorageService {
       return;
     }
 
+    console.log(`[MOVIE_CLIP_ADD] Adding clip ${clip.id} with order ${clip.order} to movie ${movieId}, animation ID: ${clip.animationId || 'NONE'}`);
+
     let releaseLock;
     try {
       // Acquire lock for this movie
@@ -669,11 +728,24 @@ class StorageService {
         movie.clips = [];
       }
 
+      // Check for any existing clips with the same animation ID
+      if (clip.animationId) {
+        const existingClipsWithSameAnimation = movie.clips.filter(c => c.animationId === clip.animationId);
+        if (existingClipsWithSameAnimation.length > 0) {
+          console.log(`[MOVIE_CLIP_DUPLICATE_CHECK] Found ${existingClipsWithSameAnimation.length} existing clips with animation ID ${clip.animationId}:`);
+          existingClipsWithSameAnimation.forEach(c => {
+            console.log(`  Existing clip ID: ${c.id}, order: ${c.order}`);
+          });
+        }
+      }
+
       // Add new clip, ensuring no duplicates by order
       const existingClipIndex = movie.clips.findIndex(c => c.order === clip.order);
       if (existingClipIndex >= 0) {
+        console.log(`[MOVIE_CLIP_UPDATE] Updating existing clip at order ${clip.order} with new clip ${clip.id}`);
         movie.clips[existingClipIndex] = clip;
       } else {
+        console.log(`[MOVIE_CLIP_NEW] Adding new clip ${clip.id} at order ${clip.order}`);
         movie.clips.push(clip);
       }
 

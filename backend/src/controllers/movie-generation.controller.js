@@ -160,6 +160,11 @@ function updateSessionProgress(session, newClip = null) {
 
   if (newClip) {
     progressSet.add(newClip.order);
+
+    // Add diagnostic log for clip events being sent
+    if (newClip.animationId) {
+      console.log(`[SERVER_CLIP_EVENT] Sending clip event: order=${newClip.order}, id=${newClip.id}, animationId=${newClip.animationId}, session=${session.id}`);
+    }
   }
 
   // Update progress count atomically
@@ -235,6 +240,11 @@ exports.startGeneration = async (req, res) => {
           // Find the existing clip for this scene
           const existingClip = storyboard.clips.find(clip => clip.order === i);
           if (existingClip) {
+            // Log re-sending of existing clip during recovery
+            if (existingClip.animationId) {
+              console.log(`[SERVER_RECOVERY_EVENT] Re-sending existing clip event in recovery mode: order=${existingClip.order}, id=${existingClip.id}, animationId=${existingClip.animationId}`);
+            }
+
             // Update progress to include this pre-existing clip
             updateSessionProgress(session, existingClip);
             return existingClip;
@@ -307,15 +317,16 @@ exports.startGeneration = async (req, res) => {
           throw new Error(`Failed to generate scene ${i + 1}: No SVG content returned`);
         }
 
-        // Save the animation first
-        const animationId = uuidv4();
-        await storageService.saveAnimation({
-          id: animationId,
-          name: `Scene ${i + 1}: ${scene.id || ''}`,
-          svg: result.svg,
-          timestamp: new Date().toISOString(),
-          provider: session.provider
-        });
+        // The animation is already saved by the animation service, use the returned ID
+        // Skip saving the animation again to prevent duplicates
+        const animationId = result.animationId;
+
+        if (!animationId) {
+          console.error(`[GENERATION] Missing animation ID in result for scene ${i + 1}`);
+          throw new Error(`Failed to generate scene ${i + 1}: No animation ID returned`);
+        }
+
+        console.log(`[GENERATION] Using animation ID from service: ${animationId}`);
 
         // Create clip with scene-specific information
         const clip = {

@@ -39,6 +39,9 @@ export function useGenerationProgress({
   // Keep track of unmounting to avoid state updates after unmount
   const isMountedRef = useRef<boolean>(true);
 
+  // Track processed clip IDs by animation ID to prevent duplicates
+  const processedClipIdsRef = useRef<Map<string, Set<string>>>(new Map());
+
   // Effect to handle SSE connection
   useEffect(() => {
     // Set as mounted when the component initializes
@@ -93,6 +96,9 @@ export function useGenerationProgress({
         if (!isMountedRef.current) return;
 
         try {
+          // Log raw event data
+          console.log(`[RAW_SSE_EVENT] Raw SSE data received for session ${sessionId}:`, event.data);
+
           const update = JSON.parse(event.data);
           console.log(`Received SSE update for session ${sessionId}:`, update);
 
@@ -101,8 +107,31 @@ export function useGenerationProgress({
 
             // Handle new clip updates
             if (update.data.newClip) {
-              console.log(`New clip received for session ${sessionId}:`, update.data.newClip.clip);
-              onNewClip?.(update.data.newClip.clip);
+              const clipData = update.data.newClip.clip;
+              console.log(`[STATE_UPDATE] New clip received for session ${sessionId}:`, clipData);
+
+              // Check if this clip has an animation ID
+              if (clipData.animationId) {
+                // Get or create the set of clip IDs for this animation ID
+                const processedClips = processedClipIdsRef.current.get(clipData.animationId) || new Set<string>();
+
+                // Check if we've already processed this specific clip
+                if (processedClips.has(clipData.id)) {
+                  console.log(`[DUPLICATE_EVENT] Skipping duplicate clip ${clipData.id} with animation ID ${clipData.animationId}`);
+                } else {
+                  // Track this clip as processed
+                  processedClips.add(clipData.id);
+                  processedClipIdsRef.current.set(clipData.animationId, processedClips);
+
+                  console.log(`[NEW_CLIP] Processing clip ${clipData.id} with animation ID ${clipData.animationId}`);
+                  // Pass the clip to the callback
+                  onNewClip?.(clipData);
+                }
+              } else {
+                // No animation ID, just pass it through
+                console.log(`[NEW_CLIP] Processing clip without animation ID: ${clipData.id}`);
+                onNewClip?.(clipData);
+              }
             }
 
             // Handle completion
@@ -231,6 +260,8 @@ export function useGenerationProgress({
     isGenerating,
     progress,
     setIsGenerating,
-    setProgress
+    setProgress,
+    // Expose the processedClipIds for external use
+    processedClipIdsRef
   };
 }

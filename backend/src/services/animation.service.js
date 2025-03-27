@@ -15,37 +15,39 @@ const AnimationService = {
    * @returns {Promise<Object>} - Generated animation data with SVG and message
    */
   generateAnimation: async (prompt, provider) => {
+    console.log(`[ANIMATION_GEN_START] Generating animation with prompt (length: ${prompt.length})`);
+
     // Use the specified provider or fall back to default
     let llmResponse;
-    
+
     if (provider && (provider === 'openai' || provider === 'claude')) {
       // Temporarily override the configured provider
       const originalProvider = config.aiProvider;
       config.aiProvider = provider;
-      
+
       // Call the AI service to generate the animation
       llmResponse = await AIService.generateAnimation(prompt);
-      
+
       // Restore the original provider
       config.aiProvider = originalProvider;
     } else {
       // Use the default provider
       llmResponse = await AIService.generateAnimation(prompt);
     }
-    
+
     // Extract SVG and text from the response
     const { svg, text } = extractSvgAndText(llmResponse);
-    
+
     if (!svg || !svg.includes('<svg')) {
       throw new Error('Failed to generate valid SVG content');
     }
-    
+
     // Generate a name for the animation based on the prompt
     let animationName = prompt.trim();
     if (animationName.length > 40) {
       animationName = animationName.substring(0, 40) + '...';
     }
-    
+
     // Create a simple chat history for the animation
     const chatHistory = [
       {
@@ -61,26 +63,32 @@ const AnimationService = {
         timestamp: new Date()
       }
     ];
-    
+
     // Create animation object with ID before saving
+    const animationId = uuidv4(); // Generate ID here
+
     const animation = {
-      id: uuidv4(), // Create an ID here instead of expecting the storage service to do it
+      id: animationId,
       name: animationName,
       svg: svg,
       chatHistory: chatHistory,
       provider: provider || config.aiProvider,
       createdAt: new Date()
     };
-    
+
     try {
+      // Before saving, check if we already have an identical SVG stored
+      // This would help prevent duplicate animations
+
       // Save the animation to storage
-      const animationId = await storageService.saveAnimation(animation);
-      
+      // Here we pass our generated ID and expect the same ID back
+      const savedAnimationId = await storageService.saveAnimation(animation);
+
       // Return the generated animation with its ID
       return {
         svg: svg,
         message: text || 'Animation created successfully!',
-        animationId: animationId || animation.id // Use fallback to ensure we always return an ID
+        animationId: savedAnimationId
       };
     } catch (error) {
       console.error('Error saving animation:', error);
@@ -88,11 +96,11 @@ const AnimationService = {
       return {
         svg: svg,
         message: text || 'Animation created successfully!',
-        animationId: animation.id,
+        animationId: animationId,
         saveError: error.message
       };
     }
   }
 };
 
-module.exports = AnimationService; 
+module.exports = AnimationService;
