@@ -37,9 +37,12 @@ export const GenerationStatusBadge: React.FC<{
       </div>
     );
   } else if (completedScenes > 0) {
+    const isComplete = completedScenes >= totalScenes;
     return (
       <div className={`text-xs text-gray-400 ${className}`}>
-        {showText && `${completedScenes}/${totalScenes} generated`}
+        {showText && (isComplete
+          ? `${completedScenes}/${totalScenes} completed`
+          : `${completedScenes}/${totalScenes} generated`)}
       </div>
     );
   }
@@ -80,8 +83,21 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const totalScenes = generationProgress?.total || storyboard?.generationStatus?.totalScenes || 0;
   const completedScenes = generationProgress?.current || storyboard?.generationStatus?.completedScenes || 0;
 
+  // Log the generation status for debugging
+  useEffect(() => {
+    if (hasGenerationStatus) {
+      console.log('StoryboardPanel generation status:', {
+        isGenerating,
+        completedScenes,
+        totalScenes,
+        storyboardStatus: storyboard?.generationStatus,
+        generationProgress
+      });
+    }
+  }, [hasGenerationStatus, isGenerating, completedScenes, totalScenes, storyboard?.generationStatus, generationProgress]);
+
   // Simple counter for display purposes
-  const [displayCount, setDisplayCount] = useState(0);
+  const [displayCount, setDisplayCount] = useState(completedScenes);
 
   // Reset display count when generation starts/stops or when props change
   useEffect(() => {
@@ -395,7 +411,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
           ) : (
             <div className="text-sm">
               {completedScenes > 0 ?
-                `Generated ${Math.floor(completedScenes)}/${totalScenes} scenes` :
+                (completedScenes >= totalScenes ?
+                  `Completed ${Math.floor(completedScenes)}/${totalScenes} scenes` :
+                  `Generated ${Math.floor(completedScenes)}/${totalScenes} scenes`) :
                 'Ready to generate'}
             </div>
           )}

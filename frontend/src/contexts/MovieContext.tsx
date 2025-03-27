@@ -437,7 +437,18 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
         // Preserve AI provider and original scenes for resumption
         aiProvider: movie.aiProvider,
         originalScenes: movie.originalScenes,
+        // Copy generation status from server
+        generationStatus: movie.generationStatus ? {
+          ...movie.generationStatus,
+          startedAt: movie.generationStatus.startedAt ? new Date(movie.generationStatus.startedAt) : undefined,
+          completedAt: movie.generationStatus.completedAt ? new Date(movie.generationStatus.completedAt) : undefined
+        } : undefined
       };
+
+      // Log generation status for debugging
+      if (storyboard.generationStatus?.inProgress) {
+        console.log(`Loading in-progress movie: ${storyboard.name} (${storyboard.id})`, storyboard.generationStatus);
+      }
 
       // Validate and synchronize clips if needed
       if (storyboard.clips && storyboard.clips.length > 0) {
