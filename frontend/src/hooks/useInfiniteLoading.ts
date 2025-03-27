@@ -56,12 +56,12 @@ export function useInfiniteLoading<T, ID>({
   const [currentPage, setCurrentPage] = useState(0);
   // State for all IDs
   const [allIds, setAllIds] = useState<ID[]>([]);
-  
+
   // Refs for tracking state
   const fetchInProgress = useRef(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const lastItemRef = useRef<HTMLElement | null>(null);
-  
+
   // State for filter function - convert boolean to function if needed
   const [filterFn, setFilterFn] = useState<(item: T) => boolean>(() => {
     if (typeof initialFilter === 'function') {
@@ -74,24 +74,24 @@ export function useInfiniteLoading<T, ID>({
   // Initialize by fetching all IDs
   useEffect(() => {
     if (!enabled) return;
-    
+
     let isMounted = true; // For race condition prevention
-    
+
     const initialize = async () => {
       if (fetchInProgress.current) return;
       fetchInProgress.current = true;
-      
+
       setIsLoading(true);
       setError(null);
-      
+
       try {
         // Fetch all IDs first
         const ids = await fetchIds();
-        
+
         if (!isMounted) return;
-        
+
         setAllIds(ids);
-        
+
         // Load first page if there are IDs
         if (ids.length > 0) {
           await loadBatch(ids.slice(0, pageSize), 0);
@@ -102,7 +102,7 @@ export function useInfiniteLoading<T, ID>({
         }
       } catch (err) {
         if (!isMounted) return;
-        
+
         console.error('Error initializing infinite loading:', err);
         setError('Failed to load items');
       } finally {
@@ -112,9 +112,9 @@ export function useInfiniteLoading<T, ID>({
         }
       }
     };
-    
+
     initialize();
-    
+
     return () => {
       isMounted = false;
     };
@@ -123,33 +123,33 @@ export function useInfiniteLoading<T, ID>({
   // Stable reference to loadBatch function
   const loadBatch = useCallback(async (ids: ID[], page: number) => {
     if (ids.length === 0) return;
-    
+
     try {
       // Use Promise.all for parallel loading
-      const itemPromises = ids.map(id => 
+      const itemPromises = ids.map(id =>
         fetchItem(id)
           .catch(err => {
             console.error(`Error fetching item ${String(id)}:`, err);
             return null;
           })
       );
-      
+
       const batchResults = await Promise.all(itemPromises);
       const validItems = batchResults.filter(Boolean) as T[];
-      
+
       setItems(prev => {
         const newItems = [...prev];
-        
+
         // Remove duplicates and add new items using Map for more efficient comparison
         const existingItemsMap = new Map();
         prev.forEach((item, index) => existingItemsMap.set(item, index));
-        
+
         validItems.forEach(item => {
           if (!existingItemsMap.has(item)) {
             newItems.push(item);
           }
         });
-        
+
         return newItems;
       });
     } catch (error) {
@@ -161,15 +161,15 @@ export function useInfiniteLoading<T, ID>({
   // Load the next page of items - memoized implementation
   const loadNextPage = useCallback(async () => {
     if (isLoadingMore || !hasMore || fetchInProgress.current) return;
-    
+
     fetchInProgress.current = true;
     setIsLoadingMore(true);
-    
+
     try {
       const nextPage = currentPage + 1;
       const start = nextPage * pageSize;
       const end = start + pageSize;
-      
+
       if (start < allIds.length) {
         const nextBatch = allIds.slice(start, end);
         await loadBatch(nextBatch, nextPage);
@@ -209,28 +209,55 @@ export function useInfiniteLoading<T, ID>({
     }
   }, []);
 
-  // Callback ref for the last item - stable function reference
+  // Filter items and sort by updatedAt (newest first)
+  const filteredItems = useMemo(() => {
+    const filtered = items.filter(filterFn);
+
+    // Simple sort by updatedAt, newer items first
+    return [...filtered].sort((a, b) => {
+      // Safely access updatedAt with optional chaining
+      const dateA = (a as any)?.updatedAt;
+      const dateB = (b as any)?.updatedAt;
+
+      if (dateA && dateB) {
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      }
+      return 0;
+    });
+  }, [items, filterFn]);
+
+  // Ref callback for the last item element (for intersection observer)
   const lastItemRefCallback = useCallback((node: HTMLElement | null) => {
-    lastItemRef.current = node;
-    
+    if (isLoadingMore) return;
+
     if (observerRef.current) {
       observerRef.current.disconnect();
-      
-      if (node && hasMore) {
-        observerRef.current.observe(node);
-      }
+      observerRef.current = null;
     }
-  }, [hasMore]);
+
+    if (node && hasMore) {
+      lastItemRef.current = node;
+
+      const observer = new IntersectionObserver(entries => {
+        if (entries[0]?.isIntersecting && hasMore && !isLoadingMore && !fetchInProgress.current) {
+          loadNextPage();
+        }
+      }, { threshold: 0.5 });
+
+      observer.observe(node);
+      observerRef.current = observer;
+    }
+  }, [isLoadingMore, hasMore, loadNextPage]);
 
   // Set up intersection observer for infinite scrolling
   useEffect(() => {
     if (!enabled || !hasMore) return;
-    
+
     // Cleanup old observer
     if (observerRef.current) {
       observerRef.current.disconnect();
     }
-    
+
     // Create new observer
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -240,31 +267,18 @@ export function useInfiniteLoading<T, ID>({
       },
       { threshold: 0.5 }
     );
-    
+
     // Observe the last item if it exists
     if (lastItemRef.current) {
       observerRef.current.observe(lastItemRef.current);
     }
-    
+
     return () => {
       if (observerRef.current) {
         observerRef.current.disconnect();
       }
     };
   }, [enabled, hasMore, isLoadingMore, isLoading, loadNextPage]);
-
-  // Apply the filter function to get filtered items - memoized result
-  const filteredItems = useMemo(() => {
-    if (typeof filterFn !== 'function') {
-      return items;
-    }
-    try {
-      return items.filter(filterFn);
-    } catch (err) {
-      console.error('Error filtering items:', err);
-      return items;
-    }
-  }, [items, filterFn]);
 
   // Calculate remaining IDs - memoized result
   const remainingIds = useMemo(() => {
@@ -284,4 +298,4 @@ export function useInfiniteLoading<T, ID>({
     lastItemRef: lastItemRefCallback,
     remainingIds
   };
-} 
+}
