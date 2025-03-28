@@ -392,7 +392,7 @@ const MovieEditorPage: React.FC = () => {
                 ></div>
               </div>
               <p className="text-center mt-2 text-sm text-gray-400">
-                {Math.floor(storyboardGenerator.generationProgress.current)} of {currentStoryboard.generationStatus?.totalScenes || storyboardGenerator.generationProgress.total} scenes completed
+                {Math.floor(storyboardGenerator.generationProgress.current)} of {storyboardGenerator.generationProgress.total} scenes completed
               </p>
               <p className="text-center mt-2 text-sm text-gray-400">
                 This may take a few minutes. Please don't close this window.

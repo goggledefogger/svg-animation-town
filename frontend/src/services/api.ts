@@ -729,46 +729,47 @@ export const MovieStorageApi = {
       };
     }
 
+    // Register this animation as loading
+    AnimationRegistryHelpers.markLoading(animationId);
+
+    // Create a unique request ID for this animation load
+    const requestId = `clip-animation-${animationId}`;
+
     try {
-      // Register this animation as loading
-      AnimationRegistryHelpers.markLoading(animationId);
-
-      // Create a unique request ID for this animation load
-      const requestId = `clip-animation-${animationId}`;
-
       // Use the registry to track this request and prevent duplicates
       return await AnimationRegistryHelpers.trackRequest(requestId, (async () => {
         try {
-          const data = await fetchApi<any>(`/movie/clip-animation/${animationId}`);
+          // Directly use the regular animation endpoint - simpler and more reliable
+          const animData = await AnimationStorageApi.getAnimation(animationId);
 
-          if (data.success && data.animation && data.animation.svg) {
+          if (animData && animData.svg) {
             // Store in registry for future use
-            AnimationRegistryHelpers.storeAnimation(animationId, data.animation.svg, {
-              name: data.animation.name,
-              timestamp: data.animation.timestamp
+            AnimationRegistryHelpers.storeAnimation(animationId, animData.svg, {
+              name: animData.name,
+              timestamp: animData.timestamp
             });
 
-            console.log(`[API] Successfully fetched animation ${animationId}: ${data.animation.svg.length} bytes`);
+            console.log(`[API] Successfully fetched animation ${animationId}: ${animData.svg.length} bytes`);
 
-            // Dispatch an event to notify any interested components that this animation is loaded
+            // Dispatch an event to notify any interested components
             window.dispatchEvent(new CustomEvent('animation-loaded', {
               detail: {
                 animationId,
-                svg: data.animation.svg
+                svg: animData.svg
               }
             }));
 
             return {
               id: animationId,
-              svg: data.animation.svg,
-              chatHistory: data.animation.chatHistory,
-              timestamp: data.animation.timestamp
+              svg: animData.svg,
+              chatHistory: animData.chatHistory,
+              timestamp: animData.timestamp
             };
-          } else {
-            console.error(`Animation ${animationId} not found or invalid`);
-            AnimationRegistryHelpers.markFailed(animationId);
-            return null;
           }
+
+          console.error(`Animation ${animationId} not found or invalid`);
+          AnimationRegistryHelpers.markFailed(animationId);
+          return null;
         } catch (error) {
           console.error(`Error fetching animation ${animationId}:`, error);
           AnimationRegistryHelpers.markFailed(animationId);

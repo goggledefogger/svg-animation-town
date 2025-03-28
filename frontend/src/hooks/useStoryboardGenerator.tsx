@@ -200,7 +200,17 @@ export function useStoryboardGenerator(
 
     // Double check with the server
     verifyFinalState(targetStoryboardId);
-  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard]);
+
+    // Auto-select the first clip when generation is complete
+    if (currentStoryboard?.clips && currentStoryboard.clips.length > 0) {
+      // Sort the clips by order to ensure we get the first scene
+      const sortedClips = [...currentStoryboard.clips].sort((a, b) => a.order - b.order);
+      if (sortedClips[0]?.id) {
+        console.log(`Auto-selecting first clip: ${sortedClips[0].id}`);
+        setActiveClipId(sortedClips[0].id);
+      }
+    }
+  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard, setActiveClipId]);
 
   // Handle generation errors
   const handleError = useCallback((error: string) => {
@@ -405,6 +415,13 @@ export function useStoryboardGenerator(
       // Reset any previous state
       setGenerationError(null);
       isPollingRef.current = false;
+
+      // Set initial progress state to 0/0 before showing the modal
+      setGenerationProgress({
+        current: 0,
+        total: 0,
+        status: 'initializing'
+      });
 
       // Show the generating modal and hide the generator modal
       setShowGeneratingClipsModal(true);
