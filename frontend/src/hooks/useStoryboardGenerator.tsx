@@ -410,7 +410,7 @@ export function useStoryboardGenerator(
   /**
    * Handle storyboard generation
    */
-  const handleGenerateStoryboard = async (prompt: string, provider: 'openai' | 'claude' = 'openai', numScenes?: number) => {
+  const handleGenerateStoryboard = async (prompt: string, provider: 'openai' | 'claude' | 'gemini' = 'openai', numScenes?: number) => {
     try {
       // Reset any previous state
       setGenerationError(null);

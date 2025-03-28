@@ -30,6 +30,16 @@ class UnifiedRateLimiter {
         lastRefill: Date.now(),
         pendingRequests: new Set(),
         activePromises: new Map()
+      },
+      gemini: {
+        tokens: config.gemini.rateLimiter.tokensPerMinute,
+        maxTokens: config.gemini.rateLimiter.tokensPerMinute,
+        tokensPerRequest: 2000, // Gemini uses about 2000 tokens per request
+        currentRequests: 0,
+        maxConcurrent: config.gemini.rateLimiter.maxConcurrent || 10,
+        lastRefill: Date.now(),
+        pendingRequests: new Set(),
+        activePromises: new Map()
       }
     };
 
@@ -43,6 +53,11 @@ class UnifiedRateLimiter {
         tokensPerMinute: config.openai.rateLimiter.tokensPerMinute,
         maxConcurrent: openaiMaxConcurrent,
         tokensPerRequest: this.buckets.openai.tokensPerRequest
+      },
+      gemini: {
+        tokensPerMinute: config.gemini.rateLimiter.tokensPerMinute,
+        maxConcurrent: config.gemini.rateLimiter.maxConcurrent || 10,
+        tokensPerRequest: this.buckets.gemini.tokensPerRequest
       }
     });
   }

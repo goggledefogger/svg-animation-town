@@ -10,8 +10,8 @@ interface AnimationContextType {
   svgContent: string;
   playing: boolean;
   playbackSpeed: number | 'groovy';
-  aiProvider: 'openai' | 'claude';
-  setAIProvider: (provider: 'openai' | 'claude') => void;
+  aiProvider: 'openai' | 'claude' | 'gemini';
+  setAIProvider: (provider: 'openai' | 'claude' | 'gemini') => void;
   setPlaying: (playing: boolean) => void;
   setSvgContent: React.Dispatch<React.SetStateAction<string>>;
   setSvgContentWithBroadcast: (newContent: string | ((prev: string) => string), source?: string) => void;
@@ -61,7 +61,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [svgContent, setSvgContent] = useState<string>('');
   const [playing, setPlaying] = useState<boolean>(true);
   const [svgRef, setSvgRefState] = useState<SVGSVGElement | null>(null);
-  const [aiProvider, setAIProvider] = useState<'openai' | 'claude'>('openai');
+  const [aiProvider, setAIProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
   const [playbackSpeed, setPlaybackSpeed] = useState<number | 'groovy'>(1);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const groovyIntervalRef = useRef<number | null>(null);
@@ -262,17 +262,17 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
       // Create a unique ID for this request
       const requestId = `list-animations-${Date.now()}`;
-      
+
       // Use the registry helper to create or reuse the request
       const request = async () => {
         const animations = await AnimationStorageApi.listAnimations();
-        
+
         // Store in registry for future use
         AnimationRegistryHelpers.storeAnimationList(animations);
-        
+
         return animations;
       };
-      
+
       return AnimationRegistryHelpers.trackRequest(requestId, request());
     } catch (error) {
       console.error('Error getting saved animations:', error);
@@ -940,16 +940,16 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Reset state before loading new content
       setSvgContent('');
       setChatHistory([]);
-      
+
       // First - check if we have SVG content directly in the clip
       if (clip.svgContent && clip.svgContent.length > 100) {
         console.log(`[AnimationContext] Using clip's SVG content directly (${clip.svgContent.length} bytes)`);
         setSvgContent(clip.svgContent);
-        
+
         if (clip.chatHistory) {
           setChatHistory(clip.chatHistory);
         }
-        
+
         // Also cache in the registry if we have an animationId
       if (clip.animationId) {
           AnimationRegistryHelpers.storeAnimation(
@@ -958,7 +958,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             { chatHistory: clip.chatHistory }
           );
         }
-        
+
         return;
       }
 
@@ -966,63 +966,63 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (clip.animationId) {
         const animationId = clip.animationId;
         const result = AnimationRegistryHelpers.getAnimation(animationId);
-        
+
         // Handle each possible status
         switch (result.status) {
           case 'available':
             if (result.svg) {
               console.log(`[AnimationContext] Using cached animation from registry: ${animationId}`);
               setSvgContent(result.svg);
-              
+
               // Set the chat history if available from registry
               if (result.metadata?.chatHistory) {
                 setChatHistory(result.metadata.chatHistory);
               }
-              
+
               // Note: We can't update the clip here as updateClip is not available in this context
             }
             break;
-            
+
           case 'loading':
             console.log(`[AnimationContext] Animation ${animationId} is already loading, waiting`);
             break;
-            
+
           case 'failed':
             console.log(`[AnimationContext] Animation previously failed to load: ${animationId}`);
             break;
-            
+
           case 'not_found':
             // Not in registry, need to load it
             console.log(`[AnimationContext] Loading animation from server: ${animationId}`);
-            
+
             // Create a request ID for this animation load
             const requestId = `load-animation-${animationId}`;
-            
+
             // Mark as loading
             AnimationRegistryHelpers.markLoading(animationId);
-            
+
             // Create and track the request
             const loadRequest = async () => {
               try {
                 const response = await AnimationStorageApi.getAnimation(animationId);
-                
+
                 // Handle both response formats (direct or wrapped)
                 const animation = response && response.success ? response.animation : response;
-                
+
             if (animation?.svg) {
                   // Store in registry with metadata
                   AnimationRegistryHelpers.storeAnimation(
-                    animationId, 
-                    animation.svg, 
+                    animationId,
+                    animation.svg,
                     {
-                      chatHistory: animation.chatHistory, 
+                      chatHistory: animation.chatHistory,
                       timestamp: animation.timestamp
                     }
                   );
-                  
+
                   // Set the SVG content
               setSvgContent(animation.svg);
-                  
+
                   // Note: We can't update the clip here as updateClip is not available in this context
 
               // Set the chat history if available
@@ -1043,7 +1043,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 return null;
               }
             };
-            
+
             AnimationRegistryHelpers.trackRequest(requestId, loadRequest());
             break;
         }
@@ -1064,7 +1064,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       // Parse animation name to get the ID
       let animationId: string | undefined;
-      
+
       // Check if name has the format "name (id)"
       const idMatch = name.match(/^(.+) \(([a-f0-9-]+)\)$/);
       if (idMatch) {
@@ -1075,25 +1075,25 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           animationId = name;
         }
       }
-      
+
       // If we have an ID, create a request ID for tracking
       const requestId = `load-animation-by-name-${animationId || name}`;
-      
+
       // Create the load request function
       const loadRequest = async () => {
         // If we have an animation ID, check the registry first
         if (animationId) {
           const result = AnimationRegistryHelpers.getAnimation(animationId);
-          
+
           if (result.status === 'available' && result.svg) {
             console.log(`Using animation from registry: ${animationId}`);
             setSvgContent(result.svg);
-            
+
             // Set chat history if available
             if (result.metadata?.chatHistory) {
               setChatHistory(result.metadata.chatHistory);
             }
-            
+
             return {
               svg: result.svg,
               chatHistory: result.metadata?.chatHistory,
@@ -1101,27 +1101,27 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             };
           }
         }
-        
+
         try {
           // Load from server
           console.log(`Loading animation by name: ${name}, id: ${animationId || 'none'}`);
-          
+
           let response;
           if (animationId) {
             // If we have a direct ID, use the storage API
             response = await AnimationStorageApi.getAnimation(animationId);
-            
+
             // Check if response has the new format with success and animation properties
             const animationData = response && response.success ? response.animation : response;
-            
+
             if (animationData && animationData.svg) {
               console.log(`Animation loaded from server: ${name}, ${animationData.svg.length} bytes`);
               setSvgContent(animationData.svg);
-              
+
               if (animationData.chatHistory) {
                 setChatHistory(animationData.chatHistory);
               }
-              
+
               // Also store in registry for future use
               AnimationRegistryHelpers.storeAnimation(
                 animationId,
@@ -1131,7 +1131,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   timestamp: animationData.timestamp
                 }
               );
-              
+
               return {
                 svg: animationData.svg,
                 chatHistory: animationData.chatHistory,
@@ -1141,29 +1141,29 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           } else {
             // We don't have an ID, search by name
             response = await AnimationStorageApi.listAnimations();
-            
+
             if (response && Array.isArray(response)) {
               // Filter animations by name
-              const matches = response.filter(anim => 
+              const matches = response.filter(anim =>
                 anim.name.toLowerCase().includes(name.toLowerCase())
               );
-              
+
               if (matches.length > 0) {
                 // Get the first matching animation
                 const match = matches[0];
-                
+
                 // Load full animation details
                 const animation = await AnimationStorageApi.getAnimation(match.id);
                 const animationData = animation && animation.success ? animation.animation : animation;
-                
+
                 if (animationData && animationData.svg) {
                   console.log(`Animation found and loaded from search: ${name}, id: ${match.id}`);
                   setSvgContent(animationData.svg);
-                  
+
                   if (animationData.chatHistory) {
                     setChatHistory(animationData.chatHistory);
                   }
-                  
+
                   // Store in registry
                   AnimationRegistryHelpers.storeAnimation(
                     match.id,
@@ -1173,7 +1173,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                       timestamp: animationData.timestamp
                     }
                   );
-                  
+
                   return {
                     svg: animationData.svg,
                     chatHistory: animationData.chatHistory,
@@ -1183,7 +1183,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               }
             }
           }
-          
+
           console.warn(`Animation not found: ${name}`);
           return null;
         } catch (error) {
@@ -1191,7 +1191,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           return null;
         }
       };
-      
+
       // Track the request to prevent duplicates
       return await AnimationRegistryHelpers.trackRequest(requestId, loadRequest());
     } catch (error) {

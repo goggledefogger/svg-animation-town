@@ -1,6 +1,15 @@
 const openai = require('./shared-openai-client');
 const { ServiceUnavailableError, BadRequestError } = require('../utils/errors');
 const config = require('../config');
+const { getGeminiClient, Type } = require('./shared-gemini-client');
+const { RateLimiter } = require('../utils/rate-limiter');
+
+// Create a rate limiter for storyboard generation
+const storyboardRateLimiter = new RateLimiter({
+  tokensPerInterval: 10, // Adjust based on your quota
+  interval: 60 * 1000, // 1 minute in milliseconds
+  maxWaitTime: 45 * 1000 // 45 seconds max wait time
+});
 
 // Add a unique identifier for this client instance
 const clientId = Math.random().toString(36).substring(7);
@@ -355,7 +364,154 @@ exports.generateStoryboard = async (prompt, provider = null, numScenes = null) =
       return await exports.generateStoryboardWithOpenAI(prompt, numScenes);
     case 'claude':
       return await exports.generateStoryboardWithClaude(prompt, numScenes);
+    case 'gemini':
+      return await exports.generateStoryboardWithGemini(prompt, numScenes);
     default:
       throw new ServiceUnavailableError(`Unknown AI provider: ${selectedProvider}`);
   }
 };
+
+/**
+ * Generate a storyboard using Gemini API
+ *
+ * @param {string} prompt - User's storyboard request
+ * @param {number} numScenes - Optional number of scenes to generate
+ * @returns {object} Storyboard data including title, description, and scenes
+ */
+const generateStoryboardWithGemini = async (prompt, numScenes = null) => {
+  if (!config.gemini.apiKey) {
+    throw new ServiceUnavailableError('Gemini API key is not configured');
+  }
+
+  try {
+    // Wait for rate limiter token
+    await storyboardRateLimiter.acquireToken();
+    console.log('[Storyboard Service] Rate limit token acquired, sending request');
+
+    console.log('Generating storyboard with Gemini...');
+
+    // Get Gemini client
+    const client = getGeminiClient();
+
+    // Prepare prompts with specific storyboard generation instructions
+    const systemPrompt = createSystemPrompt();
+    const userPrompt = createUserPrompt(prompt, numScenes);
+
+    // Call Gemini API with structured output configuration
+    const result = await client.models.generateContent({
+      model: config.gemini.model,
+      contents: `${systemPrompt}\n\n${userPrompt}`,
+      generationConfig: {
+        temperature: 0.7, // Higher temperature for creative storyboards
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: {
+              type: Type.STRING,
+              description: "A concise title for the movie"
+            },
+            description: {
+              type: Type.STRING,
+              description: "Overall description of the movie and its story arc"
+            },
+            scenes: {
+              type: Type.ARRAY,
+              description: "Sequential scenes describing different states of the animation",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: {
+                    type: Type.STRING,
+                    description: "Unique identifier for the scene"
+                  },
+                  description: {
+                    type: Type.STRING,
+                    description: "Detailed description of what happens in this scene"
+                  },
+                  svgPrompt: {
+                    type: Type.STRING,
+                    description: "Detailed prompt for generating an SVG animation of this scene"
+                  },
+                  duration: {
+                    type: Type.NUMBER,
+                    description: "Duration of the scene in seconds"
+                  }
+                },
+                required: ["id", "description", "svgPrompt", "duration"]
+              }
+            }
+          },
+          required: ['title', 'description', 'scenes']
+        }
+      }
+    });
+
+    try {
+      const text = result.text();
+
+      if (!text) {
+        console.warn('Empty response from Gemini API');
+        throw new ServiceUnavailableError('Received empty storyboard response from Gemini API');
+      }
+
+      try {
+        // Since we're using structured output, the response should be JSON
+        const parsedResponse = JSON.parse(text);
+
+        if (!parsedResponse || !parsedResponse.title || !parsedResponse.scenes) {
+          console.warn('Invalid storyboard format in Gemini response');
+          throw new ServiceUnavailableError('Invalid storyboard format received from Gemini API');
+        }
+
+        console.log(`Successfully received storyboard with ${parsedResponse.scenes.length} scenes`);
+        return processStoryboard(parsedResponse);
+      } catch (parseError) {
+        console.error('Error parsing JSON from Gemini storyboard response:', parseError);
+        console.error('Raw response:', text);
+
+        // Fall back to regex extraction if JSON parsing fails
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            const jsonStr = jsonMatch[0];
+            const extractedResponse = JSON.parse(jsonStr);
+
+            if (extractedResponse && extractedResponse.title && extractedResponse.scenes) {
+              console.log('Successfully extracted storyboard using regex fallback');
+              return processStoryboard(extractedResponse);
+            }
+          } catch (e) {
+            console.error('Failed to extract storyboard JSON with regex fallback:', e);
+          }
+        }
+
+        throw new ServiceUnavailableError('Failed to parse storyboard response from Gemini API');
+      }
+    } catch (error) {
+      console.error('Error processing Gemini storyboard response:', error);
+      throw new ServiceUnavailableError(`Error processing storyboard response: ${error.message}`);
+    }
+  } catch (error) {
+    console.error('Gemini API Error in storyboard generation:', error);
+
+    // Handle specific error types
+    if (error.message && error.message.includes('API key')) {
+      throw new ServiceUnavailableError('Invalid Gemini API key. Please check your configuration.');
+    }
+
+    if (error.message && error.message.includes('quota')) {
+      throw new ServiceUnavailableError('Gemini API quota exceeded. Please check your billing information.');
+    }
+
+    if (error.message && error.message.includes('rate limit')) {
+      throw new ServiceUnavailableError('Gemini API rate limit exceeded. Please try again later.');
+    }
+
+    throw new ServiceUnavailableError(`Gemini API Error: ${error.message}`);
+  }
+};
+
+exports.generateStoryboardWithGemini = generateStoryboardWithGemini;

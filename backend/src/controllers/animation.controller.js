@@ -21,7 +21,7 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
     let llmResponse;
 
     // Override the default provider if one is specified in the request
-    if (provider && (provider === 'openai' || provider === 'claude')) {
+    if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
       // Temporarily override the configured provider
       const originalProvider = config.aiProvider;
       config.aiProvider = provider;
@@ -104,7 +104,7 @@ exports.updateAnimation = asyncHandler(async (req, res) => {
 
   try {
     // Override the default provider if one is specified in the request
-    if (provider && (provider === 'openai' || provider === 'claude')) {
+    if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
       // Temporarily override the configured provider
       const originalProvider = config.aiProvider;
       config.aiProvider = provider;

@@ -1,5 +1,6 @@
 const openAIService = require('./openai.service');
 const claudeService = require('./claude.service');
+const geminiService = require('./gemini.service');
 const rateLimiter = require('./unified-rate-limiter.service');
 const config = require('../config');
 const { ServiceUnavailableError } = require('../utils/errors');
@@ -21,6 +22,12 @@ const getAIService = () => {
         throw new ServiceUnavailableError('Claude API key is not configured');
       }
       return claudeService;
+
+    case 'gemini':
+      if (!config.gemini.apiKey) {
+        throw new ServiceUnavailableError('Gemini API key is not configured');
+      }
+      return geminiService;
 
     default:
       throw new ServiceUnavailableError(`Unknown AI provider: ${config.aiProvider}`);

@@ -107,7 +107,7 @@ export const AnimationApi = {
    */
   generate: async (
     prompt: string,
-    provider: 'openai' | 'claude' = 'openai'
+    provider: 'openai' | 'claude' | 'gemini' = 'openai'
   ): Promise<{ svg: string; message: string; animationId?: string }> => {
     // Only log provider choice, not the prompt
     console.log(`Generating animation using ${provider}`);
@@ -227,7 +227,7 @@ export const AnimationApi = {
    */
   generateWithMovieContext: async (
     prompt: string,
-    provider: 'openai' | 'claude' = 'openai',
+    provider: 'openai' | 'claude' | 'gemini' = 'openai',
     movieContext: {
       storyboardId: string;
       sceneIndex: number;
@@ -325,7 +325,7 @@ export const AnimationApi = {
   update: async (
     prompt: string,
     currentSvg: string,
-    provider: 'openai' | 'claude' = 'openai'
+    provider: 'openai' | 'claude' | 'gemini' = 'openai'
   ): Promise<{ svg: string; message: string }> => {
     console.log('Updating animation with prompt:', prompt);
     console.log('Using AI provider:', provider);

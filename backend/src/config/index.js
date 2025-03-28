@@ -37,8 +37,22 @@ const config = {
     }
   },
 
+  // Gemini configuration
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY,
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-pro-exp-03-25',
+    temperature: 0.7,
+    maxTokens: 12000,
+    // Rate limiter configuration
+    rateLimiter: {
+      tokensPerMinute: parseInt(process.env.GEMINI_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 10000,
+      tokensPerRequest: parseInt(process.env.GEMINI_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 2000,
+      maxConcurrentRequests: parseInt(process.env.GEMINI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 10
+    }
+  },
+
   // AI Provider selection
-  aiProvider: process.env.AI_PROVIDER || 'openai', // 'openai' or 'claude'
+  aiProvider: process.env.AI_PROVIDER || 'openai', // 'openai', 'claude', or 'gemini'
 
   // Cors configuration
   cors: {
@@ -56,6 +70,10 @@ const validateConfig = () => {
 
   if (config.aiProvider === 'claude' && !config.claude.apiKey) {
     console.warn('Warning: Claude API key is missing but Claude is selected as the provider.');
+  }
+
+  if (config.aiProvider === 'gemini' && !config.gemini.apiKey) {
+    console.warn('Warning: Gemini API key is missing but Gemini is selected as the provider.');
   }
 
   // Validate other common settings
