@@ -1,5 +1,6 @@
 const storageService = require('../services/storage.service');
 const { BadRequestError, NotFoundError } = require('../utils/errors');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Animation storage controller
@@ -21,7 +22,7 @@ const animationStorageController = {
 
       const timestamp = new Date().toISOString();
       const animationId = await storageService.saveAnimation({
-        id,
+        id: id || uuidv4(),
         name,
         svg,
         chatHistory,
