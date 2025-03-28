@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 interface StoryboardGeneratorModalProps {
   isOpen: boolean;
   onCancel: () => void;
-  onGenerate: (prompt: string, provider: 'openai' | 'claude', numScenes?: number) => void;
+  onGenerate: (prompt: string, provider: 'openai' | 'claude' | 'gemini', numScenes?: number) => void;
   isLoading: boolean;
 }
 
@@ -14,7 +14,7 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
   isLoading
 }) => {
   const [prompt, setPrompt] = useState('');
-  const [provider, setProvider] = useState<'openai' | 'claude'>('openai');
+  const [provider, setProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
   const [numScenes, setNumScenes] = useState<'auto' | number>('auto');
   const [providerDropdownOpen, setProviderDropdownOpen] = useState(false);
   const [scenesDropdownOpen, setScenesDropdownOpen] = useState(false);
@@ -50,8 +50,13 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
     }
   };
 
-  const getProviderDisplayName = (providerValue: 'openai' | 'claude') => {
-    return providerValue === 'openai' ? 'OpenAI' : 'Claude';
+  const getProviderDisplayName = (providerValue: 'openai' | 'claude' | 'gemini') => {
+    switch (providerValue) {
+      case 'openai': return 'OpenAI';
+      case 'claude': return 'Claude';
+      case 'gemini': return 'Gemini';
+      default: return providerValue;
+    }
   };
 
   const getScenesDisplayName = (scenesValue: 'auto' | number) => {
@@ -112,7 +117,7 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
                   className={`
                     flex items-center justify-between w-full px-4 py-2 text-sm
                     bg-gray-700 border ${isLoading ? 'border-gray-600' : 'border-gray-600 hover:border-gray-500'}
-                    rounded-md focus:outline-none ${provider === 'openai' ? 'text-bat-yellow' : provider === 'claude' ? 'text-bat-yellow' : 'text-white'}
+                    rounded-md focus:outline-none text-bat-yellow
                   `}
                   onClick={() => !isLoading && setProviderDropdownOpen(!providerDropdownOpen)}
                   disabled={isLoading}
@@ -158,6 +163,18 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
                           }}
                         >
                           Claude
+                        </button>
+                      </li>
+                      <li>
+                        <button
+                          type="button"
+                          className={`w-full px-4 py-2 text-left ${provider === 'gemini' ? 'bg-gray-600 text-bat-yellow' : 'text-white hover:bg-gray-600'}`}
+                          onClick={() => {
+                            setProvider('gemini');
+                            setProviderDropdownOpen(false);
+                          }}
+                        >
+                          Gemini
                         </button>
                       </li>
                     </ul>

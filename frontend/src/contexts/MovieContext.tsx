@@ -15,7 +15,7 @@ export interface MovieClip {
   chatHistory?: Message[];
   animationId?: string; // Reference to saved animation ID in backend storage
   createdAt?: Date;     // When the clip was created
-  provider?: 'openai' | 'claude'; // Which AI provider was used to generate the clip
+  provider?: 'openai' | 'claude' | 'gemini'; // Which AI provider was used to generate the clip
 }
 
 // Define storyboard interface
@@ -27,7 +27,7 @@ export interface Storyboard {
   createdAt: Date;
   updatedAt: Date;
   // AI provider used for generation
-  aiProvider?: 'openai' | 'claude';
+  aiProvider?: 'openai' | 'claude' | 'gemini';
   // Store original scenes from the storyboard response
   originalScenes?: any[];
   // Generation status for in-progress movies

@@ -11,16 +11,17 @@ const AnimationService = {
   /**
    * Generate animation from a text prompt
    * @param {string} prompt - Text prompt to generate animation from
-   * @param {string} provider - AI provider to use (openai or claude)
+   * @param {string} provider - AI provider to use (openai, claude, or gemini)
    * @returns {Promise<Object>} - Generated animation data with SVG and message
    */
   generateAnimation: async (prompt, provider) => {
     console.log(`[ANIMATION_GEN_START] Generating animation with prompt (length: ${prompt.length})`);
+    console.log(`[ANIMATION_GEN_PROVIDER] Using provider: ${provider || config.aiProvider}`);
 
     // Use the specified provider or fall back to default
     let llmResponse;
 
-    if (provider && (provider === 'openai' || provider === 'claude')) {
+    if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
       // Temporarily override the configured provider
       const originalProvider = config.aiProvider;
       config.aiProvider = provider;

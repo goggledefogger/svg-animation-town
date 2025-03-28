@@ -757,8 +757,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       if (document.visibilityState === 'visible') {
         console.log(`[Visibility] Page became visible at ${new Date().toISOString()}`);
 
-        // First check if there's a movie to load
-        if (currentStoryboard?.id) {
+        // First check if there's a movie to load - ONLY if we're not in the animation editor
+        if (currentStoryboard?.id && !isAnimationEditor) {
           try {
             console.log('[Visibility] Checking movie state from server');
             const response = await MovieStorageApi.getMovie(currentStoryboard.id) as MovieResponse;

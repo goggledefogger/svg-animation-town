@@ -8,7 +8,7 @@ export interface StoryboardScene {
   description: string;
   svgPrompt: string;
   duration: number;
-  provider?: 'openai' | 'claude'; // Which AI provider to use for this scene
+  provider?: 'openai' | 'claude' | 'gemini'; // Which AI provider to use for this scene
 }
 
 /**
@@ -44,7 +44,7 @@ export const MovieApi = {
    */
   generateStoryboard: async (
     prompt: string,
-    provider: 'openai' | 'claude' = 'openai',
+    provider: 'openai' | 'claude' | 'gemini' = 'openai',
     numScenes?: number
   ): Promise<StoryboardResponse> => {
     console.log('Generating storyboard with prompt:', prompt);
