@@ -134,13 +134,6 @@ export function useStoryboardGenerator(
 
   // Handle new clip updates
   const handleNewClip = useCallback((clip: MovieClip) => {
-    console.log("[STORYBOARD_UPDATE] Handle new clip called:", clip.id);
-
-    // Check if the clip has an animation ID
-    if (clip.animationId) {
-      console.log(`[STORYBOARD_UPDATE] Clip ${clip.id} has animation ID ${clip.animationId}`);
-    }
-
     // Update the storyboard with the new clip
     setCurrentStoryboard(prev => {
       // Check if the clip already exists in the storyboard
@@ -158,8 +151,6 @@ export function useStoryboardGenerator(
       // Calculate new generation status
       const completedScenes = updatedClips.length;
       const totalScenes = prev.generationStatus?.totalScenes || 0;
-
-      console.log(`[STORYBOARD_UPDATE] Updated clip state: ${completedScenes}/${totalScenes} scenes completed`);
 
       // Update the generationStatus to keep UI in sync
       return {

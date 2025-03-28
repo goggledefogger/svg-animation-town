@@ -96,11 +96,7 @@ export function useGenerationProgress({
         if (!isMountedRef.current) return;
 
         try {
-          // Log raw event data
-          console.log(`[RAW_SSE_EVENT] Raw SSE data received for session ${sessionId}:`, event.data);
-
           const update = JSON.parse(event.data);
-          console.log(`Received SSE update for session ${sessionId}:`, update);
 
           if (update.type === 'progress') {
             setProgress(update.data);
@@ -108,7 +104,6 @@ export function useGenerationProgress({
             // Handle new clip updates
             if (update.data.newClip) {
               const clipData = update.data.newClip.clip;
-              console.log(`[STATE_UPDATE] New clip received for session ${sessionId}:`, clipData);
 
               // Check if this clip has an animation ID
               if (clipData.animationId) {
