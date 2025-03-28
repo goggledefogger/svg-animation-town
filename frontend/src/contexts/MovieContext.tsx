@@ -135,6 +135,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
   const [activeClip, setActiveClip] = useState<MovieClip | null>(null);
   const [savedStoryboards, setSavedStoryboards] = useState<string[]>([]);
+  const [defaultProvider, setDefaultProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
 
   // Caching mechanism to avoid redundant API calls
   const animationListCache = useRef<{timestamp: number, animations: string[]} | null>(null);
@@ -143,6 +144,23 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   // Playback state
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentPlaybackPosition, setCurrentPlaybackPosition] = useState(0);
+
+  // Fetch default provider from backend on initial load
+  useEffect(() => {
+    const fetchDefaultProvider = async () => {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        if (data.config && data.config.aiProvider) {
+          console.log(`Setting default AI provider from backend for movie context: ${data.config.aiProvider}`);
+          setDefaultProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
+        }
+      } catch (error) {
+        console.error('Error fetching default provider:', error);
+      }
+    };
+    fetchDefaultProvider();
+  }, []);
 
   // Load saved storyboard list on mount
   useEffect(() => {

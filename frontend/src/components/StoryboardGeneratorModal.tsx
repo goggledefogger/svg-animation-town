@@ -21,6 +21,23 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
   const providerDropdownRef = useRef<HTMLDivElement>(null);
   const scenesDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Fetch default provider from backend on initial load
+  useEffect(() => {
+    const fetchDefaultProvider = async () => {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        if (data.config && data.config.aiProvider) {
+          console.log(`Setting default AI provider from backend: ${data.config.aiProvider}`);
+          setProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
+        }
+      } catch (error) {
+        console.error('Error fetching default provider:', error);
+      }
+    };
+    fetchDefaultProvider();
+  }, []);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {

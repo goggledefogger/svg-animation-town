@@ -62,6 +62,27 @@ export function useStoryboardGenerator(
     activeClipId
   } = useMovie();
 
+  // State for default provider fetched from server
+  const [defaultProvider, setDefaultProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
+
+  // Fetch default provider from backend on initial load
+  useEffect(() => {
+    const fetchDefaultProvider = async () => {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        if (data.config && data.config.aiProvider) {
+          console.log(`Setting default AI provider from backend for storyboard generator: ${data.config.aiProvider}`);
+          setDefaultProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
+        }
+      } catch (error) {
+        console.error('Error fetching default provider:', error);
+      }
+    };
+    fetchDefaultProvider();
+  }, []);
+
+  // State for tracking generation progress and error
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [currentSession, setCurrentSession] = useState<string | null>(null);
 
@@ -410,7 +431,7 @@ export function useStoryboardGenerator(
   /**
    * Handle storyboard generation
    */
-  const handleGenerateStoryboard = async (prompt: string, provider: 'openai' | 'claude' | 'gemini' = 'openai', numScenes?: number) => {
+  const handleGenerateStoryboard = async (prompt: string, provider: 'openai' | 'claude' | 'gemini' = defaultProvider, numScenes?: number) => {
     try {
       // Reset any previous state
       setGenerationError(null);

@@ -508,12 +508,6 @@ export const AnimationStorageApi = {
       const data = await fetchApi<any>(`/animation/${id}`);
 
       if (data.success && data.animation) {
-        // Add debug logging to check provider field
-        console.log(`[AnimationAPI] getAnimation received data for ${id}:`, {
-          hasProvider: !!data.animation.provider,
-          provider: data.animation.provider,
-          dataKeys: Object.keys(data.animation)
-        });
         return data.animation;
       } else {
         throw new Error('Invalid response from server');

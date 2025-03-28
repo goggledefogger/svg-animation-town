@@ -62,6 +62,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [playing, setPlaying] = useState<boolean>(true);
   const [svgRef, setSvgRefState] = useState<SVGSVGElement | null>(null);
   const [aiProvider, setAIProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
+  const [defaultProvider, setDefaultProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
   const [playbackSpeed, setPlaybackSpeed] = useState<number | 'groovy'>(1);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const groovyIntervalRef = useRef<number | null>(null);
@@ -80,6 +81,25 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Cache expiration in milliseconds (5 seconds)
   const CACHE_EXPIRATION = 5000;
+
+  // Fetch default provider from backend on initial load
+  useEffect(() => {
+    const fetchDefaultProvider = async () => {
+      try {
+        const response = await fetch('/api/config');
+        const data = await response.json();
+        if (data.config && data.config.aiProvider) {
+          console.log(`Setting default AI provider from backend: ${data.config.aiProvider}`);
+          // Set both the current provider and store the default for future use
+          setAIProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
+          setDefaultProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
+        }
+      } catch (error) {
+        console.error('Error fetching default provider:', error);
+      }
+    };
+    fetchDefaultProvider();
+  }, []);
 
   // Try to restore state from session storage on initial load
   useEffect(() => {
@@ -996,8 +1016,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 console.log(`Setting AI provider from loaded animation metadata: ${result.metadata.provider}`);
                 setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
               } else {
-                console.log(`No provider found for animation ${animationId}, setting to default 'openai'`);
-                setAIProvider('openai');
+                console.log(`No provider found for animation ${animationId}, setting to default '${defaultProvider}'`);
+                setAIProvider(defaultProvider);
               }
 
               // Note: We can't update the clip here as updateClip is not available in this context
@@ -1052,13 +1072,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                     setChatHistory(animation.chatHistory);
                   }
 
-                  // Set AI provider if available in animation data, otherwise default to 'openai'
+                  // Set AI provider if available in animation data, otherwise default to defaultProvider
                   if (animation.provider) {
                     console.log(`Setting AI provider from loaded animation: ${animation.provider}`);
                     setAIProvider(animation.provider as 'openai' | 'claude' | 'gemini');
                   } else {
-                    console.log(`No provider found for animation from server, setting to default 'openai'`);
-                    setAIProvider('openai');
+                    console.log(`No provider found for animation from server, setting to default '${defaultProvider}'`);
+                    setAIProvider(defaultProvider);
                   }
 
                   console.log(`[AnimationContext] Animation loaded: ${animationId}`);
@@ -1130,8 +1150,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               console.log(`Setting AI provider from loaded animation metadata: ${result.metadata.provider}`);
               setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
             } else {
-              console.log(`No provider found for animation ${animationId}, setting to default 'openai'`);
-              setAIProvider('openai');
+              console.log(`No provider found for animation ${animationId}, setting to default '${defaultProvider}'`);
+              setAIProvider(defaultProvider);
             }
 
             return {
@@ -1162,13 +1182,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 setChatHistory(animationData.chatHistory);
               }
 
-              // Set AI provider if available in animation data, otherwise default to 'openai'
+              // Set AI provider if available in animation data, otherwise default to defaultProvider
               if (animationData.provider) {
                 console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
                 setAIProvider(animationData.provider as 'openai' | 'claude' | 'gemini');
               } else {
-                console.log(`No provider found for animation from server, setting to default 'openai'`);
-                setAIProvider('openai');
+                console.log(`No provider found for animation from server, setting to default '${defaultProvider}'`);
+                setAIProvider(defaultProvider);
               }
 
               // Also store in registry for future use
@@ -1214,13 +1234,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                     setChatHistory(animationData.chatHistory);
                   }
 
-                  // Set AI provider if available in animation data, otherwise default to 'openai'
+                  // Set AI provider if available in animation data, otherwise default to defaultProvider
                   if (animationData.provider) {
                     console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
                     setAIProvider(animationData.provider as 'openai' | 'claude' | 'gemini');
                   } else {
-                    console.log(`No provider found for animation from search, setting to default 'openai'`);
-                    setAIProvider('openai');
+                    console.log(`No provider found for animation from search, setting to default '${defaultProvider}'`);
+                    setAIProvider(defaultProvider);
                   }
 
                   // Store in registry
