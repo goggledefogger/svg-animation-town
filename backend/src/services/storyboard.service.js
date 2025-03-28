@@ -390,66 +390,66 @@ const generateStoryboardWithGemini = async (prompt, numScenes = null) => {
 
     console.log('Generating storyboard with Gemini...');
 
-    // Get Gemini client
-    const client = getGeminiClient();
-
-    // Prepare prompts with specific storyboard generation instructions
-    const systemPrompt = createSystemPrompt();
-    const userPrompt = createUserPrompt(prompt, numScenes);
-
-    // Call Gemini API with structured output configuration
-    const result = await client.models.generateContent({
-      model: config.gemini.model,
-      contents: `${systemPrompt}\n\n${userPrompt}`,
-      generationConfig: {
-        temperature: 0.7, // Higher temperature for creative storyboards
-      },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: {
-              type: Type.STRING,
-              description: "A concise title for the movie"
-            },
-            description: {
-              type: Type.STRING,
-              description: "Overall description of the movie and its story arc"
-            },
-            scenes: {
-              type: Type.ARRAY,
-              description: "Sequential scenes describing different states of the animation",
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: {
-                    type: Type.STRING,
-                    description: "Unique identifier for the scene"
-                  },
-                  description: {
-                    type: Type.STRING,
-                    description: "Detailed description of what happens in this scene"
-                  },
-                  svgPrompt: {
-                    type: Type.STRING,
-                    description: "Detailed prompt for generating an SVG animation of this scene"
-                  },
-                  duration: {
-                    type: Type.NUMBER,
-                    description: "Duration of the scene in seconds"
-                  }
-                },
-                required: ["id", "description", "svgPrompt", "duration"]
-              }
-            }
-          },
-          required: ['title', 'description', 'scenes']
-        }
-      }
-    });
+    // Get Gemini client with tracking
+    const { client, completeRequest } = getGeminiClient();
 
     try {
+      // Prepare prompts with specific storyboard generation instructions
+      const systemPrompt = createSystemPrompt();
+      const userPrompt = createUserPrompt(prompt, numScenes);
+
+      // Call Gemini API with structured output configuration
+      const result = await client.models.generateContent({
+        model: config.gemini.model,
+        contents: `${systemPrompt}\n\n${userPrompt}`,
+        generationConfig: {
+          temperature: 0.7, // Higher temperature for creative storyboards
+        },
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              title: {
+                type: Type.STRING,
+                description: "A concise title for the movie"
+              },
+              description: {
+                type: Type.STRING,
+                description: "Overall description of the movie and its story arc"
+              },
+              scenes: {
+                type: Type.ARRAY,
+                description: "Sequential scenes describing different states of the animation",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: {
+                      type: Type.STRING,
+                      description: "Unique identifier for the scene"
+                    },
+                    description: {
+                      type: Type.STRING,
+                      description: "Detailed description of what happens in this scene"
+                    },
+                    svgPrompt: {
+                      type: Type.STRING,
+                      description: "Detailed prompt for generating an SVG animation of this scene"
+                    },
+                    duration: {
+                      type: Type.NUMBER,
+                      description: "Duration of the scene in seconds"
+                    }
+                  },
+                  required: ["id", "description", "svgPrompt", "duration"]
+                }
+              }
+            },
+            required: ['title', 'description', 'scenes']
+          }
+        }
+      });
+
       const text = result.text;
 
       if (!text) {
@@ -490,9 +490,9 @@ const generateStoryboardWithGemini = async (prompt, numScenes = null) => {
 
         throw new ServiceUnavailableError('Failed to parse storyboard response from Gemini API');
       }
-    } catch (error) {
-      console.error('Error processing Gemini storyboard response:', error);
-      throw new ServiceUnavailableError(`Error processing storyboard response: ${error.message}`);
+    } finally {
+      // Always decrement the counter, even if there was an error
+      completeRequest();
     }
   } catch (error) {
     console.error('Gemini API Error in storyboard generation:', error);

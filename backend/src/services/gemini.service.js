@@ -80,38 +80,38 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false) =
 
     console.log(`[Gemini Service ${clientId}] Starting request`);
 
-    // Get Gemini client
-    const client = getGeminiClient();
-
-    // Call Gemini API with proper structured output configuration
-    const result = await client.models.generateContent({
-      model: config.gemini.model,
-      contents: `${systemPrompt}\n\n${userPrompt}`,
-      generationConfig: {
-        temperature: isUpdate ? Math.max(0.1, config.gemini.temperature - 0.1) : config.gemini.temperature,
-      },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            explanation: {
-              type: Type.STRING,
-              description: "A brief explanation of the animation or the changes made"
-            },
-            svg: {
-              type: Type.STRING,
-              description: "The complete SVG code with animations"
-            }
-          },
-          required: ['explanation', 'svg'],
-        },
-      }
-    });
-
-    console.log(`[Gemini Service ${clientId}] Request completed`);
+    // Get Gemini client with tracking
+    const { client, completeRequest } = getGeminiClient();
 
     try {
+      // Call Gemini API with proper structured output configuration
+      const result = await client.models.generateContent({
+        model: config.gemini.model,
+        contents: `${systemPrompt}\n\n${userPrompt}`,
+        generationConfig: {
+          temperature: isUpdate ? Math.max(0.1, config.gemini.temperature - 0.1) : config.gemini.temperature,
+        },
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              explanation: {
+                type: Type.STRING,
+                description: "A brief explanation of the animation or the changes made"
+              },
+              svg: {
+                type: Type.STRING,
+                description: "The complete SVG code with animations"
+              }
+            },
+            required: ['explanation', 'svg'],
+          },
+        }
+      });
+
+      console.log(`[Gemini Service ${clientId}] Request completed`);
+
       const text = result.text;
 
       if (!text) {
@@ -152,9 +152,9 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false) =
 
         return generateErrorSvg('Failed to parse response', isUpdate ? currentSvg : null);
       }
-    } catch (error) {
-      console.error('Error processing Gemini response:', error);
-      return generateErrorSvg('Error processing response', isUpdate ? currentSvg : null);
+    } finally {
+      // Always decrement the counter, even if there was an error
+      completeRequest();
     }
   } catch (error) {
     console.error('Gemini API Error:', error);
@@ -214,44 +214,49 @@ exports.generateRawResponse = async (prompt) => {
     await svgRateLimiter.acquireToken();
     console.log('[Gemini Service] Rate limit token acquired for raw response');
 
-    // Get Gemini client
-    const client = getGeminiClient();
+    // Get Gemini client with tracking
+    const { client, completeRequest } = getGeminiClient();
 
-    // Prepare prompt with instructions
-    const systemInstructions = "You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.";
-    const userPromptWithInstructions = prompt;
+    try {
+      // Prepare prompt with instructions
+      const systemInstructions = "You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.";
+      const userPromptWithInstructions = prompt;
 
-    // Call Gemini API with proper structured output configuration for JSON
-    const result = await client.models.generateContent({
-      model: config.gemini.model,
-      contents: `${systemInstructions}\n\n${userPromptWithInstructions}`,
-      generationConfig: {
-        temperature: 0.1, // Lower temperature for more deterministic JSON responses
-      },
-      config: {
-        responseMimeType: 'application/json'
+      // Call Gemini API with proper structured output configuration for JSON
+      const result = await client.models.generateContent({
+        model: config.gemini.model,
+        contents: `${systemInstructions}\n\n${userPromptWithInstructions}`,
+        generationConfig: {
+          temperature: 0.1, // Lower temperature for more deterministic JSON responses
+        },
+        config: {
+          responseMimeType: 'application/json'
+        }
+      });
+
+      if (!result) {
+        console.error('Empty response from Gemini API');
+        throw new ServiceUnavailableError('Received empty response from Gemini API');
       }
-    });
 
-    if (!result) {
-      console.error('Empty response from Gemini API');
-      throw new ServiceUnavailableError('Received empty response from Gemini API');
+      const responseContent = result.text;
+      console.log(`Gemini raw response received, length: ${responseContent.length}`);
+
+      // Make sure we don't have surrounding markdown code blocks
+      const cleanedResponse = responseContent.replace(/```json|```/g, '').trim();
+
+      // Validate that we have something that at least starts with a JSON object or array
+      if (!cleanedResponse.startsWith('{') && !cleanedResponse.startsWith('[')) {
+        console.error('Gemini response does not start with a JSON object or array');
+        console.error('Response starts with:', cleanedResponse.substring(0, 100));
+        throw new ServiceUnavailableError('Invalid JSON response from Gemini: does not start with { or [');
+      }
+
+      return cleanedResponse;
+    } finally {
+      // Always decrement the counter, even if there was an error
+      completeRequest();
     }
-
-    const responseContent = result.text;
-    console.log(`Gemini raw response received, length: ${responseContent.length}`);
-
-    // Make sure we don't have surrounding markdown code blocks
-    const cleanedResponse = responseContent.replace(/```json|```/g, '').trim();
-
-    // Validate that we have something that at least starts with a JSON object or array
-    if (!cleanedResponse.startsWith('{') && !cleanedResponse.startsWith('[')) {
-      console.error('Gemini response does not start with a JSON object or array');
-      console.error('Response starts with:', cleanedResponse.substring(0, 100));
-      throw new ServiceUnavailableError('Invalid JSON response from Gemini: does not start with { or [');
-    }
-
-    return cleanedResponse;
   } catch (error) {
     console.error('Gemini API Error in generateRawResponse:', error);
 

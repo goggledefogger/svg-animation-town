@@ -21,10 +21,24 @@ const geminiClient = new GoogleGenAI({
 // Track the active requests and return the client
 const getGeminiClient = () => {
   activeRequests++;
-
   console.log(`[Gemini Client] Active requests: ${activeRequests}`);
 
-  return geminiClient;
+  // Return an object with the client and a completion function
+  return {
+    client: geminiClient,
+    completeRequest: () => {
+      activeRequests--;
+      console.log(`[Gemini Client] Request completed. Active requests: ${activeRequests}`);
+    }
+  };
+};
+
+// Function to manually decrement the counter
+const completeRequest = () => {
+  if (activeRequests > 0) {
+    activeRequests--;
+    console.log(`[Gemini Client] Request completed. Active requests: ${activeRequests}`);
+  }
 };
 
 // Get rate limiter status
@@ -38,6 +52,7 @@ const getRateLimiterStatus = () => {
 module.exports = {
   geminiClient,
   getGeminiClient,
+  completeRequest,
   Type,
   getRateLimiterStatus
 };
