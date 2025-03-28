@@ -68,6 +68,7 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       name: animationName,
       svg,
       chatHistory,
+      provider: provider || config.aiProvider,
       timestamp
     });
 

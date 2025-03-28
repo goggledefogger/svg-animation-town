@@ -452,7 +452,8 @@ export const AnimationStorageApi = {
   saveAnimation: async (
     name: string,
     svgContent: string,
-    chatHistory?: any[]
+    chatHistory?: any[],
+    provider?: 'openai' | 'claude' | 'gemini'
   ): Promise<{ id: string }> => {
     console.log(`Saving animation with name: ${name}`);
 
@@ -464,7 +465,8 @@ export const AnimationStorageApi = {
           body: JSON.stringify({
             name,
             svg: svgContent,
-            chatHistory
+            chatHistory,
+            provider
           }),
         }
       );
@@ -506,6 +508,12 @@ export const AnimationStorageApi = {
       const data = await fetchApi<any>(`/animation/${id}`);
 
       if (data.success && data.animation) {
+        // Add debug logging to check provider field
+        console.log(`[AnimationAPI] getAnimation received data for ${id}:`, {
+          hasProvider: !!data.animation.provider,
+          provider: data.animation.provider,
+          dataKeys: Object.keys(data.animation)
+        });
         return data.animation;
       } else {
         throw new Error('Invalid response from server');

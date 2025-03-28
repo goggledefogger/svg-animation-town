@@ -311,14 +311,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   useEffect(() => {
     const loadAnimationId = sessionStorage.getItem('load_animation_id');
     const isEditingFromMovie = sessionStorage.getItem('editing_from_movie') === 'true';
-    const storedProvider = sessionStorage.getItem('animation_provider') as 'openai' | 'claude' | null;
+    const storedProvider = sessionStorage.getItem('animation_provider') as 'openai' | 'claude' | 'gemini' | null;
 
     // Set state based on session storage
     setIsEditingFromMovie(isEditingFromMovie);
 
-    // If a specific AI provider was requested, set it
-    if (storedProvider) {
-      console.log(`Setting AI provider to: ${storedProvider}`);
+    // If a specific AI provider was requested and we're editing from movie, set it
+    if (storedProvider && isEditingFromMovie) {
+      console.log(`Setting AI provider to: ${storedProvider} (from movie clip)`);
       setAIProvider(storedProvider);
     }
 

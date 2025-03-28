@@ -236,11 +236,12 @@ class StorageService {
             const filePath = path.join(ANIMATIONS_DIR, file);
             const data = await fs.readFile(filePath, 'utf8');
             const animation = JSON.parse(data);
-            // Return minimal metadata
+            // Return minimal metadata including provider
             return {
               id: animation.id,
               name: animation.name,
-              timestamp: animation.timestamp
+              timestamp: animation.timestamp,
+              provider: animation.provider
             };
           } catch (error) {
             console.error(`Storage: Error reading animation file ${file}:`, error);

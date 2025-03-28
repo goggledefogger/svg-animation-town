@@ -86,10 +86,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     const isMobile = isMobileDevice();
     const isFresh = isFreshPageLoad();
 
-    // Clear session storage on desktop page reloads
+    // For desktop page reloads, we still clear most animation state
+    // but will allow the aiProvider to be set by the animation loading process
     if (!isMobile && isFresh) {
+      // Clear session storage but don't reset aiProvider
+      // We'll let the loadAnimation method set it from the server response
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      console.log('Desktop page reload detected - cleared animation state');
+      console.log('Desktop page reload detected - cleared animation state but preserving provider settings');
       return;
     }
 
@@ -950,12 +953,21 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           setChatHistory(clip.chatHistory);
         }
 
+        // Set AI provider if available in clip data
+        if (clip.provider) {
+          console.log(`[AnimationContext] Setting AI provider from clip: ${clip.provider}`);
+          setAIProvider(clip.provider as 'openai' | 'claude' | 'gemini');
+        }
+
         // Also cache in the registry if we have an animationId
-      if (clip.animationId) {
+        if (clip.animationId) {
           AnimationRegistryHelpers.storeAnimation(
             clip.animationId,
             clip.svgContent,
-            { chatHistory: clip.chatHistory }
+            {
+              chatHistory: clip.chatHistory,
+              provider: clip.provider
+            }
           );
         }
 
@@ -977,6 +989,15 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               // Set the chat history if available from registry
               if (result.metadata?.chatHistory) {
                 setChatHistory(result.metadata.chatHistory);
+              }
+
+              // Set AI provider if available in metadata, otherwise set to default
+              if (result.metadata?.provider) {
+                console.log(`Setting AI provider from loaded animation metadata: ${result.metadata.provider}`);
+                setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
+              } else {
+                console.log(`No provider found for animation ${animationId}, setting to default 'openai'`);
+                setAIProvider('openai');
               }
 
               // Note: We can't update the clip here as updateClip is not available in this context
@@ -1009,26 +1030,36 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 // Handle both response formats (direct or wrapped)
                 const animation = response && response.success ? response.animation : response;
 
-            if (animation?.svg) {
+                if (animation?.svg) {
                   // Store in registry with metadata
                   AnimationRegistryHelpers.storeAnimation(
                     animationId,
                     animation.svg,
                     {
                       chatHistory: animation.chatHistory,
-                      timestamp: animation.timestamp
+                      timestamp: animation.timestamp,
+                      provider: animation.provider
                     }
                   );
 
                   // Set the SVG content
-              setSvgContent(animation.svg);
+                  setSvgContent(animation.svg);
 
                   // Note: We can't update the clip here as updateClip is not available in this context
 
-              // Set the chat history if available
-              if (animation.chatHistory) {
-                setChatHistory(animation.chatHistory);
-              }
+                  // Set the chat history if available
+                  if (animation.chatHistory) {
+                    setChatHistory(animation.chatHistory);
+                  }
+
+                  // Set AI provider if available in animation data, otherwise default to 'openai'
+                  if (animation.provider) {
+                    console.log(`Setting AI provider from loaded animation: ${animation.provider}`);
+                    setAIProvider(animation.provider as 'openai' | 'claude' | 'gemini');
+                  } else {
+                    console.log(`No provider found for animation from server, setting to default 'openai'`);
+                    setAIProvider('openai');
+                  }
 
                   console.log(`[AnimationContext] Animation loaded: ${animationId}`);
                   return animation;
@@ -1038,7 +1069,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   return null;
                 }
               } catch (error) {
-            console.error(`[AnimationContext] Error loading animation: ${error}`);
+                console.error(`[AnimationContext] Error loading animation: ${error}`);
                 AnimationRegistryHelpers.markFailed(animationId);
                 return null;
               }
@@ -1057,7 +1088,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     return () => {
       window.removeEventListener('clip-changed', handleClipChanged);
     };
-  }, [svgRef, setSvgContent, setChatHistory]);
+  }, [svgRef, setSvgContent, setChatHistory, setAIProvider]);
 
   // Load an animation from server by name
   const loadAnimation = useCallback(async (name: string): Promise<ChatData | null> => {
@@ -1094,6 +1125,15 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               setChatHistory(result.metadata.chatHistory);
             }
 
+            // Set AI provider if available in metadata, otherwise set to default
+            if (result.metadata?.provider) {
+              console.log(`Setting AI provider from loaded animation metadata: ${result.metadata.provider}`);
+              setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
+            } else {
+              console.log(`No provider found for animation ${animationId}, setting to default 'openai'`);
+              setAIProvider('openai');
+            }
+
             return {
               svg: result.svg,
               chatHistory: result.metadata?.chatHistory,
@@ -1122,13 +1162,23 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 setChatHistory(animationData.chatHistory);
               }
 
+              // Set AI provider if available in animation data, otherwise default to 'openai'
+              if (animationData.provider) {
+                console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
+                setAIProvider(animationData.provider as 'openai' | 'claude' | 'gemini');
+              } else {
+                console.log(`No provider found for animation from server, setting to default 'openai'`);
+                setAIProvider('openai');
+              }
+
               // Also store in registry for future use
               AnimationRegistryHelpers.storeAnimation(
                 animationId,
                 animationData.svg,
                 {
                   chatHistory: animationData.chatHistory,
-                  timestamp: animationData.timestamp
+                  timestamp: animationData.timestamp,
+                  provider: animationData.provider
                 }
               );
 
@@ -1164,13 +1214,23 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                     setChatHistory(animationData.chatHistory);
                   }
 
+                  // Set AI provider if available in animation data, otherwise default to 'openai'
+                  if (animationData.provider) {
+                    console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
+                    setAIProvider(animationData.provider as 'openai' | 'claude' | 'gemini');
+                  } else {
+                    console.log(`No provider found for animation from search, setting to default 'openai'`);
+                    setAIProvider('openai');
+                  }
+
                   // Store in registry
                   AnimationRegistryHelpers.storeAnimation(
                     match.id,
                     animationData.svg,
                     {
                       chatHistory: animationData.chatHistory,
-                      timestamp: animationData.timestamp
+                      timestamp: animationData.timestamp,
+                      provider: animationData.provider
                     }
                   );
 
@@ -1198,7 +1258,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error(`Error in loadAnimation: ${error}`);
       return null;
     }
-  }, [setSvgContent, setChatHistory]);
+  }, [setSvgContent, setChatHistory, setAIProvider]);
 
   return (
     <AnimationContext.Provider value={{

@@ -12,6 +12,7 @@ interface AnimationRegistry {
     name?: string;
     timestamp?: string;
     chatHistory?: any[];
+    provider?: 'openai' | 'claude' | 'gemini';
   }>;
 
   // Tracking for API requests
@@ -42,7 +43,12 @@ export const AnimationRegistryHelpers = {
   storeAnimation: (
     animationId: string,
     svgContent: string,
-    metadata?: { name?: string; timestamp?: string; chatHistory?: any[] }
+    metadata?: {
+      name?: string;
+      timestamp?: string;
+      chatHistory?: any[];
+      provider?: 'openai' | 'claude' | 'gemini';
+    }
   ) => {
     if (!animationId || !svgContent || svgContent.length < 100) {
       console.log(`[ANIMATION_REGISTRY] Invalid animation data for ID ${animationId}, not storing`);
