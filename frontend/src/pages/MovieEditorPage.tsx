@@ -228,6 +228,31 @@ const MovieEditorPage: React.FC = () => {
     checkForPendingAnimation();
   }, [addClip, setActiveClipId]);
 
+  // Add a useEffect to check if we need to select a clip after returning from animation editor
+  useEffect(() => {
+    // Check if we just updated a clip in the animation editor
+    const updatedClipId = sessionStorage.getItem('clip_just_updated');
+    if (updatedClipId) {
+      // Select the updated clip
+      setActiveClipId(updatedClipId);
+      // Show a success message
+      modalManager.showToastNotification("Clip updated successfully", "success");
+      // Clear the flag
+      sessionStorage.removeItem('clip_just_updated');
+    }
+
+    // Check if we just created a new clip in the animation editor
+    const createdClipId = sessionStorage.getItem('clip_just_created');
+    if (createdClipId) {
+      // Select the newly created clip
+      setActiveClipId(createdClipId);
+      // Show a success message
+      modalManager.showToastNotification("New clip created successfully", "success");
+      // Clear the flag
+      sessionStorage.removeItem('clip_just_created');
+    }
+  }, [setActiveClipId, modalManager]);
+
   // Update handleAddClip to use utility functions
   const handleAddClip = () => {
     // Check if we have a pending animation to add directly

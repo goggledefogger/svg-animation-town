@@ -38,6 +38,15 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
   // Check if we're in the animation editor (path '/')
   const isAnimationEditor = location.pathname === '/';
 
+  // Check if we're editing from the movie editor
+  const [isEditingFromMovie, setIsEditingFromMovie] = useState(false);
+
+  // Check sessionStorage on mount and when location changes
+  useEffect(() => {
+    const editingFromMovie = sessionStorage.getItem('editing_from_movie') === 'true';
+    setIsEditingFromMovie(editingFromMovie);
+  }, [location]);
+
   // Keep animation context and movie context playback in sync
   useEffect(() => {
     // Skip if we're controlled by props
@@ -132,8 +141,8 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       </div>
 
       <div className="flex items-center space-x-1">
-        {/* Only show return button in the animation editor */}
-        {isAnimationEditor && (
+        {/* Only show return button in the animation editor when editing from movie */}
+        {isAnimationEditor && isEditingFromMovie && (
           <button
             onClick={() => navigateToMovieEditor()}
             className="hidden sm:block text-white bg-blue-600 hover:bg-blue-500 rounded-md px-2 sm:px-3 py-1 text-xs sm:text-sm whitespace-nowrap"

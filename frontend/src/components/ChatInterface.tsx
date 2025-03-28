@@ -26,6 +26,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   const [clipName, setClipName] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const [isEditingFromMovie, setIsEditingFromMovie] = useState(false);
 
   const {
     svgContent,
@@ -253,6 +254,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
         });
 
         console.log('Clip updated successfully with new animation content');
+
+        // Store the fact that we're returning with updated content
+        sessionStorage.setItem('clip_just_updated', editingClipId);
       } catch (error) {
         console.error('Error saving animation for clip:', error);
         // Still update the clip with SVG content even if saving to server fails
@@ -260,6 +264,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
           svgContent,
           chatHistory
         });
+
+        // Still mark as updated even if server save failed
+        sessionStorage.setItem('clip_just_updated', editingClipId);
       }
 
       // Clear the editing state
@@ -274,6 +281,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     else if (pendingClipName) {
       const clipId = saveCurrentAnimationAsClip(pendingClipName);
       if (clipId) {
+        // Mark the newly created clip so it can be selected in the movie editor
+        sessionStorage.setItem('clip_just_created', clipId);
         // Navigate back to movie editor with the new clip
         navigate('/movie-editor');
       }
@@ -303,6 +312,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     const loadAnimationId = sessionStorage.getItem('load_animation_id');
     const isEditingFromMovie = sessionStorage.getItem('editing_from_movie') === 'true';
     const storedProvider = sessionStorage.getItem('animation_provider') as 'openai' | 'claude' | null;
+
+    // Set state based on session storage
+    setIsEditingFromMovie(isEditingFromMovie);
 
     // If a specific AI provider was requested, set it
     if (storedProvider) {
@@ -354,10 +366,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
       const clipSvgContent = sessionStorage.getItem('clip_svg_content');
       if (clipSvgContent && isEditingFromMovie) {
         console.log('Loading clip SVG content directly from sessionStorage');
-        
+
         // Use the broadcast version to ensure proper updates
         setSvgContentWithBroadcast(clipSvgContent, 'movie-clip-edit-direct');
-        
+
         // Clear the storage immediately since the broadcast function handles proper timing
         sessionStorage.removeItem('clip_svg_content');
         sessionStorage.removeItem('editing_from_movie');
@@ -374,8 +386,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
           <AIProviderSelector className="ml-4" />
         </div>
         <div className="flex items-center">
-          {/* Add save button */}
-          {svgContent && (
+          {/* Add save button - only show when editing from movie or has pending clip name */}
+          {svgContent && (isEditingFromMovie || pendingClipName) && (
             <button
               onClick={handleSaveToMovieEditor}
               className="p-1.5 mr-2 rounded-md text-white bg-green-600 hover:bg-green-500"
@@ -383,6 +395,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+              </svg>
+            </button>
+          )}
+          {/* Regular save button for standalone animations */}
+          {svgContent && !isEditingFromMovie && !pendingClipName && (
+            <button
+              onClick={() => setShowSaveModal(true)}
+              className="p-1.5 mr-2 rounded-md text-white bg-green-600 hover:bg-green-500"
+              title="Save Animation"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
               </svg>
             </button>
           )}
