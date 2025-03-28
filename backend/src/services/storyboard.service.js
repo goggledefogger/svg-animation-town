@@ -450,7 +450,7 @@ const generateStoryboardWithGemini = async (prompt, numScenes = null) => {
     });
 
     try {
-      const text = result.text();
+      const text = result.text;
 
       if (!text) {
         console.warn('Empty response from Gemini API');

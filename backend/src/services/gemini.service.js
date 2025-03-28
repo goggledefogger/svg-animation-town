@@ -112,7 +112,7 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false) =
     console.log(`[Gemini Service ${clientId}] Request completed`);
 
     try {
-      const text = result.text();
+      const text = result.text;
 
       if (!text) {
         console.warn('Empty response from Gemini API');
@@ -238,7 +238,7 @@ exports.generateRawResponse = async (prompt) => {
       throw new ServiceUnavailableError('Received empty response from Gemini API');
     }
 
-    const responseContent = result.text();
+    const responseContent = result.text;
     console.log(`Gemini raw response received, length: ${responseContent.length}`);
 
     // Make sure we don't have surrounding markdown code blocks
