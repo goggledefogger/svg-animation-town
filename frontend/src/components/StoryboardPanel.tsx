@@ -481,9 +481,6 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs text-white font-medium">{clip.duration}s</span>
                         <div className="flex items-center gap-1">
-                          {clip.animationId && (
-                            <span className="text-xs text-white bg-black/30 px-1 rounded">Server Saved</span>
-                          )}
                           <button
                             className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-black/30"
                             onClick={(e) => handleDeleteClip(e, clip.id)}

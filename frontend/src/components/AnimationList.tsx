@@ -260,7 +260,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
 
     // If no special renderer or it returned null, render normally
     return (
-      <div className="flex items-center w-full">
+      <div className="flex items-center">
         {/* Thumbnail preview */}
         {showThumbnails && (
           <div className="w-16 h-12 mr-2 overflow-hidden bg-gray-900 rounded flex-shrink-0">
@@ -281,9 +281,9 @@ const AnimationList: React.FC<AnimationListProps> = ({
         )}
 
         {/* Animation details */}
-        <div className="flex-1 min-w-0 overflow-hidden">
+        <div className="flex-1 min-w-0">
           <div className="font-medium text-bat-yellow text-sm truncate">{animation.name}</div>
-          <div className="text-xs text-gray-400 truncate">
+          <div className="text-xs text-gray-400">
             {animation.timestamp ? new Date(animation.timestamp).toLocaleString() : 'No date'}
           </div>
         </div>
@@ -354,21 +354,19 @@ const AnimationList: React.FC<AnimationListProps> = ({
                   }
                 }}
               >
-                <div className="flex items-center space-between">
-                  <div className="flex items-center flex-1 min-w-0 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
                     {renderAnimationItem(animation)}
                   </div>
 
                   {/* Delete button - only show for regular animations, not special items */}
                   {onDeleteAnimation && !animation.id.startsWith('create-') && !animation.id.startsWith('special-') && (
                     <button
-                      className="ml-2 text-red-400 hover:text-red-300 flex-shrink-0 p-1 rounded hover:bg-gray-700"
+                      className="ml-2 text-red-400 hover:text-red-300 text-xs"
                       onClick={(e) => handleDeleteAnimation(e, animation)}
                       aria-label="Delete animation"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      Delete
                     </button>
                   )}
                 </div>
