@@ -642,7 +642,16 @@ class StorageService {
       );
 
       // Filter out any null results from errors
-      return movies.filter(movie => movie !== null);
+      const validMovies = movies.filter(movie => movie !== null);
+
+      // Add sorting by updatedAt date, newest first
+      validMovies.sort((a, b) => {
+        const dateA = new Date(a.updatedAt || 0);
+        const dateB = new Date(b.updatedAt || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      return validMovies;
     } catch (error) {
       console.error('Error listing movies:', error);
       return [];
