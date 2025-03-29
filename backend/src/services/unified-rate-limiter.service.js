@@ -6,17 +6,21 @@ const config = require('../config');
  */
 class UnifiedRateLimiter {
   constructor() {
-    // Ensure maxConcurrent has default values
-    const claudeMaxConcurrent = config.claude.rateLimiter.maxConcurrent || 2;
-    const openaiMaxConcurrent = config.openai.rateLimiter.maxConcurrent || 10;
+    // Ensure maxConcurrent has default values and proper property names
+    const claudeMaxConcurrent = config.claude.rateLimiter.maxConcurrentRequests || 2;
+    const openaiMaxConcurrent = config.openai.rateLimiter.maxConcurrentRequests || 10;
+    const geminiMaxConcurrent = config.gemini.rateLimiter.maxConcurrentRequests || 10;
+    
+    // For Claude, enforce a stricter limit to prevent 529 overload errors
+    const claudeConcurrencyLimit = Math.min(claudeMaxConcurrent, 2);
 
     this.buckets = {
       claude: {
         tokens: config.claude.rateLimiter.tokensPerMinute,
         maxTokens: config.claude.rateLimiter.tokensPerMinute,
-        tokensPerRequest: 1600, // Claude uses about 1600 tokens per request
+        tokensPerRequest: config.claude.rateLimiter.tokensPerRequest || 1600,
         currentRequests: 0,
-        maxConcurrent: claudeMaxConcurrent,
+        maxConcurrent: claudeConcurrencyLimit,
         lastRefill: Date.now(),
         pendingRequests: new Set(),
         activePromises: new Map()
@@ -24,7 +28,7 @@ class UnifiedRateLimiter {
       openai: {
         tokens: config.openai.rateLimiter.tokensPerMinute,
         maxTokens: config.openai.rateLimiter.tokensPerMinute,
-        tokensPerRequest: 2000, // OpenAI uses about 2000 tokens per request
+        tokensPerRequest: config.openai.rateLimiter.tokensPerRequest || 2000,
         currentRequests: 0,
         maxConcurrent: openaiMaxConcurrent,
         lastRefill: Date.now(),
@@ -34,9 +38,9 @@ class UnifiedRateLimiter {
       gemini: {
         tokens: config.gemini.rateLimiter.tokensPerMinute,
         maxTokens: config.gemini.rateLimiter.tokensPerMinute,
-        tokensPerRequest: 2000, // Gemini uses about 2000 tokens per request
+        tokensPerRequest: config.gemini.rateLimiter.tokensPerRequest || 2000,
         currentRequests: 0,
-        maxConcurrent: config.gemini.rateLimiter.maxConcurrent || 10,
+        maxConcurrent: geminiMaxConcurrent,
         lastRefill: Date.now(),
         pendingRequests: new Set(),
         activePromises: new Map()
@@ -46,7 +50,7 @@ class UnifiedRateLimiter {
     console.log('[Rate Limiter] Initialized with config:', {
       claude: {
         tokensPerMinute: config.claude.rateLimiter.tokensPerMinute,
-        maxConcurrent: claudeMaxConcurrent,
+        maxConcurrent: claudeConcurrencyLimit,
         tokensPerRequest: this.buckets.claude.tokensPerRequest
       },
       openai: {
@@ -56,7 +60,7 @@ class UnifiedRateLimiter {
       },
       gemini: {
         tokensPerMinute: config.gemini.rateLimiter.tokensPerMinute,
-        maxConcurrent: config.gemini.rateLimiter.maxConcurrent || 10,
+        maxConcurrent: geminiMaxConcurrent,
         tokensPerRequest: this.buckets.gemini.tokensPerRequest
       }
     });

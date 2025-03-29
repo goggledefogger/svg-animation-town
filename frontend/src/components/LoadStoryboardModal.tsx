@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Storyboard } from '../contexts/MovieContext';
 import ConfirmationModal from './ConfirmationModal';
 import { MovieStorageApi } from '../services/api';
@@ -59,17 +59,32 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
 
   // Clear search and reset when modal is opened or refreshTrigger changes
   useEffect(() => {
-    if (isOpen) {
+    const shouldRefresh = isOpen && (
+      // Only clear cache if modal is being opened or refreshTrigger changed
+      !prevIsOpenRef.current || 
+      prevRefreshTriggerRef.current !== refreshTrigger
+    );
+
+    if (shouldRefresh) {
       // Clear cache to force fresh data
       clearCacheForServerRefresh();
-
       // Reset search
       setSearchQuery('');
-    } else {
+      // Reset storyboards to trigger fresh load
+      resetStoryboards();
+    } else if (!isOpen) {
       // Cleanup when modal closes
       resetStoryboards();
     }
+
+    // Update refs for next comparison
+    prevIsOpenRef.current = isOpen;
+    prevRefreshTriggerRef.current = refreshTrigger;
   }, [isOpen, refreshTrigger, resetStoryboards]);
+
+  // Add refs to track previous values
+  const prevIsOpenRef = useRef(false);
+  const prevRefreshTriggerRef = useRef(refreshTrigger);
 
   // Update filter when search query changes
   useEffect(() => {
@@ -189,11 +204,13 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
         cancelText="Cancel"
         onConfirm={async () => {
           if (storyboardToDelete) {
-            await onDeleteStoryboard(storyboardToDelete);
-
-            // Reset to reload without the deleted item
-            resetStoryboards();
-
+            const success = await onDeleteStoryboard(storyboardToDelete);
+            if (success) {
+              // Reset the storyboards to trigger a fresh load
+              resetStoryboards();
+              // Clear the search to show all remaining storyboards
+              setSearchQuery('');
+            }
             setShowDeleteConfirmation(false);
             setStoryboardToDelete(null);
           }

@@ -60,10 +60,25 @@ export function useGenerationProgress({
       return;
     }
 
+    // Don't set up a new connection if we're already connected to this session
+    if (activeSessionRef.current === sessionId) {
+      console.log(`[SSE] Already connected to session ${sessionId}`);
+      return;
+    }
+
     console.log(`[SSE] Setting up connection for session ${sessionId}`);
     const eventSource = new EventSource(`/api/movie/generate/${sessionId}/progress`);
+    eventsRef.current = eventSource;
+    activeSessionRef.current = sessionId;
+    setIsGenerating(true);
 
     eventSource.onmessage = (event) => {
+      if (!isMountedRef.current) {
+        console.log(`[SSE] Component unmounted, ignoring message for session ${sessionId}`);
+        eventSource.close();
+        return;
+      }
+
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'progress') {
@@ -76,35 +91,65 @@ export function useGenerationProgress({
           // Handle completion states
           if (data.data.status === 'completed' || data.data.status === 'completed_with_errors') {
             console.log(`[SSE] Generation completed with status: ${data.data.status}`);
-            eventSource.close();
+            
+            // Update progress state first
+            setProgress(data.data);
             setIsGenerating(false);
-            onComplete?.(data.data.storyboardId || sessionId);
+            
+            // Close the connection
+            eventSource.close();
+            eventsRef.current = null;
+            activeSessionRef.current = null;
+            
+            // Call cleanup first to ensure session is properly closed
+            onCleanup?.(sessionId);
+            
+            // Then call onComplete with the storyboard ID if available
+            if (data.data.storyboardId) {
+              onComplete?.(data.data.storyboardId);
+            }
           }
 
           // Handle failure state
           if (data.data.status === 'failed') {
             console.log(`[SSE] Generation failed`);
             eventSource.close();
+            eventsRef.current = null;
+            activeSessionRef.current = null;
             setIsGenerating(false);
+            onCleanup?.(sessionId);
             onError?.('Generation failed. Please try again.');
           }
         }
       } catch (error) {
         console.error('[SSE] Error processing event:', error);
+        eventSource.close();
+        eventsRef.current = null;
+        activeSessionRef.current = null;
+        setIsGenerating(false);
+        onCleanup?.(sessionId);
       }
     };
 
     eventSource.onerror = (error) => {
       console.error('[SSE] Connection error:', error);
+      eventSource.close();
+      eventsRef.current = null;
+      activeSessionRef.current = null;
       setIsGenerating(false);
+      onCleanup?.(sessionId);
       onError?.('Lost connection to server. Please try again.');
     };
 
     return () => {
-      console.log(`[SSE] Closing connection for session ${sessionId}`);
-      eventSource.close();
+      console.log(`[SSE] Cleaning up connection for session ${sessionId}`);
+      if (eventSource) {
+        eventSource.close();
+        eventsRef.current = null;
+        activeSessionRef.current = null;
+      }
     };
-  }, [sessionId, onNewClip, onComplete, onError]);
+  }, [sessionId, onNewClip, onComplete, onError, onCleanup]);
 
   return {
     isGenerating,

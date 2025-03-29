@@ -15,91 +15,114 @@ const AnimationService = {
    * @returns {Promise<Object>} - Generated animation data with SVG and message
    */
   generateAnimation: async (prompt, provider) => {
+    // Strategic log #3: Detailed entry log for animation generation
+    console.log(`[ANIMATION_TRACE] Animation generation STARTED:
+      - Provider: ${provider || config.aiProvider}
+      - Prompt length: ${prompt?.length || 0}
+      - Timestamp: ${new Date().toISOString()}
+      - Request ID: ${uuidv4().substring(0, 8)}`);
+    
     console.log(`[ANIMATION_GEN_START] Generating animation with prompt (length: ${prompt.length})`);
     console.log(`[ANIMATION_GEN_PROVIDER] Using provider: ${provider || config.aiProvider}`);
 
-    // Use the specified provider or fall back to default
-    let llmResponse;
-
-    if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
-      // Temporarily override the configured provider
-      const originalProvider = config.aiProvider;
-      config.aiProvider = provider;
-
-      // Call the AI service to generate the animation
-      llmResponse = await AIService.generateAnimation(prompt);
-
-      // Restore the original provider
-      config.aiProvider = originalProvider;
-    } else {
-      // Use the default provider
-      llmResponse = await AIService.generateAnimation(prompt);
-    }
-
-    // Extract SVG and text from the response
-    const { svg, text } = extractSvgAndText(llmResponse);
-
-    if (!svg || !svg.includes('<svg')) {
-      throw new Error('Failed to generate valid SVG content');
-    }
-
-    // Generate a name for the animation based on the prompt
-    let animationName = prompt.trim();
-    if (animationName.length > 40) {
-      animationName = animationName.substring(0, 40) + '...';
-    }
-
-    // Create a simple chat history for the animation
-    const chatHistory = [
-      {
-        id: uuidv4(),
-        sender: 'user',
-        text: prompt,
-        timestamp: new Date()
-      },
-      {
-        id: uuidv4(),
-        sender: 'ai',
-        text: text || 'Animation created successfully!',
-        timestamp: new Date()
-      }
-    ];
-
-    // Create animation object with ID before saving
-    const animationId = uuidv4(); // Generate ID here
-
-    const animation = {
-      id: animationId,
-      name: animationName,
-      svg: svg,
-      chatHistory: chatHistory,
-      provider: provider || config.aiProvider,
-      createdAt: new Date()
-    };
-
     try {
-      // Before saving, check if we already have an identical SVG stored
-      // This would help prevent duplicate animations
+      // Use the specified provider or fall back to default
+      let llmResponse;
 
-      // Save the animation to storage
-      // Here we pass our generated ID and expect the same ID back
-      const savedAnimationId = await storageService.saveAnimation(animation);
+      if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
+        // Temporarily override the configured provider
+        const originalProvider = config.aiProvider;
+        config.aiProvider = provider;
 
-      // Return the generated animation with its ID
-      return {
+        // Call the AI service to generate the animation
+        llmResponse = await AIService.generateAnimation(prompt);
+
+        // Restore the original provider
+        config.aiProvider = originalProvider;
+      } else {
+        // Use the default provider
+        llmResponse = await AIService.generateAnimation(prompt);
+      }
+
+      // Extract SVG and text from the response
+      const { svg, text } = extractSvgAndText(llmResponse);
+
+      if (!svg || !svg.includes('<svg')) {
+        throw new Error('Failed to generate valid SVG content');
+      }
+
+      // Generate a name for the animation based on the prompt
+      let animationName = prompt.trim();
+      if (animationName.length > 40) {
+        animationName = animationName.substring(0, 40) + '...';
+      }
+
+      // Create a simple chat history for the animation
+      const chatHistory = [
+        {
+          id: uuidv4(),
+          sender: 'user',
+          text: prompt,
+          timestamp: new Date()
+        },
+        {
+          id: uuidv4(),
+          sender: 'ai',
+          text: text || 'Animation created successfully!',
+          timestamp: new Date()
+        }
+      ];
+
+      // Create animation object with ID before saving
+      const animationId = uuidv4(); // Generate ID here
+
+      const animation = {
+        id: animationId,
+        name: animationName,
         svg: svg,
-        message: text || 'Animation created successfully!',
-        animationId: savedAnimationId
+        chatHistory: chatHistory,
+        provider: provider || config.aiProvider,
+        createdAt: new Date()
       };
+
+      try {
+        // Before saving, check if we already have an identical SVG stored
+        // This would help prevent duplicate animations
+
+        // Save the animation to storage
+        // Here we pass our generated ID and expect the same ID back
+        const savedAnimationId = await storageService.saveAnimation(animation);
+
+        // Strategic log #4: Successful completion log
+        console.log(`[ANIMATION_TRACE] Animation generation COMPLETED:
+          - Provider: ${provider || config.aiProvider}
+          - Animation ID: ${savedAnimationId}
+          - SVG size: ${svg?.length || 0} chars
+          - Timestamp: ${new Date().toISOString()}`);
+
+        // Return the generated animation with its ID
+        return {
+          svg: svg,
+          message: text || 'Animation created successfully!',
+          animationId: savedAnimationId
+        };
+      } catch (error) {
+        console.error('Error saving animation:', error);
+        // Still return the SVG and message even if saving failed
+        return {
+          svg: svg,
+          message: text || 'Animation created successfully!',
+          animationId: animationId,
+          saveError: error.message
+        };
+      }
     } catch (error) {
-      console.error('Error saving animation:', error);
-      // Still return the SVG and message even if saving failed
-      return {
-        svg: svg,
-        message: text || 'Animation created successfully!',
-        animationId: animationId,
-        saveError: error.message
-      };
+      // Strategic log #5: Error log
+      console.error(`[ANIMATION_TRACE] Animation generation FAILED:
+        - Provider: ${provider || config.aiProvider}
+        - Error: ${error.message}
+        - Timestamp: ${new Date().toISOString()}`);
+      throw error;
     }
   }
 };

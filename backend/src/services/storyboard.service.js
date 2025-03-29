@@ -2,18 +2,12 @@ const openai = require('./shared-openai-client');
 const { ServiceUnavailableError, BadRequestError } = require('../utils/errors');
 const config = require('../config');
 const { getGeminiClient, Type } = require('./shared-gemini-client');
-const { RateLimiter } = require('../utils/rate-limiter');
-
-// Create a rate limiter for storyboard generation
-const storyboardRateLimiter = new RateLimiter({
-  tokensPerInterval: 10, // Adjust based on your quota
-  interval: 60 * 1000, // 1 minute in milliseconds
-  maxWaitTime: 45 * 1000 // 45 seconds max wait time
-});
+const unifiedRateLimiter = require('./unified-rate-limiter.service');
+const anthropic = require('./shared-claude-client');
 
 // Add a unique identifier for this client instance
 const clientId = Math.random().toString(36).substring(7);
-console.log(`[Storyboard Service] Created OpenAI client instance ${clientId}`);
+console.log(`[Storyboard Service] Created client instance ${clientId}`);
 
 /**
  * Create system prompt for storyboard generation
@@ -147,22 +141,31 @@ exports.generateStoryboardWithOpenAI = async (prompt, numScenes) => {
   validateStoryboardRequest(prompt, config.openai.apiKey, 'OpenAI');
 
   try {
+    console.log('[Storyboard Service] Using unified rate limiter for OpenAI request');
+
     const systemPrompt = createSystemPrompt();
     const userPrompt = createUserPrompt(prompt, numScenes);
 
     console.log(`[Storyboard Service ${clientId}] Starting request with client instance ${clientId}`);
     console.log(`[Storyboard Service ${clientId}] Current active requests: ${openai.activeRequests || 0}`);
 
-    // Use the OpenAI API with JSON response format
-    const completion = await openai.chat.completions.create({
-      model: config.openai.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
-    });
+    // Use the unified rate limiter to make the request
+    const completion = await unifiedRateLimiter.executeRequest(
+      async () => {
+        // Use the OpenAI API with JSON response format
+        return await openai.chat.completions.create({
+          model: config.openai.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.7,
+          response_format: { type: "json_object" }
+        });
+      },
+      [config.openai.model, systemPrompt, userPrompt], // Args for caching/deduplication
+      'openai' // Provider name for rate limiting
+    );
 
     console.log(`[Storyboard Service ${clientId}] Request completed`);
 
@@ -224,28 +227,33 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes) => {
   validateStoryboardRequest(prompt, config.claude.apiKey, 'Claude');
 
   try {
-    // Initialize Anthropic client
-    const Anthropic = require('@anthropic-ai/sdk');
-    const anthropic = new Anthropic({
-      apiKey: config.claude.apiKey
-    });
+    console.log('[Storyboard Service] Using unified rate limiter for Claude request');
+    
+    // Strategic log #1: Log the current service state before Claude API call
+    console.log(`[CLAUDE_DEBUG] Sending request to Claude with provider: ${config.aiProvider}, fallback available: ${config.aiProvider !== 'claude'}, token: ${config.claude.apiKey ? 'valid' : 'missing'}`);
 
     const systemPrompt = createSystemPrompt();
     const userPrompt = createUserPrompt(prompt, numScenes);
 
     console.log('Sending storyboard generation request to Claude');
     console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
-
-    // Use the Anthropic API with Claude
-    const completion = await anthropic.messages.create({
-      model: config.claude.model,
-      max_tokens: config.claude.maxTokens,
-      system: systemPrompt,
-      messages: [
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.7
-    });
+    
+    // Use the unified rate limiter to make the request
+    const completion = await unifiedRateLimiter.executeRequest(
+      async () => {
+        return await anthropic.messages.create({
+          model: config.claude.model,
+          max_tokens: config.claude.maxTokens,
+          system: systemPrompt,
+          messages: [
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.7
+        });
+      },
+      [config.claude.model, systemPrompt, userPrompt], // Args for caching/deduplication
+      'claude' // Provider name for rate limiting
+    );
 
     if (!completion.content || completion.content.length === 0) {
       console.error('Empty response from Claude API');
@@ -325,6 +333,9 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes) => {
   } catch (error) {
     console.error('Claude API Error:', error);
 
+    // Strategic log #2: Log detailed error information and fallback status
+    console.log(`[ERROR_HANDLING] Claude error type: ${error.status || 'unknown'}, message: "${error.message || 'none'}", error_type: ${error.error?.error?.type || 'unknown'}, fallback provider: ${config.aiProvider === 'claude' ? config.fallbackProvider || 'none' : 'N/A'}`);
+
     // Handle specific error cases
     if (error.status === 429) {
       throw new ServiceUnavailableError('Claude API rate limit exceeded. Please try again later.');
@@ -332,6 +343,21 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes) => {
 
     if (error.status === 401) {
       throw new ServiceUnavailableError('Invalid Claude API key. Please check your configuration.');
+    }
+
+    // Handle overloaded error (add specific case)
+    if (error.status === 529 || (error.error?.error?.type === 'overloaded_error')) {
+      // Strategic error log for Claude overload errors
+      console.error(`[CLAUDE_OVERLOAD_ERROR] Claude service is overloaded despite unified rate limiting:
+        - Claude bucket: ${JSON.stringify(unifiedRateLimiter.buckets?.claude || {})}
+        - Used configuration: maxConcurrent=${unifiedRateLimiter.buckets?.claude?.maxConcurrent || 'N/A'}, 
+          tokensPerMinute=${unifiedRateLimiter.buckets?.claude?.maxTokens || 'N/A'},
+          tokensPerRequest=${unifiedRateLimiter.buckets?.claude?.tokensPerRequest || 'N/A'}
+        - Request size: ~${numScenes || 'default'} scenes, ~${prompt?.length || 0} chars in prompt
+        This appears to be a Claude service capacity issue - our rate limiting is correctly configured
+        but Claude is still reporting overload.`);
+      
+      throw new ServiceUnavailableError(`Failed to generate storyboard with Claude: API overloaded. Please try again later or switch to another AI provider.`);
     }
 
     // Re-throw the error if it's already a ServiceUnavailableError
@@ -354,6 +380,9 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes) => {
 exports.generateStoryboard = async (prompt, provider = null, numScenes = null) => {
   // Use the specified provider or fall back to configured default
   const selectedProvider = provider || config.aiProvider;
+  
+  // Strategic log #3: Log the selected provider and fallback configuration
+  console.log(`[PROVIDER_SELECTION] Using provider: ${selectedProvider}, default provider: ${config.aiProvider}, fallback configured: ${config.fallbackProvider || 'none'}`);
 
   console.log(`Using ${selectedProvider} for storyboard generation`);
   console.log(`Number of scenes requested: ${numScenes ? numScenes : 'Auto'}`);
@@ -384,115 +413,114 @@ const generateStoryboardWithGemini = async (prompt, numScenes = null) => {
   }
 
   try {
-    // Wait for rate limiter token
-    await storyboardRateLimiter.acquireToken();
-    console.log('[Storyboard Service] Rate limit token acquired, sending request');
-
-    console.log('Generating storyboard with Gemini...');
+    console.log('[Storyboard Service] Using unified rate limiter for Gemini request');
 
     // Get Gemini client with tracking
     const { client, completeRequest } = getGeminiClient();
 
-    try {
-      // Prepare prompts with specific storyboard generation instructions
-      const systemPrompt = createSystemPrompt();
-      const userPrompt = createUserPrompt(prompt, numScenes);
+    // Prepare prompts with specific storyboard generation instructions
+    const systemPrompt = createSystemPrompt();
+    const userPrompt = createUserPrompt(prompt, numScenes);
 
-      // Call Gemini API with structured output configuration
-      const result = await client.models.generateContent({
-        model: config.gemini.model,
-        contents: `${systemPrompt}\n\n${userPrompt}`,
-        generationConfig: {
-          temperature: 0.7, // Higher temperature for creative storyboards
-        },
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              title: {
-                type: Type.STRING,
-                description: "A concise title for the movie"
-              },
-              description: {
-                type: Type.STRING,
-                description: "Overall description of the movie and its story arc"
-              },
-              scenes: {
-                type: Type.ARRAY,
-                description: "Sequential scenes describing different states of the animation",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: {
-                      type: Type.STRING,
-                      description: "Unique identifier for the scene"
+    // Use the unified rate limiter to make the request
+    const result = await unifiedRateLimiter.executeRequest(
+      async () => {
+        // Call Gemini API with structured output configuration
+        const response = await client.models.generateContent({
+          model: config.gemini.model,
+          contents: `${systemPrompt}\n\n${userPrompt}`,
+          generationConfig: {
+            temperature: 0.7, // Higher temperature for creative storyboards
+          },
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: {
+                  type: Type.STRING,
+                  description: "A concise title for the movie"
+                },
+                description: {
+                  type: Type.STRING,
+                  description: "Overall description of the movie and its story arc"
+                },
+                scenes: {
+                  type: Type.ARRAY,
+                  description: "Sequential scenes describing different states of the animation",
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: {
+                        type: Type.STRING,
+                        description: "Unique identifier for the scene"
+                      },
+                      description: {
+                        type: Type.STRING,
+                        description: "Detailed description of what happens in this scene"
+                      },
+                      svgPrompt: {
+                        type: Type.STRING,
+                        description: "Detailed prompt for generating an SVG animation of this scene"
+                      },
+                      duration: {
+                        type: Type.NUMBER,
+                        description: "Duration of the scene in seconds"
+                      }
                     },
-                    description: {
-                      type: Type.STRING,
-                      description: "Detailed description of what happens in this scene"
-                    },
-                    svgPrompt: {
-                      type: Type.STRING,
-                      description: "Detailed prompt for generating an SVG animation of this scene"
-                    },
-                    duration: {
-                      type: Type.NUMBER,
-                      description: "Duration of the scene in seconds"
-                    }
-                  },
-                  required: ["id", "description", "svgPrompt", "duration"]
+                    required: ["id", "description", "svgPrompt", "duration"]
+                  }
                 }
-              }
-            },
-            required: ['title', 'description', 'scenes']
-          }
-        }
-      });
-
-      const text = result.text;
-
-      if (!text) {
-        console.warn('Empty response from Gemini API');
-        throw new ServiceUnavailableError('Received empty storyboard response from Gemini API');
-      }
-
-      try {
-        // Since we're using structured output, the response should be JSON
-        const parsedResponse = JSON.parse(text);
-
-        if (!parsedResponse || !parsedResponse.title || !parsedResponse.scenes) {
-          console.warn('Invalid storyboard format in Gemini response');
-          throw new ServiceUnavailableError('Invalid storyboard format received from Gemini API');
-        }
-
-        console.log(`Successfully received storyboard with ${parsedResponse.scenes.length} scenes`);
-        return processStoryboard(parsedResponse);
-      } catch (parseError) {
-        console.error('Error parsing JSON from Gemini storyboard response:', parseError);
-        console.error('Raw response:', text);
-
-        // Fall back to regex extraction if JSON parsing fails
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          try {
-            const jsonStr = jsonMatch[0];
-            const extractedResponse = JSON.parse(jsonStr);
-
-            if (extractedResponse && extractedResponse.title && extractedResponse.scenes) {
-              console.log('Successfully extracted storyboard using regex fallback');
-              return processStoryboard(extractedResponse);
+              },
+              required: ['title', 'description', 'scenes']
             }
-          } catch (e) {
-            console.error('Failed to extract storyboard JSON with regex fallback:', e);
           }
-        }
+        });
+        return response;
+      },
+      [config.gemini.model, systemPrompt, userPrompt], // Args for caching/deduplication
+      'gemini' // Provider name for rate limiting
+    );
 
-        throw new ServiceUnavailableError('Failed to parse storyboard response from Gemini API');
+    const text = result.text;
+
+    if (!text) {
+      console.warn('Empty response from Gemini API');
+      throw new ServiceUnavailableError('Received empty storyboard response from Gemini API');
+    }
+
+    try {
+      // Since we're using structured output, the response should be JSON
+      const parsedResponse = JSON.parse(text);
+
+      if (!parsedResponse || !parsedResponse.title || !parsedResponse.scenes) {
+        console.warn('Invalid storyboard format in Gemini response');
+        throw new ServiceUnavailableError('Invalid storyboard format received from Gemini API');
       }
-    } finally {
-      // Always decrement the counter, even if there was an error
-      completeRequest();
+
+      console.log(`Successfully received storyboard with ${parsedResponse.scenes.length} scenes`);
+      return processStoryboard(parsedResponse);
+    } catch (parseError) {
+      console.error('Error parsing JSON from Gemini storyboard response:', parseError);
+      console.error('Raw response:', text);
+
+      // Fall back to regex extraction if JSON parsing fails
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const jsonStr = jsonMatch[0];
+          const extractedResponse = JSON.parse(jsonStr);
+
+          if (extractedResponse && extractedResponse.title && extractedResponse.scenes) {
+            console.log('Successfully extracted storyboard using regex fallback');
+            return processStoryboard(extractedResponse);
+          }
+        } catch (e) {
+          console.error('Failed to extract storyboard JSON with regex fallback:', e);
+        }
+      }
+
+      throw new ServiceUnavailableError('Failed to parse storyboard response from Gemini API');
     }
   } catch (error) {
     console.error('Gemini API Error in storyboard generation:', error);

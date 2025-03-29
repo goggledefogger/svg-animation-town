@@ -111,26 +111,80 @@ export function useStoryboardGenerator(
 
     try {
       console.log(`Verifying final state for storyboard ${storyboardId}`);
-
       const response = await MovieStorageApi.getMovie(storyboardId);
+      
       if (response?.success && response.movie) {
-        // Only update if there's a mismatch
-        setCurrentStoryboard(prev => {
-          if (JSON.stringify(prev.clips) !== JSON.stringify(response.movie.clips)) {
-            console.log('Fixing clip state mismatch with backend');
-            return response.movie;
-          }
-          return prev;
-        });
+        // Only update if there's a mismatch and the movie has clips
+        if (response.movie.clips && response.movie.clips.length > 0) {
+          setCurrentStoryboard(prev => {
+            if (JSON.stringify(prev.clips) !== JSON.stringify(response.movie.clips)) {
+              console.log('Fixing clip state mismatch with backend');
+              return response.movie;
+            }
+            return prev;
+          });
+        } else {
+          console.log('Movie has no clips yet, waiting for backend to finish processing');
+          // Wait a bit and try again if no clips are present
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return verifyFinalState(storyboardId);
+        }
       } else {
         console.warn(`Failed to verify final state: Movie not found or invalid response`);
       }
     } catch (error) {
       console.error('Error verifying final state:', error);
-      // No need to show an error to the user in this case
-      // This is just a final verification step that can fail without affecting the user experience
     }
   }, [setCurrentStoryboard]);
+
+  // Handle generation completion
+  const handleComplete = useCallback((storyboardId: string) => {
+    console.log(`Generation complete for storyboard: ${storyboardId}`);
+
+    // Make sure the ID is valid
+    if (!storyboardId) {
+      console.error("No storyboard ID provided to handleComplete");
+      return;
+    }
+
+    // Stop polling if we were doing that
+    isPollingRef.current = false;
+    clearConditionalPolling();
+
+    // Update the storyboard state
+    setCurrentStoryboard(prev => {
+      if (!prev) return prev;
+
+      console.log(`Updating storyboard ${storyboardId} to completed status`);
+      return {
+        ...prev,
+        generationStatus: prev.generationStatus ? {
+          ...prev.generationStatus,
+          inProgress: false,
+          completedScenes: prev.clips.length,
+          completedAt: new Date(),
+          status: 'completed'
+        } : undefined
+      };
+    });
+
+    // Close modals immediately
+    console.log('Closing generation modals');
+    setShowGeneratingClipsModal(false);
+    setShowStoryboardGeneratorModal(false);
+
+    // Then verify final state
+    verifyFinalState(storyboardId).then(() => {
+      // Auto-select the first clip when generation is complete
+      if (currentStoryboard?.clips && currentStoryboard.clips.length > 0) {
+        const sortedClips = [...currentStoryboard.clips].sort((a, b) => a.order - b.order);
+        if (sortedClips[0]?.id) {
+          console.log(`Auto-selecting first clip: ${sortedClips[0].id}`);
+          setActiveClipId(sortedClips[0].id);
+        }
+      }
+    });
+  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard, setActiveClipId, clearConditionalPolling]);
 
   // Handle new clip updates
   const handleNewClip = useCallback((clip: MovieClip) => {
@@ -170,60 +224,6 @@ export function useStoryboardGenerator(
     }
   }, [setCurrentStoryboard, activeClipId, setActiveClipId]);
 
-  // Handle generation completion
-  const handleComplete = useCallback((storyboardId: string) => {
-    console.log(`Generation complete for storyboard: ${storyboardId}`);
-    setShowGeneratingClipsModal(false);
-    setShowStoryboardGeneratorModal(false);
-
-    // Make sure the ID is valid and matches our current storyboard
-    if (!storyboardId) {
-      console.error("No storyboard ID provided to handleComplete");
-      return;
-    }
-
-    // Check if the ID we received is a session ID instead of a storyboard ID
-    // If our current storyboard ID doesn't match, but we have one, use that instead
-    let targetStoryboardId = storyboardId;
-    if (currentStoryboard?.id && currentStoryboard.id !== storyboardId) {
-      console.log(`ID mismatch: received ${storyboardId} but current storyboard is ${currentStoryboard.id}, using current`);
-      targetStoryboardId = currentStoryboard.id;
-    }
-
-    // Make sure we mark the generation as complete
-    setCurrentStoryboard(prev => {
-      if (!prev) return prev;
-
-      console.log(`Updating storyboard ${targetStoryboardId} to completed status`);
-      // Set the generation status to completed
-      return {
-        ...prev,
-        generationStatus: prev.generationStatus ? {
-          ...prev.generationStatus,
-          inProgress: false,
-          completedScenes: prev.clips.length,
-          completedAt: new Date()
-        } : undefined
-      };
-    });
-
-    // Stop polling if we were doing that
-    isPollingRef.current = false;
-
-    // Double check with the server
-    verifyFinalState(targetStoryboardId);
-
-    // Auto-select the first clip when generation is complete
-    if (currentStoryboard?.clips && currentStoryboard.clips.length > 0) {
-      // Sort the clips by order to ensure we get the first scene
-      const sortedClips = [...currentStoryboard.clips].sort((a, b) => a.order - b.order);
-      if (sortedClips[0]?.id) {
-        console.log(`Auto-selecting first clip: ${sortedClips[0].id}`);
-        setActiveClipId(sortedClips[0].id);
-      }
-    }
-  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard, setActiveClipId]);
-
   // Handle generation errors
   const handleError = useCallback((error: string) => {
     console.log('Generation error:', error);
@@ -240,7 +240,10 @@ export function useStoryboardGenerator(
     console.log(`Cleaning up session ${sessionId}`);
     // Only clear the session if it matches the current one
     setCurrentSession(current => sessionId === current ? null : current);
-  }, []);
+    // Ensure modals are closed on cleanup
+    setShowGeneratingClipsModal(false);
+    setShowStoryboardGeneratorModal(false);
+  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal]);
 
   // Use the new generation progress hook
   const {
@@ -445,7 +448,13 @@ export function useStoryboardGenerator(
       const initResponse = await fetch('/api/movie/generate/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, provider, numScenes })
+        body: JSON.stringify({
+          prompt,
+          provider,
+          numScenes,
+          // If we have a current storyboard and it's in initializing state, reuse it
+          existingMovieId: currentStoryboard?.generationStatus?.status === 'initializing' ? currentStoryboard.id : undefined
+        })
       });
 
       if (!initResponse.ok) {
@@ -659,14 +668,17 @@ export function useStoryboardGenerator(
     if (!currentStoryboard?.id) return;
 
     const checkGenerationStatus = async () => {
-      console.log('Checking storyboard generation status:', {
+      // Add log to track entry into status check with full storyboard details
+      console.log('[GENERATION_FLOW] Checking storyboard status:', {
         id: currentStoryboard.id,
         name: currentStoryboard.name,
         hasStatus: !!currentStoryboard.generationStatus,
         inProgress: currentStoryboard.generationStatus?.inProgress,
         completedScenes: currentStoryboard.generationStatus?.completedScenes,
         totalScenes: currentStoryboard.generationStatus?.totalScenes,
-        status: currentStoryboard.generationStatus?.status
+        status: currentStoryboard.generationStatus?.status,
+        hasOriginalScenes: !!currentStoryboard.originalScenes,
+        originalScenesCount: currentStoryboard.originalScenes?.length
       });
 
       // If there's no generation status, nothing to do
@@ -697,22 +709,56 @@ export function useStoryboardGenerator(
       if (activeSessionId) {
         console.log(`Setting up SSE for active session: ${activeSessionId}`);
         setCurrentSession(activeSessionId);
+        
+        // If the status is still 'initializing', we need to call start
+        if (status === 'initializing') {
+          console.log(`[GENERATION_FLOW] Found initializing session, calling start endpoint for session: ${activeSessionId}`);
+          
+          try {
+            // Start generation
+            const startResponse = await fetch(`/api/movie/generate/${activeSessionId}/start`, {
+              method: 'POST'
+            });
+
+            if (!startResponse.ok) {
+              throw new Error('Failed to start generation');
+            }
+
+            console.log(`[GENERATION_FLOW] Successfully started generation for existing session: ${activeSessionId}`);
+          } catch (error) {
+            console.error('[GENERATION_FLOW] Error starting generation for existing session:', error);
+            setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
+          }
+        }
+        
         return;
       }
 
       // If we're in initializing state, we need to restart generation
       if (status === 'initializing' && currentStoryboard.originalScenes) {
-        console.log(`[GENERATION_RECOVERY] Found storyboard in initializing state, restarting generation`);
+        // Add detailed log for initialization attempt
+        console.log(`[GENERATION_FLOW] Attempting to restart generation for initializing movie:`, {
+          id: currentStoryboard.id,
+          name: currentStoryboard.name,
+          provider: currentStoryboard.aiProvider || defaultProvider,
+          description: currentStoryboard.description,
+          numScenes: currentStoryboard.originalScenes.length,
+          originalScenes: currentStoryboard.originalScenes.map(scene => ({ 
+            order: scene.order,
+            hasDescription: !!scene.description
+          }))
+        });
         
         try {
-          // Initialize new generation session
+          // Initialize new generation session but reuse existing movie
           const initResponse = await fetch('/api/movie/generate/initialize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               prompt: currentStoryboard.description,
               provider: currentStoryboard.aiProvider || defaultProvider,
-              numScenes: currentStoryboard.originalScenes.length
+              numScenes: currentStoryboard.originalScenes.length,
+              existingMovieId: currentStoryboard.id // Pass the existing movie ID to reuse it
             })
           });
 
@@ -721,7 +767,7 @@ export function useStoryboardGenerator(
           }
 
           const { sessionId } = await initResponse.json();
-          console.log(`[GENERATION_RECOVERY] Created new generation session: ${sessionId}`);
+          console.log(`[GENERATION_RECOVERY] Created new generation session: ${sessionId} for existing movie: ${currentStoryboard.id}`);
 
           // Set current session ID to establish SSE connection
           setCurrentSession(sessionId);

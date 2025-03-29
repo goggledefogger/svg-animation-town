@@ -15,39 +15,66 @@ const sessionProgress = new Map();
  */
 exports.initializeGeneration = async (req, res) => {
   try {
-    const { prompt, provider, numScenes } = req.body;
+    const { prompt, provider, numScenes, existingMovieId } = req.body;
 
     // Validate request
     if (!prompt) {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
-    // First, generate a complete storyboard with scene descriptions
-    console.log('Generating initial storyboard with scene descriptions...');
-    const storyboardResponse = await storyboardService.generateStoryboard(prompt, provider, numScenes);
+    let storyboard;
 
-    // Create new storyboard with the generated content
-    const storyboard = {
-      id: uuidv4(),
-      name: storyboardResponse.title || (prompt.substring(0, 50) + (prompt.length > 50 ? '...' : '')),
-      description: storyboardResponse.description || prompt,
-      clips: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      aiProvider: provider,
-      // Store the scene descriptions for generating clips
-      originalScenes: storyboardResponse.scenes,
-      // Initialize generation status
-      generationStatus: {
-        inProgress: true,
-        completedScenes: 0,
-        totalScenes: storyboardResponse.scenes.length,
-        status: 'initializing',
-        startedAt: new Date()
+    // If we have an existingMovieId, try to load it
+    if (existingMovieId) {
+      console.log(`Attempting to reuse existing movie: ${existingMovieId}`);
+      const existingMovie = await storageService.getMovie(existingMovieId);
+      
+      if (existingMovie) {
+        console.log(`Found existing movie: ${existingMovie.name}`);
+        storyboard = {
+          ...existingMovie,
+          updatedAt: new Date(),
+          // Update generation status
+          generationStatus: {
+            ...existingMovie.generationStatus,
+            status: 'initializing',
+            startedAt: new Date()
+          }
+        };
+      } else {
+        console.log(`Existing movie ${existingMovieId} not found, creating new one`);
       }
-    };
+    }
 
-    // Save initial storyboard
+    // If we don't have a storyboard yet (no existingMovieId or not found), create a new one
+    if (!storyboard) {
+      // First, generate a complete storyboard with scene descriptions
+      console.log('Generating initial storyboard with scene descriptions...');
+      const storyboardResponse = await storyboardService.generateStoryboard(prompt, provider, numScenes);
+
+      // Create new storyboard with the generated content
+      storyboard = {
+        id: existingMovieId || uuidv4(), // Use existing ID if provided
+        name: storyboardResponse.title || (prompt.substring(0, 50) + (prompt.length > 50 ? '...' : '')),
+        description: storyboardResponse.description || prompt,
+        clips: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        aiProvider: provider,
+        // Store the scene descriptions for generating clips
+        originalScenes: storyboardResponse.scenes,
+        // Initialize generation status
+        generationStatus: {
+          inProgress: true,
+          completedScenes: 0,
+          totalScenes: storyboardResponse.scenes.length,
+          status: 'initializing',
+          startedAt: new Date()
+        }
+      };
+    }
+
+    // Save storyboard
     await storageService.saveMovie(storyboard);
 
     // Create a new session
@@ -55,12 +82,12 @@ exports.initializeGeneration = async (req, res) => {
     const session = {
       id: sessionId,
       storyboardId: storyboard.id,
-      prompt,
+      prompt: storyboard.description,
       provider: provider || 'openai',
-      numScenes: storyboardResponse.scenes.length,
+      numScenes: storyboard.originalScenes.length,
       progress: {
         current: 0,
-        total: storyboardResponse.scenes.length,
+        total: storyboard.originalScenes.length,
         status: 'initializing'
       },
       clients: new Set(),
@@ -70,12 +97,16 @@ exports.initializeGeneration = async (req, res) => {
     // Store the session
     activeSessions.set(sessionId, session);
 
+    // Update the storyboard with the active session
+    storyboard.generationStatus.activeSessionId = sessionId;
+    await storageService.saveMovie(storyboard);
+
     // Return the session ID and storyboard
     res.json({
       success: true,
       sessionId,
       storyboard,
-      message: 'Generation session initialized'
+      message: existingMovieId ? 'Restarting generation for existing movie' : 'Generation session initialized'
     });
   } catch (error) {
     console.error('Error initializing generation:', error);
@@ -175,9 +206,14 @@ function updateSessionProgress(session, newClip = null) {
  */
 exports.startGeneration = async (req, res) => {
   const { sessionId } = req.params;
+  
+  // Strategic log #1: Log the API call with details
+  console.log(`[GENERATION_DEBUG] startGeneration called for sessionId: ${sessionId}, method: ${req.method}, url: ${req.originalUrl}, client: ${req.ip}`);
+  
   const session = activeSessions.get(sessionId);
 
   if (!session) {
+    console.log(`[GENERATION_DEBUG] Session not found in activeSessions map. Active sessions: ${Array.from(activeSessions.keys()).join(', ')}`);
     return res.status(404).json({
       success: false,
       error: 'Generation session not found'
@@ -214,6 +250,14 @@ exports.startGeneration = async (req, res) => {
     const scenePromises = storyboard.originalScenes.map(async (scene, i) => {
       try {
         console.log(`[GENERATION] Starting scene ${i + 1}/${storyboard.originalScenes.length}`);
+
+        // Strategic log #2: Log details about the animation generation call
+        console.log(`[SVG_GENERATION_DEBUG] Calling animationService.generateAnimation for scene ${i + 1}:
+          - Provider: ${session.provider}
+          - Scene ID: ${scene.id || 'unknown'}
+          - Prompt length: ${scene.svgPrompt?.length || 0} chars
+          - Active session ID: ${sessionId}
+          - Storyboard ID: ${session.storyboardId}`);
 
         // Use the scene's specific prompt for generation
         const result = await animationService.generateAnimation(scene.svgPrompt, session.provider);
