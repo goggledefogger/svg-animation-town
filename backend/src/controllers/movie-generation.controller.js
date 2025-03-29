@@ -219,6 +219,17 @@ exports.startGeneration = async (req, res) => {
       error: 'Generation session not found'
     });
   }
+  
+  // Prevent duplicate starts - if already generating, just return success
+  if (session.progress.status === 'generating') {
+    console.log(`[GENERATION_DEBUG] Session ${sessionId} is already generating, preventing duplicate start`);
+    return res.json({
+      success: true,
+      sessionId,
+      progress: session.progress,
+      message: 'Generation already in progress'
+    });
+  }
 
   try {
     // Update session status
