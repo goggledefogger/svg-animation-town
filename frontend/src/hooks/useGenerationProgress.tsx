@@ -55,201 +55,56 @@ export function useGenerationProgress({
 
   // Effect to handle SSE connection
   useEffect(() => {
-    // Don't do anything if we don't have a session ID
     if (!sessionId) {
-      console.log("No session ID provided, skipping SSE setup");
+      console.log('No session ID provided, skipping SSE setup');
       return;
     }
 
-    console.log(`Setting up SSE connection for session ${sessionId}`);
+    console.log(`[SSE] Setting up connection for session ${sessionId}`);
+    const eventSource = new EventSource(`/api/movie/generate/${sessionId}/progress`);
 
-    // Don't recreate the connection if we already have one for the same session
-    if (eventsRef.current && activeSessionRef.current === sessionId) {
-      console.log(`Already have an active SSE connection for session ${sessionId}`);
-      return;
-    }
-
-    // Clean up any existing connection before creating a new one
-    if (eventsRef.current) {
-      console.log(`Closing existing SSE connection for ${activeSessionRef.current} before creating new one for ${sessionId}`);
-      eventsRef.current.close();
-      eventsRef.current = null;
-    }
-
-    // Update active session reference
-    activeSessionRef.current = sessionId;
-
-    // Always set isGenerating to true immediately when session is provided
-    if (isMountedRef.current) {
-      setIsGenerating(true);
-    }
-
-    // Set up SSE connection
-    try {
-      const events = new EventSource(`/api/movie/generate/${sessionId}/progress`);
-      eventsRef.current = events;
-
-      console.log(`SSE connection established for ${sessionId}`);
-
-      events.onmessage = (event) => {
-        // Skip processing if component has unmounted
-        if (!isMountedRef.current) return;
-
-        try {
-          const update = JSON.parse(event.data);
-
-          if (update.type === 'progress') {
-            setProgress(update.data);
-
-            // Handle new clip updates
-            if (update.data.newClip) {
-              const clipData = update.data.newClip.clip;
-
-              // Check if this clip has an animation ID
-              if (clipData.animationId) {
-                // Get or create the set of clip IDs for this animation ID
-                const processedClips = processedClipIdsRef.current.get(clipData.animationId) || new Set<string>();
-
-                // Check if we've already processed this specific clip
-                if (processedClips.has(clipData.id)) {
-                  console.log(`[DUPLICATE_EVENT] Skipping duplicate clip ${clipData.id} with animation ID ${clipData.animationId}`);
-                } else {
-                  // Track this clip as processed
-                  processedClips.add(clipData.id);
-                  processedClipIdsRef.current.set(clipData.animationId, processedClips);
-
-                  console.log(`[NEW_CLIP] Processing clip ${clipData.id} with animation ID ${clipData.animationId}`);
-                  // Pass the clip to the callback
-                  onNewClip?.(clipData);
-                }
-              } else {
-                // No animation ID, just pass it through
-                console.log(`[NEW_CLIP] Processing clip without animation ID: ${clipData.id}`);
-                onNewClip?.(clipData);
-              }
-            }
-
-            // Handle completion
-            if (update.data.status === 'completed' || update.data.status === 'completed_with_errors') {
-              console.log(`Session ${sessionId} completed with status: ${update.data.status}`);
-              events.close();
-              eventsRef.current = null;
-              activeSessionRef.current = null;
-
-              if (isMountedRef.current) {
-                setIsGenerating(false);
-              }
-
-              // Make sure we pass the actual storyboard ID, not the session ID
-              const storyboardId = update.data.storyboardId;
-              if (storyboardId) {
-                console.log(`Completing generation for storyboard ${storyboardId}`);
-                onComplete?.(storyboardId);
-              } else {
-                console.error(`No storyboardId found in completion data, cannot complete properly`);
-                // Fall back to session ID, though this will likely cause errors
-                onComplete?.(sessionId);
-              }
-
-              // Only do cleanup if we're still mounted
-              if (isMountedRef.current) {
-                onCleanup?.(sessionId);
-              }
-            }
-
-            // Handle errors
-            if (update.data.status === 'failed') {
-              console.log(`Session ${sessionId} failed`);
-              events.close();
-              eventsRef.current = null;
-              activeSessionRef.current = null;
-
-              if (isMountedRef.current) {
-                setIsGenerating(false);
-              }
-
-              onError?.('Generation failed. Please try again.');
-
-              // Only do cleanup if we're still mounted
-              if (isMountedRef.current) {
-                onCleanup?.(sessionId);
-              }
-            }
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'progress') {
+          if (data.data.newClip) {
+            console.log(`[SSE] Received new clip: scene ${data.data.newClip.clip.order + 1}`);
+            onNewClip?.(data.data.newClip.clip);
           }
-        } catch (error) {
-          console.error(`Error parsing SSE message for session ${sessionId}:`, error);
-        }
-      };
+          setProgress(data.data);
 
-      events.onerror = (error) => {
-        // Skip processing if component has unmounted
-        if (!isMountedRef.current) return;
-
-        console.error(`SSE connection error for session ${sessionId}:`, error);
-        events.close();
-        eventsRef.current = null;
-        activeSessionRef.current = null;
-
-        if (isMountedRef.current) {
-          setIsGenerating(false);
-        }
-
-        onError?.('Lost connection to server. Please try again.');
-
-        // Only do cleanup if we're still mounted
-        if (isMountedRef.current) {
-          onCleanup?.(sessionId);
-        }
-      };
-
-      // Cleanup function that only runs when sessionId changes or component unmounts
-      return () => {
-        // Skip the cleanup if we're just unmounting to avoid destroying an active connection
-        // Only clean up if the session ID actually changed
-        if (sessionId !== activeSessionRef.current) {
-          console.log(`Cleaning up SSE connection for session ${sessionId} - session changed`);
-          if (events) {
-            events.close();
+          // Handle completion states
+          if (data.data.status === 'completed' || data.data.status === 'completed_with_errors') {
+            console.log(`[SSE] Generation completed with status: ${data.data.status}`);
+            eventSource.close();
+            setIsGenerating(false);
+            onComplete?.(data.data.storyboardId || sessionId);
           }
 
-          // Only call onCleanup if we're actually cleaning up the session
-          // AND if component isn't unmounting
-          if (isMountedRef.current && sessionId === activeSessionRef.current) {
-            onCleanup?.(sessionId);
+          // Handle failure state
+          if (data.data.status === 'failed') {
+            console.log(`[SSE] Generation failed`);
+            eventSource.close();
+            setIsGenerating(false);
+            onError?.('Generation failed. Please try again.');
           }
-
-          // Clear refs
-          if (eventsRef.current === events) {
-            eventsRef.current = null;
-          }
-        } else {
-          console.log(`Skipping cleanup for session ${sessionId} during component updates`);
         }
-      };
-    } catch (error) {
-      console.error(`Error setting up SSE for session ${sessionId}:`, error);
-
-      if (eventsRef.current) {
-        eventsRef.current.close();
-        eventsRef.current = null;
+      } catch (error) {
+        console.error('[SSE] Error processing event:', error);
       }
+    };
 
-      activeSessionRef.current = null;
+    eventSource.onerror = (error) => {
+      console.error('[SSE] Connection error:', error);
+      setIsGenerating(false);
+      onError?.('Lost connection to server. Please try again.');
+    };
 
-      if (isMountedRef.current) {
-        setIsGenerating(false);
-      }
-
-      onError?.(`Error connecting to server: ${error instanceof Error ? error.message : 'Unknown error'}`);
-
-      // Only do cleanup if we're still mounted
-      if (isMountedRef.current) {
-        onCleanup?.(sessionId);
-      }
-
-      return () => {};
-    }
-  }, [sessionId, onNewClip, onComplete, onError, onCleanup]);
+    return () => {
+      console.log(`[SSE] Closing connection for session ${sessionId}`);
+      eventSource.close();
+    };
+  }, [sessionId, onNewClip, onComplete, onError]);
 
   return {
     isGenerating,

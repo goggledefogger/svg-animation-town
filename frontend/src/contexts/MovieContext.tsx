@@ -472,6 +472,11 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Log generation status for debugging
       if (storyboard.generationStatus?.inProgress) {
         console.log(`Loading in-progress movie: ${storyboard.name} (${storyboard.id})`, storyboard.generationStatus);
+        
+        // Add log for initializing state
+        if (storyboard.generationStatus.status === 'initializing') {
+          console.log(`[GENERATION_STATE] Found storyboard in initializing state, may need to restart generation. SessionId: ${storyboard.generationStatus.activeSessionId}`);
+        }
       }
 
       // Validate and synchronize clips if needed

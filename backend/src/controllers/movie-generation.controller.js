@@ -160,11 +160,7 @@ function updateSessionProgress(session, newClip = null) {
 
   if (newClip) {
     progressSet.add(newClip.order);
-
-    // Add diagnostic log for clip events being sent
-    if (newClip.animationId) {
-      console.log(`[SERVER_CLIP_EVENT] Sending clip event: order=${newClip.order}, id=${newClip.id}, animationId=${newClip.animationId}, session=${session.id}`);
-    }
+    console.log(`[SSE_UPDATE] Sending clip update for session ${session.id}: scene=${newClip.order + 1}, clipId=${newClip.id}`);
   }
 
   // Update progress count atomically
@@ -192,6 +188,7 @@ exports.startGeneration = async (req, res) => {
     // Update session status
     session.progress.status = 'generating';
     notifyClients(session);
+    console.log(`[GENERATION] Starting generation for session ${sessionId}`);
 
     // Load the storyboard to get scene descriptions
     const storyboard = await storageService.getMovie(session.storyboardId);
@@ -210,123 +207,25 @@ exports.startGeneration = async (req, res) => {
       currentSceneIndex: 0,
       activeSessionId: sessionId
     };
+
     await storageService.saveMovie(storyboard);
-
-    // Create a shared atomic counter for tracking progress
-    let currentSceneIndex = 0;
-
-    // Check if we're recovering a paused generation
-    const isRecovery = storyboard.generationStatus.recoveredAt !== undefined;
-    const startingSceneIndex = isRecovery ? (storyboard.generationStatus.currentSceneIndex || 0) : 0;
-
-    // For recovery, we need to identify which scenes are already completed
-    const completedSceneIndices = new Set();
-    if (isRecovery && storyboard.clips && Array.isArray(storyboard.clips)) {
-      storyboard.clips.forEach(clip => {
-        if (clip && clip.order !== undefined) {
-          completedSceneIndices.add(clip.order);
-          console.log(`[GENERATION] Scene ${clip.order + 1} already completed, will skip generation`);
-        }
-      });
-      console.log(`[GENERATION] Recovery mode: ${completedSceneIndices.size} scenes already complete`);
-    }
 
     // Generate clips for each scene in parallel
     const scenePromises = storyboard.originalScenes.map(async (scene, i) => {
       try {
-        // Skip already completed scenes in recovery mode
-        if (isRecovery && completedSceneIndices.has(i)) {
-          console.log(`[GENERATION] Skipping generation for already completed scene ${i + 1}`);
-          // Find the existing clip for this scene
-          const existingClip = storyboard.clips.find(clip => clip.order === i);
-          if (existingClip) {
-            // Log re-sending of existing clip during recovery
-            if (existingClip.animationId) {
-              console.log(`[SERVER_RECOVERY_EVENT] Re-sending existing clip event in recovery mode: order=${existingClip.order}, id=${existingClip.id}, animationId=${existingClip.animationId}`);
-            }
-
-            // Update progress to include this pre-existing clip
-            updateSessionProgress(session, existingClip);
-            return existingClip;
-          }
-          return null;
-        }
-
-        console.log(`[GENERATION] Starting generation of scene ${i + 1}/${storyboard.originalScenes.length}`);
-
-        // Atomically update the current scene index in the storyboard
-        // This ensures we always have a record of which scene is being processed
-        if (i >= currentSceneIndex) {
-          currentSceneIndex = i;
-
-          // Update storyboard with current scene index
-          try {
-            const updatedStoryboard = await storageService.getMovie(storyboard.id);
-            if (updatedStoryboard && updatedStoryboard.generationStatus) {
-              updatedStoryboard.generationStatus.currentSceneIndex = i;
-              await storageService.saveMovie(updatedStoryboard);
-            }
-          } catch (updateError) {
-            console.warn(`[GENERATION] Failed to update scene index: ${updateError.message}`);
-            // Continue processing even if we couldn't update the index
-          }
-        }
+        console.log(`[GENERATION] Starting scene ${i + 1}/${storyboard.originalScenes.length}`);
 
         // Use the scene's specific prompt for generation
-        let result;
-        try {
-          result = await animationService.generateAnimation(scene.svgPrompt, session.provider);
-        } catch (animationError) {
-          // Check for rate limit errors or other recoverable errors
-          if (animationError.message && (
-              animationError.message.includes('rate limit') ||
-              animationError.message.includes('too many requests') ||
-              animationError.message.includes('429') ||
-              animationError.message.includes('temporarily unavailable')
-            )) {
-            // This is a recoverable error, pause generation
-            console.warn(`[GENERATION] Rate limit or service availability error encountered: ${animationError.message}`);
-
-            // Update storyboard with paused status, but don't exit the loop - allow other scenes to continue
-            const pausedStoryboard = await storageService.getMovie(storyboard.id);
-            if (pausedStoryboard) {
-              pausedStoryboard.generationStatus.status = 'paused_rate_limited';
-              pausedStoryboard.generationStatus.pausedReason = animationError.message;
-              pausedStoryboard.generationStatus.pausedAt = new Date();
-              pausedStoryboard.generationStatus.inProgress = true; // Still in progress, just paused
-              pausedStoryboard.generationStatus.pausedSceneIndex = i;
-              await storageService.saveMovie(pausedStoryboard);
-
-              // Add error to session but continue processing other scenes
-              session.errors.push({
-                scene: i + 1,
-                error: `Generation paused for scene: ${animationError.message}`
-              });
-              notifyClients(session);
-            }
-
-            // Return null for this scene, but allow other scenes to continue
-            return null;
-          }
-
-          // For other non-recoverable errors, throw to be caught by the scene-level catch
-          throw animationError;
-        }
+        const result = await animationService.generateAnimation(scene.svgPrompt, session.provider);
 
         if (!result || !result.svg) {
           throw new Error(`Failed to generate scene ${i + 1}: No SVG content returned`);
         }
 
-        // The animation is already saved by the animation service, use the returned ID
-        // Skip saving the animation again to prevent duplicates
         const animationId = result.animationId;
-
         if (!animationId) {
-          console.error(`[GENERATION] Missing animation ID in result for scene ${i + 1}`);
           throw new Error(`Failed to generate scene ${i + 1}: No animation ID returned`);
         }
-
-        console.log(`[GENERATION] Using animation ID from service: ${animationId}`);
 
         // Create clip with scene-specific information
         const clip = {
@@ -353,34 +252,27 @@ exports.startGeneration = async (req, res) => {
           }]
         };
 
-        // Update progress atomically
+        // Update progress atomically and notify clients
         updateSessionProgress(session, clip);
 
         // Save clip to storyboard atomically
         await storageService.addClipToMovie(storyboard.id, clip);
-        console.log(`[GENERATION] Successfully saved scene ${i + 1}/${storyboard.originalScenes.length}`);
+        console.log(`[GENERATION] Completed scene ${i + 1}/${storyboard.originalScenes.length}`);
 
         return clip;
       } catch (error) {
         console.error(`[GENERATION] Error generating scene ${i + 1}:`, error);
-
-        // Just record the error for this specific scene, but allow the others to continue
         session.errors.push({
           scene: i + 1,
           error: error.message
         });
         notifyClients(session);
-
         return null;
       }
     });
 
-    console.log(`[GENERATION] Started parallel generation of ${session.progress.total} scenes`);
-
     // Wait for all scenes to be generated
     const clips = await Promise.all(scenePromises);
-
-    // Filter out null results (failed scenes)
     const validClips = clips.filter(clip => clip !== null);
 
     // Clean up progress tracking
@@ -388,36 +280,27 @@ exports.startGeneration = async (req, res) => {
 
     // Get final storyboard state with all clips
     const finalStoryboard = await storageService.getMovie(storyboard.id);
-
-    // Count actual valid clips in the final storyboard
     const completedClips = finalStoryboard.clips ? finalStoryboard.clips.filter(clip => clip !== null).length : validClips.length;
-
-    // Determine if we have any paused status
-    const hasPausedStatus = finalStoryboard.generationStatus &&
-      finalStoryboard.generationStatus.status &&
-      finalStoryboard.generationStatus.status.startsWith('paused_');
 
     // Update final status
     finalStoryboard.generationStatus = {
-      inProgress: hasPausedStatus || completedClips < storyboard.originalScenes.length,
+      inProgress: completedClips < storyboard.originalScenes.length,
       completedScenes: completedClips,
       totalScenes: storyboard.originalScenes.length,
-      status: hasPausedStatus ? finalStoryboard.generationStatus.status :
-        session.errors.length > 0 ? 'completed_with_errors' :
-        completedClips < storyboard.originalScenes.length ? 'in_progress' : 'completed',
+      status: session.errors.length > 0 ? 'completed_with_errors' : 'completed',
       startedAt: storyboard.generationStatus.startedAt,
-      completedAt: (!hasPausedStatus && completedClips >= storyboard.originalScenes.length) ? new Date() : undefined,
-      currentSceneIndex: currentSceneIndex,
-      activeSessionId: (hasPausedStatus || completedClips < storyboard.originalScenes.length) ? sessionId : null
+      completedAt: new Date(),
+      activeSessionId: null
     };
 
     // Save final state
     await storageService.saveMovie(finalStoryboard);
 
-    // Update session status
-    session.progress.status = hasPausedStatus ? 'in_progress' :
-      session.errors.length > 0 ? 'completed_with_errors' : 'completed';
+    // Update session status and notify clients
+    session.progress.status = session.errors.length > 0 ? 'completed_with_errors' : 'completed';
     notifyClients(session);
+
+    console.log(`[GENERATION] Completed generation for session ${sessionId}: ${completedClips}/${storyboard.originalScenes.length} scenes`);
 
     // Return final status
     res.json({
@@ -425,27 +308,11 @@ exports.startGeneration = async (req, res) => {
       sessionId,
       progress: session.progress,
       errors: session.errors,
-      status: finalStoryboard.generationStatus.status,
-      pausedReason: finalStoryboard.generationStatus.pausedReason
+      status: finalStoryboard.generationStatus.status
     });
 
   } catch (error) {
     console.error('[GENERATION] Error during generation:', error);
-
-    // Try to update the storyboard status if possible
-    try {
-      const storyboard = await storageService.getMovie(session.storyboardId);
-      if (storyboard && storyboard.generationStatus) {
-        storyboard.generationStatus.status = 'paused_error';
-        storyboard.generationStatus.pausedReason = error.message;
-        storyboard.generationStatus.pausedAt = new Date();
-        storyboard.generationStatus.inProgress = true; // Still in progress, just paused
-        await storageService.saveMovie(storyboard);
-      }
-    } catch (saveError) {
-      console.error("[GENERATION] Failed to update storyboard status after error:", saveError);
-    }
-
     session.progress.status = 'failed';
     session.errors.push({
       scene: 'all',

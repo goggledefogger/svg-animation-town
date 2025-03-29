@@ -614,6 +614,143 @@ export function useStoryboardGenerator(
     }
   }, []);
 
+  // Add polling functionality
+  const startPolling = useCallback(() => {
+    if (isPollingRef.current) return;
+    isPollingRef.current = true;
+
+    const pollInterval = setInterval(async () => {
+      if (!currentStoryboard?.id) {
+        clearInterval(pollInterval);
+        isPollingRef.current = false;
+        return;
+      }
+
+      try {
+        const response = await MovieStorageApi.getMovie(currentStoryboard.id);
+        if (response?.movie?.generationStatus) {
+          const { completedScenes, totalScenes, inProgress } = response.movie.generationStatus;
+          
+          setGenerationProgress({
+            current: completedScenes || 0,
+            total: totalScenes || 0,
+            status: inProgress ? 'in_progress' : 'completed'
+          });
+
+          if (!inProgress) {
+            clearInterval(pollInterval);
+            isPollingRef.current = false;
+            setIsGenerating(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling movie status:', error);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    return () => {
+      clearInterval(pollInterval);
+      isPollingRef.current = false;
+    };
+  }, [currentStoryboard?.id]);
+
+  // Check storyboard generation status and resume if needed
+  useEffect(() => {
+    if (!currentStoryboard?.id) return;
+
+    const checkGenerationStatus = async () => {
+      console.log('Checking storyboard generation status:', {
+        id: currentStoryboard.id,
+        name: currentStoryboard.name,
+        hasStatus: !!currentStoryboard.generationStatus,
+        inProgress: currentStoryboard.generationStatus?.inProgress,
+        completedScenes: currentStoryboard.generationStatus?.completedScenes,
+        totalScenes: currentStoryboard.generationStatus?.totalScenes,
+        status: currentStoryboard.generationStatus?.status
+      });
+
+      // If there's no generation status, nothing to do
+      if (!currentStoryboard.generationStatus) return;
+
+      const {
+        inProgress,
+        status,
+        completedScenes,
+        totalScenes,
+        activeSessionId
+      } = currentStoryboard.generationStatus;
+
+      // If generation is not in progress, nothing to do
+      if (!inProgress) return;
+
+      console.log(`Detected in-progress generation for movie: ${currentStoryboard.name}`);
+
+      // Update UI state to show generation in progress
+      setIsGenerating(true);
+      setGenerationProgress({
+        current: completedScenes || 0,
+        total: totalScenes || 0,
+        status: (status as GenerationProgressState['status']) || 'in_progress'
+      });
+
+      // If we have an active session ID, set it up for SSE
+      if (activeSessionId) {
+        console.log(`Setting up SSE for active session: ${activeSessionId}`);
+        setCurrentSession(activeSessionId);
+        return;
+      }
+
+      // If we're in initializing state, we need to restart generation
+      if (status === 'initializing' && currentStoryboard.originalScenes) {
+        console.log(`[GENERATION_RECOVERY] Found storyboard in initializing state, restarting generation`);
+        
+        try {
+          // Initialize new generation session
+          const initResponse = await fetch('/api/movie/generate/initialize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: currentStoryboard.description,
+              provider: currentStoryboard.aiProvider || defaultProvider,
+              numScenes: currentStoryboard.originalScenes.length
+            })
+          });
+
+          if (!initResponse.ok) {
+            throw new Error('Failed to initialize generation');
+          }
+
+          const { sessionId } = await initResponse.json();
+          console.log(`[GENERATION_RECOVERY] Created new generation session: ${sessionId}`);
+
+          // Set current session ID to establish SSE connection
+          setCurrentSession(sessionId);
+
+          // Start generation
+          const startResponse = await fetch(`/api/movie/generate/${sessionId}/start`, {
+            method: 'POST'
+          });
+
+          if (!startResponse.ok) {
+            throw new Error('Failed to start generation');
+          }
+
+          console.log(`[GENERATION_RECOVERY] Started generation for session: ${sessionId}`);
+          return;
+        } catch (error) {
+          console.error('[GENERATION_RECOVERY] Error restarting generation:', error);
+          setGenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
+        }
+      }
+
+      // If we get here, we're in progress but have no active session
+      console.log('In progress, but no active session. Starting conditional polling...');
+      startPolling();
+    };
+
+    checkGenerationStatus();
+  }, [currentStoryboard?.id, defaultProvider, startPolling]);
+
   return {
     isGenerating,
     generationProgress,
