@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
 import { AnimationApi, AnimationStorageApi } from '../services/api';
 import { exportAnimation as exportAnimationUtil, canExportAsSvg } from '../utils/exportUtils';
+import { useViewerPreferences } from './ViewerPreferencesContext';
 import { v4 as uuidv4 } from 'uuid';
 import { isMobileDevice, isFreshPageLoad } from '../utils/deviceUtils';
 import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 
 // Define the context interface
-interface AnimationContextType {
+export interface AnimationContextType {
   svgContent: string;
   playing: boolean;
   playbackSpeed: number | 'groovy';
@@ -29,7 +30,7 @@ interface AnimationContextType {
   loadAnimation: (name: string) => Promise<ChatData | null>;
   getSavedAnimations: () => Promise<any[]>;
   deleteAnimation: (name: string) => Promise<boolean>;
-  exportAnimation: (filename: string, format: 'svg' | 'json') => void;
+  exportAnimation: (filename: string, format: 'svg' | 'json', includeBackground?: boolean) => void;
   canExportAsSvg: () => boolean;
   chatHistory: Message[];
   setChatHistory: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -81,6 +82,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Cache expiration in milliseconds (5 seconds)
   const CACHE_EXPIRATION = 5000;
+
+  const viewerPreferences = useViewerPreferences();
 
   // Fetch default provider from backend on initial load
   useEffect(() => {
@@ -863,14 +866,16 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   // Function to export animation
-  const exportAnimationFn = useCallback((filename: string, format: 'svg' | 'json') => {
+  const exportAnimationFn = useCallback((filename: string, format: 'svg' | 'json', includeBackground?: boolean) => {
     if (!svgContent) {
       console.warn('No animation to export');
       return;
     }
 
-    exportAnimationUtil(svgContent, filename, format, chatHistory);
-  }, [svgContent, chatHistory]);
+    // Only pass the background if includeBackground is true
+    const background = includeBackground === false ? undefined : viewerPreferences.currentBackground;
+    exportAnimationUtil(svgContent, filename, format, chatHistory, background);
+  }, [svgContent, chatHistory, viewerPreferences.currentBackground]);
 
   // Check if SVG can be exported with animations
   const canExportAsSvgFn = useCallback(() => {

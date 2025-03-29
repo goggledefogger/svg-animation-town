@@ -1,10 +1,11 @@
 import React, { useState, KeyboardEvent, useEffect } from 'react';
 import { canExportAsSvg } from '../utils/exportUtils';
+import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 
 interface ExportModalProps {
   isOpen: boolean;
   onCancel: () => void;
-  onExport: (filename: string, format: 'svg' | 'json') => void;
+  onExport: (filename: string, format: 'svg' | 'json', includeBackground?: boolean) => void;
   svgContent: string;
 }
 
@@ -16,6 +17,8 @@ const ExportModal: React.FC<ExportModalProps> = ({
 }) => {
   const [filename, setFilename] = useState('animation');
   const [format, setFormat] = useState<'svg' | 'json'>('svg');
+  const [includeBackground, setIncludeBackground] = useState(true);
+  const { currentBackground } = useViewerPreferences();
 
   // Check if SVG can be exported with animations
   const canExportSvg = canExportAsSvg(svgContent);
@@ -29,7 +32,7 @@ const ExportModal: React.FC<ExportModalProps> = ({
 
   const handleExport = () => {
     if (filename.trim()) {
-      onExport(filename.trim(), format);
+      onExport(filename.trim(), format, format === 'svg' ? includeBackground : undefined);
     }
   };
 
@@ -42,83 +45,86 @@ const ExportModal: React.FC<ExportModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-11/12 max-w-md shadow-xl overflow-hidden">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-lg font-medium text-white">Export Animation</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/50">
+      <div className="bg-gray-800 rounded-lg p-4 sm:p-5 w-full max-w-sm sm:max-w-md mx-auto my-auto">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-white">Export Animation</h2>
+
+        <div className="mb-3 sm:mb-4">
+          <label htmlFor="filename" className="block text-gray-300 mb-1 text-sm sm:text-base">
+            Filename
+          </label>
+          <input
+            type="text"
+            id="filename"
+            value={filename}
+            onChange={(e) => setFilename(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-bat-yellow text-sm sm:text-base"
+            autoFocus
+          />
         </div>
 
-        <div className="mb-4">
-          <div className="mt-2">
-            <label htmlFor="filename" className="block text-sm font-medium text-gray-300 mb-1">
-              Filename
+        <div className="mb-3 sm:mb-4">
+          <label className="block text-gray-300 mb-1 text-sm sm:text-base">
+            Format
+          </label>
+          <div className="flex gap-4">
+            <label className="inline-flex items-center">
+              <input
+                type="radio"
+                value="svg"
+                checked={format === 'svg'}
+                onChange={() => setFormat('svg')}
+                disabled={!canExportSvg}
+                className="form-radio text-bat-yellow focus:ring-bat-yellow h-4 w-4"
+              />
+              <span className={`ml-2 text-sm sm:text-base ${!canExportSvg ? 'text-gray-500' : 'text-white'}`}>SVG</span>
             </label>
-            <input
-              type="text"
-              id="filename"
-              value={filename}
-              onChange={(e) => setFilename(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-bat-yellow"
-              placeholder="Enter filename without extension"
-              autoFocus
-            />
-          </div>
-
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Format
+            <label className="inline-flex items-center">
+              <input
+                type="radio"
+                value="json"
+                checked={format === 'json'}
+                onChange={() => setFormat('json')}
+                className="form-radio text-bat-yellow focus:ring-bat-yellow h-4 w-4"
+              />
+              <span className="ml-2 text-sm sm:text-base text-white">JSON</span>
             </label>
-            <div className="flex gap-4">
-              <div className="flex items-center">
-                <input
-                  type="radio"
-                  id="format-svg"
-                  value="svg"
-                  checked={format === 'svg'}
-                  onChange={() => setFormat('svg')}
-                  disabled={!canExportSvg}
-                  className="mr-2"
-                />
-                <label htmlFor="format-svg" className={!canExportSvg ? "text-gray-500" : "text-gray-300"}>
-                  SVG
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="radio"
-                  id="format-json"
-                  value="json"
-                  checked={format === 'json'}
-                  onChange={() => setFormat('json')}
-                  className="mr-2"
-                />
-                <label htmlFor="format-json" className="text-gray-300">
-                  JSON
-                </label>
-              </div>
-            </div>
-
-            {!canExportSvg && format === 'json' && (
-              <p className="mt-2 text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded">
-                This animation contains SMIL animations which may not work correctly when exported as SVG.
-                JSON format is recommended.
-              </p>
-            )}
           </div>
+          {!canExportSvg && format === 'svg' && (
+            <p className="text-yellow-400 text-xs mt-1">
+              This animation may not support direct SVG export with animations.
+            </p>
+          )}
         </div>
 
-        <div className="flex justify-end space-x-3">
+        {format === 'svg' && (
+          <div className="mb-3 sm:mb-4">
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={includeBackground}
+                onChange={() => setIncludeBackground(!includeBackground)}
+                className="form-checkbox text-bat-yellow focus:ring-bat-yellow h-4 w-4"
+              />
+              <span className="ml-2 text-sm sm:text-base text-white">Include {currentBackground.isDark ? 'dark' : 'light'} background</span>
+            </label>
+            <p className="text-gray-400 text-xs mt-1">
+              This will embed the current background color in the SVG file.
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 sm:gap-3 mt-4 sm:mt-5">
           <button
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
             onClick={onCancel}
+            className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-gray-700 hover:bg-gray-600 text-white rounded"
           >
             Cancel
           </button>
           <button
-            className="px-4 py-2 bg-bat-yellow hover:bg-bat-yellow/90 disabled:bg-gray-700 disabled:text-gray-400 text-black rounded"
             onClick={handleExport}
+            className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-bat-yellow hover:bg-bat-yellow/90 text-black rounded"
             disabled={!filename.trim()}
           >
             Export

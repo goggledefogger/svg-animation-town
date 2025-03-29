@@ -255,8 +255,8 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleExport = (filename: string, format: 'svg' | 'json') => {
-    exportAnimation(filename, format);
+  const handleExport = (filename: string, format: 'svg' | 'json', includeBackground?: boolean) => {
+    exportAnimation(filename, format, includeBackground);
     setShowExportModal(false);
   };
 

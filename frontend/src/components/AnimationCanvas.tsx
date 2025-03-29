@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useAnimation, useSvgRef } from '../contexts/AnimationContext';
 import { useMovie } from '../contexts/MovieContext';
+import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 import { AnimationApi, MovieStorageApi } from '../services/api';
@@ -33,6 +34,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const { svgContent: contextSvgContent, setSvgContent } = useAnimation();
   const { currentStoryboard, activeClipId, getActiveClip, updateClip, setCurrentStoryboard } = useMovie();
   const setSvgRef = useSvgRef();
+  const { getBackgroundStyle, currentBackground } = useViewerPreferences();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
   const currentSvgRef = useRef<SVGSVGElement | null>(null);
@@ -46,12 +48,15 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = useCallback((message: string): string => {
+    const fill = currentBackground.isDark ? "#1a1a2e" : "#f5f5f5";
+    const textColor = currentBackground.isDark ? "white" : "#333333";
+
     // Placeholder implementation
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
-      <rect width="800" height="600" fill="#1a1a2e" />
-      <text x="400" y="300" font-family="Arial" font-size="16" fill="white" text-anchor="middle">${message}</text>
+      <rect width="800" height="600" fill="${fill}" />
+      <text x="400" y="300" font-family="Arial" font-size="16" fill="${textColor}" text-anchor="middle">${message}</text>
     </svg>`;
-  }, []);
+  }, [currentBackground]);
 
   // Initialize animation loader hooks
   const {
@@ -1031,11 +1036,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex items-center justify-center bg-gotham-black/30 rounded-lg relative overflow-hidden"
+      className="w-full h-full flex items-center justify-center rounded-lg relative overflow-hidden"
       style={{
         ...style,
-        minWidth: '280px',
+        minWidth: '240px',
         minHeight: '157px',
+        ...getBackgroundStyle()
       }}
     >
       {/* Empty state or loading overlay - ensure it's visible when loading */}
@@ -1051,7 +1057,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       <div
         ref={svgContainerRef}
         data-testid="svg-container"
-        className={`w-full h-full overflow-hidden flex items-center justify-center transition-opacity duration-300 ${
+        className={`w-full h-full px-2 sm:px-4 flex items-center justify-center transition-opacity duration-300 ${
           isLoading ? 'opacity-40' : showEmptyState ? 'opacity-0' : 'opacity-100'
         }`}
       />

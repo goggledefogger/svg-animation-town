@@ -2,75 +2,139 @@
  * Utility functions for exporting animations
  */
 
+// Update import for BackgroundOption
+import { BackgroundOption } from '../contexts/ViewerPreferencesContext';
+
 /**
  * Exports the SVG animation as a file for download
  * @param svgContent The SVG content to export
  * @param filename The filename to use (without extension)
  * @param format The format to export in ('svg' or 'json')
  * @param chatHistory Optional chat history to include in JSON export
+ * @param background Optional background option for the export
+ * @param includeBackground Whether to include the background color in the SVG export
  */
 export const exportAnimation = (
   svgContent: string,
   filename: string,
-  format: 'svg' | 'json',
-  chatHistory?: any[]
+  format: 'svg' | 'json' = 'svg',
+  chatHistory?: any[],
+  background?: BackgroundOption,
+  includeBackground: boolean = true
 ): void => {
   if (!svgContent) {
     console.error('No SVG content to export');
     return;
   }
 
-  try {
-    let blob: Blob;
-    let downloadFilename: string;
+  let contentToExport = svgContent;
+  let downloadUrl = '';
 
-    if (format === 'svg') {
-      // Export as SVG
-      blob = new Blob([svgContent], { type: 'image/svg+xml' });
-      downloadFilename = `${filename}.svg`;
-    } else {
-      // Export as JSON
-      const jsonData = {
-        svg: svgContent,
-        chatHistory,
-        timestamp: new Date().toISOString(),
-      };
-      blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
-      downloadFilename = `${filename}.json`;
+  // Handle SVG export
+  if (format === 'svg') {
+    // If background is specified AND includeBackground is true, make sure the SVG has a background element
+    if (background && includeBackground) {
+      let backgroundStyle: string;
+
+      if (background.type === 'solid') {
+        backgroundStyle = background.value;
+      } else {
+        // For gradients, we need to ensure they work in standalone SVG
+        // Convert CSS gradient to SVG gradient
+        const gradientId = `export-gradient-${Date.now()}`;
+        const isLinear = background.value.includes('linear-gradient');
+
+        // Create SVG gradient definition
+        let gradientDef = '';
+
+        if (isLinear) {
+          // Extract colors from linear gradient
+          const colors = background.gradientColors || ['#333', '#666'];
+
+          // Create gradient definition based on direction
+          let x1 = '0%', y1 = '0%', x2 = '100%', y2 = '0%'; // default: to-right
+
+          if (background.gradientDirection === 'to-bottom') {
+            x1 = '0%'; y1 = '0%'; x2 = '0%'; y2 = '100%';
+          } else if (background.gradientDirection === 'diagonal') {
+            x1 = '0%'; y1 = '0%'; x2 = '100%'; y2 = '100%';
+          }
+
+          gradientDef = `
+            <linearGradient id="${gradientId}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">
+              ${colors.map((color, index) =>
+                `<stop offset="${index * 100 / (colors.length - 1)}%" stop-color="${color}" />`
+              ).join('')}
+            </linearGradient>
+          `;
+        } else {
+          // Radial gradient (simpler fallback)
+          gradientDef = `
+            <radialGradient id="${gradientId}" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+              <stop offset="0%" stop-color="${background.gradientColors?.[0] || '#333'}" />
+              <stop offset="100%" stop-color="${background.gradientColors?.[1] || '#666'}" />
+            </radialGradient>
+          `;
+        }
+
+        // Add the gradient definition to the SVG
+        contentToExport = contentToExport.replace(
+          /(<svg[^>]*>)/,
+          `$1\n  <defs>${gradientDef}</defs>`
+        );
+
+        backgroundStyle = `url(#${gradientId})`;
+      }
+
+      // Check if there's a background rect element
+      if (!/<rect[^>]*width=['"]100%['"][^>]*height=['"]100%['"][^>]*fill/.test(contentToExport)) {
+        // If no background rect found, add one as the first element after the opening svg tag and any defs
+        const insertAfter = contentToExport.includes('<defs>')
+          ? /<\/defs>/
+          : /(<svg[^>]*>)/;
+
+        contentToExport = contentToExport.replace(
+          insertAfter,
+          `$&\n  <rect width="100%" height="100%" fill="${backgroundStyle}" />`
+        );
+      } else {
+        // If there is a background rect, update its fill color
+        contentToExport = contentToExport.replace(
+          /(<rect[^>]*width=['"]100%['"][^>]*height=['"]100%['"][^>]*fill=['"])([^'"]+)(['"][^>]*>)/,
+          `$1${backgroundStyle}$3`
+        );
+      }
     }
 
-    // More robust download approach that works better across browsers
-    // Create a download link
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
-    a.download = downloadFilename;
+    // Create a Blob from the SVG content
+    const blob = new Blob([contentToExport], { type: 'image/svg+xml' });
+    downloadUrl = URL.createObjectURL(blob);
+  } else if (format === 'json') {
+    // Create a JSON object with SVG content
+    const jsonData = {
+      svgContent: svgContent,
+      chatHistory,
+      timestamp: new Date().toISOString(),
+    };
 
-    // For older browsers
-    const isIE = typeof (window as any).navigator.msSaveBlob !== 'undefined';
-
-    if (isIE) {
-      // For IE
-      (window as any).navigator.msSaveBlob(blob, downloadFilename);
-    } else {
-      // For other browsers
-      document.body.appendChild(a);
-
-      // Use a timeout to ensure the click works across browsers
-      setTimeout(() => {
-        a.click();
-
-        // Clean up
-        document.body.removeChild(a);
-        setTimeout(() => {
-          URL.revokeObjectURL(url);
-        }, 100);
-      }, 0);
-    }
-  } catch (error) {
-    console.error('Error during export:', error);
+    // Create a Blob from the JSON
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+    downloadUrl = URL.createObjectURL(blob);
   }
+
+  // Create a download link and trigger it
+  const downloadLink = document.createElement('a');
+  downloadLink.href = downloadUrl;
+  downloadLink.download = format === 'svg'
+    ? `${filename}.svg`
+    : `${filename}.json`;
+
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  document.body.removeChild(downloadLink);
+
+  // Clean up the URL object
+  URL.revokeObjectURL(downloadUrl);
 };
 
 /**

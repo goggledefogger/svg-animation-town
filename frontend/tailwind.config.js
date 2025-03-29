@@ -8,8 +8,10 @@ module.exports = {
     extend: {
       colors: {
         'gotham-dark': '#121212',
+        'gotham-black': '#121212',
         'gotham-blue': '#1a222c',
         'bat-yellow': '#ffdf00',
+        'gotham-light': '#FFFFFF',
       },
       animation: {
         'pulse-glow': 'pulse-glow 2s infinite',

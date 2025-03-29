@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import AnimationCanvas from './components/AnimationCanvas';
 import ChatInterface from './components/ChatInterface';
@@ -7,6 +7,7 @@ import { AnimationProvider, useAnimation } from './contexts/AnimationContext';
 import { MovieProvider, useMovie } from './contexts/MovieContext';
 import AnimationControls from './components/AnimationControls';
 import MovieEditorPage from './pages/MovieEditorPage';
+import { ViewerPreferencesProvider } from './contexts/ViewerPreferencesContext';
 
 // Connector component that gets data from AnimationContext and passes it to MovieProvider
 // This pattern properly addresses the context dependency without creating circular references
@@ -141,27 +142,29 @@ function App() {
 
   return (
     <Router>
-      <AnimationProvider>
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <MovieContextConnector>
-                <AnimationEditor />
-              </MovieContextConnector>
-            }
-          />
-          <Route
-            path="/movie-editor"
-            element={
-              <MovieContextConnector>
-                <MovieEditorPage />
-              </MovieContextConnector>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </AnimationProvider>
+      <ViewerPreferencesProvider>
+        <AnimationProvider>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <MovieContextConnector>
+                  <AnimationEditor />
+                </MovieContextConnector>
+              }
+            />
+            <Route
+              path="/movie-editor"
+              element={
+                <MovieContextConnector>
+                  <MovieEditorPage />
+                </MovieContextConnector>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </AnimationProvider>
+      </ViewerPreferencesProvider>
     </Router>
   );
 }
