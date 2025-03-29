@@ -92,9 +92,9 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-gotham-blue border border-gray-700 rounded-lg shadow-lg w-full max-w-xl max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-11/12 max-w-xl shadow-xl flex flex-col max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="bg-gotham-blue border-b border-gray-700 p-4 flex justify-between items-center">
+        <div className="flex justify-between items-center mb-3">
           <h2 className="text-lg font-medium text-white">Load Storyboard</h2>
           <button
             onClick={onClose}
@@ -108,18 +108,18 @@ const LoadStoryboardModal: React.FC<LoadStoryboardModalProps> = ({
         </div>
 
         {/* Search input */}
-        <div className="p-3 bg-gotham-blue/60 border-b border-gray-700">
+        <div className="mb-3">
           <input
             type="text"
             placeholder="Search storyboards..."
-            className="w-full bg-gotham-black border border-gray-700 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-bat-yellow"
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-bat-yellow"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-0">
+        <div className="flex-1 overflow-y-auto">
           {/* Loading state */}
           {isLoading && filteredStoryboards.length === 0 && (
             <div className="flex items-center justify-center h-32">

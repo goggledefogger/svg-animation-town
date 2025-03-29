@@ -30,24 +30,24 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-gotham-blue border border-gray-700 rounded-lg shadow-lg max-w-md w-full animate-fade-in">
-        <div className="p-4 border-b border-gray-700">
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-11/12 max-w-md shadow-xl overflow-hidden">
+        <div className="flex justify-between items-center mb-3">
           <h2 className="text-lg font-medium text-white">{title}</h2>
         </div>
-        <div className="p-4">
+        <div className="mb-4">
           {typeof message === 'string' ? <p className="text-gray-300">{message}</p> : message}
         </div>
-        <div className="p-4 border-t border-gray-700 flex justify-end space-x-3">
+        <div className="flex justify-end space-x-3">
           {showCancelButton && (
             <button
-              className="btn btn-outline"
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
               onClick={onCancel}
             >
               {cancelText}
             </button>
           )}
           <button
-            className="btn btn-primary"
+            className="px-4 py-2 bg-bat-yellow hover:bg-bat-yellow/90 disabled:bg-gray-700 disabled:text-gray-400 text-black rounded"
             onClick={onConfirm}
             disabled={confirmDisabled}
           >

@@ -1,5 +1,4 @@
 import React, { useState, KeyboardEvent, useEffect } from 'react';
-import ConfirmationModal from './ConfirmationModal';
 import { canExportAsSvg } from '../utils/exportUtils';
 
 interface ExportModalProps {
@@ -40,83 +39,93 @@ const ExportModal: React.FC<ExportModalProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <ConfirmationModal
-      isOpen={isOpen}
-      title="Export Animation"
-      message={
-        <div className="mt-2">
-          <label htmlFor="filename" className="block text-sm font-medium text-gray-300">
-            Filename
-          </label>
-          <input
-            type="text"
-            id="filename"
-            className="input"
-            placeholder="Enter a filename (without extension)"
-            value={filename}
-            onChange={(e) => setFilename(e.target.value)}
-            onKeyDown={handleKeyDown}
-            autoFocus
-          />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-11/12 max-w-md shadow-xl overflow-hidden">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-lg font-medium text-white">Export Animation</h2>
+        </div>
+
+        <div className="mb-4">
+          <div className="mt-2">
+            <label htmlFor="filename" className="block text-sm font-medium text-gray-300 mb-1">
+              Filename
+            </label>
+            <input
+              type="text"
+              id="filename"
+              value={filename}
+              onChange={(e) => setFilename(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:border-bat-yellow"
+              placeholder="Enter filename without extension"
+              autoFocus
+            />
+          </div>
 
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Export Format
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Format
             </label>
-            <div className="space-y-2">
+            <div className="flex gap-4">
               <div className="flex items-center">
                 <input
-                  id="format-svg"
-                  name="format"
                   type="radio"
-                  className="h-4 w-4 border-gray-600 text-blue-600 focus:ring-blue-500"
+                  id="format-svg"
                   value="svg"
                   checked={format === 'svg'}
                   onChange={() => setFormat('svg')}
                   disabled={!canExportSvg}
+                  className="mr-2"
                 />
-                <label
-                  htmlFor="format-svg"
-                  className={`ml-2 block text-sm ${!canExportSvg ? 'text-gray-500' : 'text-gray-300'}`}
-                >
-                  SVG (with animations)
-                  {!canExportSvg && (
-                    <span className="block text-xs text-yellow-500">
-                      Not available for this animation
-                    </span>
-                  )}
+                <label htmlFor="format-svg" className={!canExportSvg ? "text-gray-500" : "text-gray-300"}>
+                  SVG
                 </label>
               </div>
+
               <div className="flex items-center">
                 <input
-                  id="format-json"
-                  name="format"
                   type="radio"
-                  className="h-4 w-4 border-gray-600 text-blue-600 focus:ring-blue-500"
+                  id="format-json"
                   value="json"
                   checked={format === 'json'}
                   onChange={() => setFormat('json')}
+                  className="mr-2"
                 />
-                <label htmlFor="format-json" className="ml-2 block text-sm text-gray-300">
-                  JSON (includes animation data and chat history)
+                <label htmlFor="format-json" className="text-gray-300">
+                  JSON
                 </label>
               </div>
             </div>
-          </div>
 
-          <p className="mt-4 text-sm text-gray-400">
-            {format === 'svg' ?
-              'Exports the animation as an SVG file that can be opened in browsers or vector graphics applications.' :
-              'Exports all animation data including chat history in JSON format. Use this to save a complete backup.'}
-          </p>
+            {!canExportSvg && format === 'json' && (
+              <p className="mt-2 text-sm text-yellow-400 bg-yellow-900/20 p-2 rounded">
+                This animation contains SMIL animations which may not work correctly when exported as SVG.
+                JSON format is recommended.
+              </p>
+            )}
+          </div>
         </div>
-      }
-      confirmText="Export"
-      cancelText="Cancel"
-      onConfirm={handleExport}
-      onCancel={onCancel}
-    />
+
+        <div className="flex justify-end space-x-3">
+          <button
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            className="px-4 py-2 bg-bat-yellow hover:bg-bat-yellow/90 disabled:bg-gray-700 disabled:text-gray-400 text-black rounded"
+            onClick={handleExport}
+            disabled={!filename.trim()}
+          >
+            Export
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 
