@@ -207,13 +207,13 @@ function updateSessionProgress(session, newClip = null) {
 exports.startGeneration = async (req, res) => {
   const { sessionId } = req.params;
   
-  // Strategic log #1: Log the API call with details
-  console.log(`[GENERATION_DEBUG] startGeneration called for sessionId: ${sessionId}, method: ${req.method}, url: ${req.originalUrl}, client: ${req.ip}`);
+  // Strategic log for important API calls
+  console.log(`[GENERATION] startGeneration called for sessionId: ${sessionId}`);
   
   const session = activeSessions.get(sessionId);
 
   if (!session) {
-    console.log(`[GENERATION_DEBUG] Session not found in activeSessions map. Active sessions: ${Array.from(activeSessions.keys()).join(', ')}`);
+    console.log(`[GENERATION] Session ${sessionId} not found in activeSessions map`);
     return res.status(404).json({
       success: false,
       error: 'Generation session not found'
@@ -222,7 +222,7 @@ exports.startGeneration = async (req, res) => {
   
   // Prevent duplicate starts - if already generating, just return success
   if (session.progress.status === 'generating') {
-    console.log(`[GENERATION_DEBUG] Session ${sessionId} is already generating, preventing duplicate start`);
+    console.log(`[GENERATION] Session ${sessionId} is already generating, preventing duplicate start`);
     return res.json({
       success: true,
       sessionId,
@@ -262,13 +262,10 @@ exports.startGeneration = async (req, res) => {
       try {
         console.log(`[GENERATION] Starting scene ${i + 1}/${storyboard.originalScenes.length}`);
 
-        // Strategic log #2: Log details about the animation generation call
-        console.log(`[SVG_GENERATION_DEBUG] Calling animationService.generateAnimation for scene ${i + 1}:
-          - Provider: ${session.provider}
-          - Scene ID: ${scene.id || 'unknown'}
-          - Prompt length: ${scene.svgPrompt?.length || 0} chars
-          - Active session ID: ${sessionId}
-          - Storyboard ID: ${session.storyboardId}`);
+        // Only log detailed animation info during generation if this is the first scene
+        if (i === 0) {
+          console.log(`[SVG_GENERATION] Processing scene ${i + 1} with provider: ${session.provider}`);
+        }
 
         // Use the scene's specific prompt for generation
         const result = await animationService.generateAnimation(scene.svgPrompt, session.provider);
@@ -337,16 +334,19 @@ exports.startGeneration = async (req, res) => {
     const finalStoryboard = await storageService.getMovie(storyboard.id);
     const completedClips = finalStoryboard.clips ? finalStoryboard.clips.filter(clip => clip !== null).length : validClips.length;
 
-    // Update final status
+    // Update final status - Always set inProgress to false when generation is done, even if some scenes failed
     finalStoryboard.generationStatus = {
-      inProgress: completedClips < storyboard.originalScenes.length,
-      completedScenes: completedClips,
+      inProgress: false, // Always set to false when reaching completion stage
+      completedScenes: completedClips, 
       totalScenes: storyboard.originalScenes.length,
       status: session.errors.length > 0 ? 'completed_with_errors' : 'completed',
       startedAt: storyboard.generationStatus.startedAt,
       completedAt: new Date(),
       activeSessionId: null
     };
+
+    // Add debug log to verify inProgress state
+    console.log(`[GENERATION] Setting final status for movie ${finalStoryboard.id}: inProgress=${finalStoryboard.generationStatus.inProgress}, status=${finalStoryboard.generationStatus.status}, completedClips=${completedClips}/${storyboard.originalScenes.length}`);
 
     // Save final state
     await storageService.saveMovie(finalStoryboard);
@@ -368,6 +368,29 @@ exports.startGeneration = async (req, res) => {
 
   } catch (error) {
     console.error('[GENERATION] Error during generation:', error);
+    
+    // Even in case of total failure, we need to update the storyboard status
+    try {
+      // Get current storyboard state
+      const failedStoryboard = await storageService.getMovie(storyboard.id);
+      
+      // Mark as completed with errors and not in progress
+      failedStoryboard.generationStatus = {
+        ...failedStoryboard.generationStatus,
+        inProgress: false,
+        status: 'failed',
+        completedAt: new Date(),
+        activeSessionId: null
+      };
+      
+      console.log(`[GENERATION] Setting failed status for movie ${failedStoryboard.id}: inProgress=false, status=failed`);
+      
+      // Save failed state
+      await storageService.saveMovie(failedStoryboard);
+    } catch (saveError) {
+      console.error('[GENERATION] Error saving failed status:', saveError);
+    }
+    
     session.progress.status = 'failed';
     session.errors.push({
       scene: 'all',

@@ -42,6 +42,12 @@ export function useGenerationProgress({
   // Track processed clip IDs by animation ID to prevent duplicates
   const processedClipIdsRef = useRef<Map<string, Set<string>>>(new Map());
 
+  // Track last status for logging
+  const lastStatusRef = useRef<string | null>(null);
+
+  // Track retrying state
+  const isRetryingRef = useRef<boolean>(false);
+
   // Effect to handle SSE connection
   useEffect(() => {
     // Set as mounted when the component initializes
@@ -60,18 +66,15 @@ export function useGenerationProgress({
       return;
     }
 
-    // Don't set up a new connection if we're already connected to this session
-    if (activeSessionRef.current === sessionId) {
-      console.log(`[SSE] Already connected to session ${sessionId}`);
-      return;
-    }
-
     console.log(`[SSE] Setting up connection for session ${sessionId}`);
+    
+    // Create the EventSource for Server-Sent Events
     const eventSource = new EventSource(`/api/movie/generate/${sessionId}/progress`);
     eventsRef.current = eventSource;
     activeSessionRef.current = sessionId;
     setIsGenerating(true);
 
+    // Handle incoming messages
     eventSource.onmessage = (event) => {
       if (!isMountedRef.current) {
         console.log(`[SSE] Component unmounted, ignoring message for session ${sessionId}`);
@@ -81,19 +84,29 @@ export function useGenerationProgress({
 
       try {
         const data = JSON.parse(event.data);
+        
+        // Only log important status changes and clip updates
         if (data.type === 'progress') {
-          if (data.data.newClip) {
-            console.log(`[SSE] Received new clip: scene ${data.data.newClip.clip.order + 1}`);
-            onNewClip?.(data.data.newClip.clip);
+          const progressData = data.data;
+          
+          // Log clip updates
+          if (progressData.newClip) {
+            console.log(`[SSE] Received new clip: scene ${progressData.newClip.clip.order + 1}`);
+            onNewClip?.(progressData.newClip.clip);
           }
-          setProgress(data.data);
-
-          // Handle completion states
-          if (data.data.status === 'completed' || data.data.status === 'completed_with_errors') {
-            console.log(`[SSE] Generation completed with status: ${data.data.status}`);
+          
+          // Log status changes
+          if (progressData.status && progressData.status !== lastStatusRef.current) {
+            console.log(`[SSE] Generation status changed to: ${progressData.status}`);
+            lastStatusRef.current = progressData.status;
+          }
+          
+          // When complete, log completion event
+          if (['completed', 'completed_with_errors', 'failed'].includes(progressData.status)) {
+            console.log(`[SSE] Generation completed with status: ${progressData.status}`);
             
             // Update progress state first
-            setProgress(data.data);
+            setProgress(progressData);
             setIsGenerating(false);
             
             // Close the connection
@@ -105,13 +118,13 @@ export function useGenerationProgress({
             onCleanup?.(sessionId);
             
             // Then call onComplete with the storyboard ID if available
-            if (data.data.storyboardId) {
-              onComplete?.(data.data.storyboardId);
+            if (progressData.storyboardId) {
+              onComplete?.(progressData.storyboardId);
             }
           }
 
           // Handle failure state
-          if (data.data.status === 'failed') {
+          if (progressData.status === 'failed') {
             console.log(`[SSE] Generation failed`);
             eventSource.close();
             eventsRef.current = null;
@@ -120,9 +133,11 @@ export function useGenerationProgress({
             onCleanup?.(sessionId);
             onError?.('Generation failed. Please try again.');
           }
+          
+          setProgress(progressData);
         }
       } catch (error) {
-        console.error('[SSE] Error processing event:', error);
+        console.error('[SSE] Error processing SSE event:', error);
         eventSource.close();
         eventsRef.current = null;
         activeSessionRef.current = null;
@@ -131,16 +146,27 @@ export function useGenerationProgress({
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error('[SSE] Connection error:', error);
-      eventSource.close();
-      eventsRef.current = null;
-      activeSessionRef.current = null;
-      setIsGenerating(false);
-      onCleanup?.(sessionId);
-      onError?.('Lost connection to server. Please try again.');
+    // Handle connection open
+    eventSource.onopen = () => {
+      console.log(`[SSE] Connection opened for session ${sessionId}`);
     };
 
+    // Handle errors
+    eventSource.onerror = (error) => {
+      console.error('[SSE] Error with EventSource connection:', error);
+      // Only retry if not already retrying and the connection isn't closed
+      if (!isRetryingRef.current && eventSource.readyState !== 2) {
+        isRetryingRef.current = true;
+        console.log('[SSE] Attempting to reconnect...');
+        setTimeout(() => {
+          isRetryingRef.current = false;
+        }, 5000); // Wait before allowing another retry
+      } else if (eventSource.readyState === 2) {
+        console.log('[SSE] Connection closed, not retrying');
+      }
+    };
+
+    // Cleanup function to close the connection when the component unmounts
     return () => {
       console.log(`[SSE] Cleaning up connection for session ${sessionId}`);
       if (eventSource) {

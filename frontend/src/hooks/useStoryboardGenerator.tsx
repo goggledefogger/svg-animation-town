@@ -151,7 +151,7 @@ export function useStoryboardGenerator(
     isPollingRef.current = false;
     clearConditionalPolling();
 
-    // Update the storyboard state
+    // Update the storyboard state immediately to prevent infinite SSE reconnections
     setCurrentStoryboard(prev => {
       if (!prev) return prev;
 
@@ -163,7 +163,8 @@ export function useStoryboardGenerator(
           inProgress: false,
           completedScenes: prev.clips.length,
           completedAt: new Date(),
-          status: 'completed'
+          status: 'completed',
+          activeSessionId: undefined // Clear the session ID to prevent reconnection
         } : undefined
       };
     });
