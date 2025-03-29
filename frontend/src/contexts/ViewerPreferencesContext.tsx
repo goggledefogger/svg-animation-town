@@ -72,6 +72,9 @@ const BACKGROUND_OPTIONS: BackgroundOption[] = [
   }
 ];
 
+// Find the first dark gradient to use as default
+const DEFAULT_BACKGROUND = BACKGROUND_OPTIONS.find(bg => bg.type === 'gradient' && bg.isDark) || BACKGROUND_OPTIONS[0];
+
 // Create the context
 const ViewerPreferencesContext = createContext<ViewerPreferencesContextType | undefined>(undefined);
 
@@ -80,8 +83,8 @@ const LOCAL_STORAGE_KEY = 'viewer_preferences';
 
 // Provider component
 export const ViewerPreferencesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize state with dark mode as default, but try to load from localStorage
-  const [currentBackground, setCurrentBackground] = useState<BackgroundOption>(BACKGROUND_OPTIONS[0]);
+  // Initialize state with the first dark gradient as default, but try to load from localStorage
+  const [currentBackground, setCurrentBackground] = useState<BackgroundOption>(DEFAULT_BACKGROUND);
 
   // Load preferences from localStorage on initial mount
   useEffect(() => {
