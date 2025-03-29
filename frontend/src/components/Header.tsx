@@ -343,16 +343,16 @@ const Header: React.FC<HeaderProps> = ({
 
         {showAnimationList && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-gotham-blue border border-gray-700 rounded-lg shadow-lg w-full max-w-md">
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 w-11/12 max-w-md shadow-xl overflow-hidden">
               <AnimationList
                 onSelectAnimation={handleSelectAnimation}
                 onDeleteAnimation={handleDeleteAnimation}
                 onClose={() => setShowAnimationList(false)}
                 title="Load Animation"
                 showThumbnails={true}
-                maxHeight="max-h-96"
+                maxHeight="max-h-72"
                 showSearchFilter={true}
-                containerClassName="rounded-lg w-full"
+                containerClassName="overflow-hidden w-full"
               />
             </div>
           </div>

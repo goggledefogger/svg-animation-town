@@ -54,21 +54,21 @@ const AnimationList: React.FC<AnimationListProps> = ({
   const [animations, setAnimations] = useState<AnimationItem[]>([]);
   const [loadingAnimations, setLoadingAnimations] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // State for thumbnails
   const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [loadingThumbnails, setLoadingThumbnails] = useState<Record<string, boolean>>({});
-  
+
   // Search filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredAnimations, setFilteredAnimations] = useState<AnimationItem[]>([]);
-  
+
   // Track if the component is mounted to prevent state updates after unmounting
   const isMounted = useRef(true);
-  
+
   // Track if transformations have been applied
   const transformationsApplied = useRef(false);
-  
+
   // Cleanup effect
   useEffect(() => {
     return () => {
@@ -76,55 +76,55 @@ const AnimationList: React.FC<AnimationListProps> = ({
       transformationsApplied.current = false;
     };
   }, []);
-  
+
   // Load animations from server
   useEffect(() => {
     let isActive = true; // For race condition prevention
     transformationsApplied.current = false;
-    
+
     const fetchAnimations = async () => {
       if (!isActive) return;
-      
+
       setLoadingAnimations(true);
       setError(null);
-      
+
       try {
         const animationList = await AnimationStorageApi.listAnimations();
-        
+
         if (!isActive) return;
-        
+
         // Sort by timestamp (most recent first)
         const sortedAnimations = [...animationList].sort((a, b) => {
           const timestampA = a.timestamp || '';
           const timestampB = b.timestamp || '';
           return timestampB.localeCompare(timestampA);
         });
-        
+
         if (!isActive) return;
-        
+
         // Apply transformations if provided, but only once during initial load
         let finalAnimations = sortedAnimations;
         if (transformAnimations && !transformationsApplied.current) {
           finalAnimations = transformAnimations(sortedAnimations);
           transformationsApplied.current = true;
         }
-        
+
         setAnimations(finalAnimations);
         setFilteredAnimations(
-          searchTerm 
-            ? finalAnimations.filter(animation => 
+          searchTerm
+            ? finalAnimations.filter(animation =>
                 animation.name.toLowerCase().includes(searchTerm.toLowerCase())
-              ) 
+              )
             : finalAnimations
         );
-        
+
         // Preload first few thumbnails for better UX
         if (showThumbnails && finalAnimations.length > 0 && isActive) {
           // Skip special items that might not have real animation IDs
           const animationsToPreload = finalAnimations
             .filter(a => !a.id.startsWith('create-') && !a.id.startsWith('special-'))
             .slice(0, 5);
-            
+
           for (const animation of animationsToPreload) {
             if (!isActive) break;
             loadThumbnail(animation.id);
@@ -132,7 +132,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
         }
       } catch (error) {
         if (!isActive) return;
-        
+
         console.error('Error loading animations:', error);
         setError('Failed to load animations');
         setAnimations([]);
@@ -143,43 +143,43 @@ const AnimationList: React.FC<AnimationListProps> = ({
         }
       }
     };
-    
+
     fetchAnimations();
-    
+
     return () => {
       isActive = false; // Prevent state updates if component unmounts during fetch
     };
-  }, [showThumbnails]); 
-  
+  }, [showThumbnails]);
+
   // Handle filtering when search term changes
   useEffect(() => {
     if (animations.length === 0) return;
-    
+
     const filtered = searchTerm
-      ? animations.filter(animation => 
+      ? animations.filter(animation =>
           animation.name.toLowerCase().includes(searchTerm.toLowerCase())
-        ) 
+        )
       : animations;
-    
+
     setFilteredAnimations(filtered);
   }, [animations, searchTerm]);
-  
+
   // Load a thumbnail for a specific animation
   const loadThumbnail = useCallback(async (animationId: string) => {
     // Skip special items
     if (animationId.startsWith('create-') || animationId.startsWith('special-')) {
       return null;
     }
-    
+
     if (thumbnails[animationId] || loadingThumbnails[animationId]) {
       return thumbnails[animationId];
     }
-    
+
     setLoadingThumbnails(prev => ({ ...prev, [animationId]: true }));
-    
+
     try {
       const animation = await AnimationStorageApi.getAnimation(animationId);
-      
+
       if (animation && animation.svg) {
         setThumbnails(prev => ({
           ...prev,
@@ -192,23 +192,23 @@ const AnimationList: React.FC<AnimationListProps> = ({
     } finally {
       setLoadingThumbnails(prev => ({ ...prev, [animationId]: false }));
     }
-    
+
     return null;
   }, [thumbnails, loadingThumbnails]);
-  
+
   // Handle animation selection
   const handleSelectAnimation = async (animation: AnimationItem) => {
     try {
       // If we don't have the SVG content yet and thumbnails are enabled, load it
       let animationSvg = thumbnails[animation.id];
-      
+
       if (!animationSvg && showThumbnails && !animation.id.startsWith('create-') && !animation.id.startsWith('special-')) {
         animationSvg = await loadThumbnail(animation.id) || undefined;
       }
-      
+
       // Call the selection handler
       onSelectAnimation(animation, animationSvg);
-      
+
       // Close the panel if a close handler is provided
       if (onClose) {
         onClose();
@@ -217,22 +217,22 @@ const AnimationList: React.FC<AnimationListProps> = ({
       console.error('Error selecting animation:', error);
     }
   };
-  
+
   // Handle animation deletion
   const handleDeleteAnimation = async (event: React.MouseEvent, animation: AnimationItem) => {
     event.stopPropagation();
-    
+
     if (!onDeleteAnimation) return;
-    
+
     if (window.confirm(`Delete animation "${animation.name}"?`)) {
       try {
         const success = await onDeleteAnimation(animation);
-        
+
         if (success) {
           // Remove from local state
           setAnimations(prev => prev.filter(a => a.id !== animation.id));
           setFilteredAnimations(prev => prev.filter(a => a.id !== animation.id));
-          
+
           // Remove thumbnail
           setThumbnails(prev => {
             const { [animation.id]: _, ...rest } = prev;
@@ -247,7 +247,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
       }
     }
   };
-  
+
   // Render a single animation item
   const renderAnimationItem = (animation: AnimationItem) => {
     // If a special item renderer is provided and returns content, use it
@@ -257,10 +257,10 @@ const AnimationList: React.FC<AnimationListProps> = ({
         return specialContent;
       }
     }
-    
+
     // If no special renderer or it returned null, render normally
     return (
-      <div className="flex items-center">
+      <div className="flex items-center w-full">
         {/* Thumbnail preview */}
         {showThumbnails && (
           <div className="w-16 h-12 mr-2 overflow-hidden bg-gray-900 rounded flex-shrink-0">
@@ -279,18 +279,18 @@ const AnimationList: React.FC<AnimationListProps> = ({
             )}
           </div>
         )}
-        
+
         {/* Animation details */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <div className="font-medium text-bat-yellow text-sm truncate">{animation.name}</div>
-          <div className="text-xs text-gray-400">
+          <div className="text-xs text-gray-400 truncate">
             {animation.timestamp ? new Date(animation.timestamp).toLocaleString() : 'No date'}
           </div>
         </div>
       </div>
     );
   };
-  
+
   return (
     <div className={containerClassName}>
       {/* Header with title and close button */}
@@ -298,7 +298,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
         <div className="flex justify-between items-center mb-3">
           {title && <h3 className="text-sm font-medium">{title}</h3>}
           {onClose && (
-            <button 
+            <button
               className="text-gray-400 hover:text-white"
               onClick={onClose}
               aria-label="Close"
@@ -310,7 +310,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
           )}
         </div>
       )}
-      
+
       {/* Search filter */}
       {showSearchFilter && (
         <div className="mb-3">
@@ -323,7 +323,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
           />
         </div>
       )}
-      
+
       {/* Animation list */}
       <div className={`overflow-y-auto ${maxHeight}`}>
         {loadingAnimations ? (
@@ -343,7 +343,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
         ) : (
           <div className={listClassName}>
             {filteredAnimations.map(animation => (
-              <div 
+              <div
                 key={animation.id}
                 className={itemClassName}
                 onClick={() => handleSelectAnimation(animation)}
@@ -354,15 +354,15 @@ const AnimationList: React.FC<AnimationListProps> = ({
                   }
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
+                <div className="flex items-center space-between">
+                  <div className="flex items-center flex-1 min-w-0 overflow-hidden">
                     {renderAnimationItem(animation)}
                   </div>
-                  
+
                   {/* Delete button - only show for regular animations, not special items */}
                   {onDeleteAnimation && !animation.id.startsWith('create-') && !animation.id.startsWith('special-') && (
                     <button
-                      className="ml-2 text-red-400 hover:text-red-300 text-xs"
+                      className="ml-2 text-red-400 hover:text-red-300 text-xs flex-shrink-0"
                       onClick={(e) => handleDeleteAnimation(e, animation)}
                       aria-label="Delete animation"
                     >
@@ -379,4 +379,4 @@ const AnimationList: React.FC<AnimationListProps> = ({
   );
 };
 
-export default AnimationList; 
+export default AnimationList;
