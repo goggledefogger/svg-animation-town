@@ -140,11 +140,12 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
         </label>
         <textarea
           id="clip-prompt"
-          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white min-h-24 resize-y"
+          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white min-h-24 resize-y cursor-not-allowed opacity-75"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="No prompt saved for this clip"
           readOnly
+          disabled
         />
         <div className="mt-2">
           <button
