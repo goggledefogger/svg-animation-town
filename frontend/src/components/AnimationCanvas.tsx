@@ -34,15 +34,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Get animation context
   const {
     setSvgRef,
-    playing,
-    submitGenerateRequest,
-    getCurrentAnimationMetadata,
-    svgContentRef,
-    svgRef: currentSvgRef,
-    displaySvgContent,
-    setDisplaySvgContent,
-    hasMessageBeenSent,
-    setHasMessageBeenSent,
+    playing
   } = useAnimation();
 
   // Get movie context if this is used in a movie editor
@@ -50,16 +42,18 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     getActiveClip,
     isPlaying: moviePlaying,
     activeClipId,
+    updateClip,
+    currentStoryboard,
+    setCurrentStoryboard
   } = useMovie();
+
+  // Create a proper ref for the current SVG element
+  const currentSvgRef = useRef<SVGSVGElement | null>(null);
   
   // Get the active clip for duration reference
   const activeClip = activeClipId ? getActiveClip() : null;
 
-  // Handle animation editor vs. movie editor context
-  const isAnimationEditor = activeClipId === undefined;
-
   const { svgContent: contextSvgContent, setSvgContent, playing: animationPlaying } = useAnimation();
-  const setSvgRef = useSvgRef();
   const { getBackgroundStyle, currentBackground } = useViewerPreferences();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
@@ -68,6 +62,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const renderCountRef = useRef(0);
   // Use a state variable to track whether we're showing the empty state or the SVG
   const [showEmptyState, setShowEmptyState] = useState(!isAnimationEditor);
+  // Track if a message has been sent to hide the empty state
+  const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
+  
+  // Track the SVG content to display
+  const [displaySvgContent, setDisplaySvgContent] = useState<string>('');
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = useCallback((message: string): string => {
@@ -118,7 +117,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // 1. Props (highest priority)
   // 2. Context (medium priority)
   // 3. Active clip SVG content (lowest priority)
-  const displaySvgContent = useMemo(() => {
+  const finalSvgContent = useMemo(() => {
     // Check if we're displaying placeholder content
     if (showEmptyState && displayEmptyState) {
       return null;
@@ -501,7 +500,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     const customEvent = event as CustomEvent;
 
     // Skip update if either container ref is not initialized or we have no content
-    if (!svgContainerRef.current || !displaySvgContent) {
+    if (!svgContainerRef.current || !finalSvgContent) {
       return;
     }
 
@@ -512,12 +511,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Debounce the update to prevent multiple rapid re-renders
     debouncedUpdateRef.current = window.setTimeout(() => {
-      if (displaySvgContent && svgContainerRef.current) {
+      if (finalSvgContent && svgContainerRef.current) {
         // Only update if different from current content
         const currentContent = svgContainerRef.current.innerHTML;
-        if (currentContent !== displaySvgContent) {
+        if (currentContent !== finalSvgContent) {
           // Set the HTML directly
-          svgContainerRef.current.innerHTML = displaySvgContent;
+          svgContainerRef.current.innerHTML = finalSvgContent;
           // Find the SVG element and set it up
           const newSvgElement = svgContainerRef.current.querySelector('svg');
           if (newSvgElement) {
@@ -544,11 +543,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     }
 
     // Check if we have SVG content to display and we're not in the middle of a clip change
-    if (displaySvgContent) {
+    if (finalSvgContent) {
       // Only update if different from current content to prevent unnecessary re-renders
       const currentContent = svgContainerRef.current.innerHTML;
 
-      if (currentContent !== displaySvgContent) {
+      if (currentContent !== finalSvgContent) {
         // Skip rendering old content when we know we're in the middle of a clip change
         if (clipChangePendingRef.current && activeClipId !== lastValidContentRef.current) {
           return;
@@ -561,17 +560,17 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         debouncedUpdateRef.current = window.setTimeout(() => {
           if (svgContainerRef.current) {
             // Only update if the content has actually changed
-            if (svgContainerRef.current.innerHTML !== displaySvgContent) {
+            if (svgContainerRef.current.innerHTML !== finalSvgContent) {
               // Log animation refresh state before updating content
               console.log('[AnimationDebug] Animation refresh state:', {
                 usingContextPlayback: isAnimationEditor ? playing : moviePlaying,
                 lastContentHash: svgContainerRef.current.innerHTML?.length, 
-                newContentHash: displaySvgContent.length,
+                newContentHash: finalSvgContent.length,
                 isContentReplaced: true,
                 timestamp: new Date().toISOString()
               });
               
-              svgContainerRef.current.innerHTML = displaySvgContent;
+              svgContainerRef.current.innerHTML = finalSvgContent;
 
               // Find the SVG element in the container
               const svgElement = svgContainerRef.current.querySelector('svg');
@@ -642,7 +641,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         debouncedUpdateRef.current = null;
       }
     };
-  }, [displaySvgContent, setupSvgElement, hasMessageBeenSent, isLoading, activeClipId, isAnimationEditor, playing, moviePlaying]);
+  }, [finalSvgContent, setupSvgElement, hasMessageBeenSent, isLoading, activeClipId, isAnimationEditor, playing, moviePlaying]);
 
   // Monitor API calls to show loading state appropriately
   useEffect(() => {
@@ -696,7 +695,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         endLoading();
 
         // If the API call was successful, make sure we hide the empty state
-        if (success && displaySvgContent) {
+        if (success && finalSvgContent) {
           setShowEmptyState(false);
         }
       }
@@ -720,7 +719,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // Remove event listener on cleanup
       window.removeEventListener('animation-updated', handleAnimationUpdated);
     };
-  }, [displaySvgContent, setupSvgElement]);
+  }, [finalSvgContent, setupSvgElement]);
 
   // Adjust SVG to container size when container dimensions change
   useEffect(() => {
@@ -728,7 +727,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
       const resizeObserver = new ResizeObserver(() => {
         // Get container dimensions
-        if (containerRef.current && displaySvgContent) {
+        if (containerRef.current && finalSvgContent) {
           const containerWidth = containerRef.current.clientWidth;
           const containerHeight = containerRef.current.clientHeight;
 
@@ -799,7 +798,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Fallback for browsers without ResizeObserver
     return undefined;
-  }, [displaySvgContent, getSvgContainer, isAnimationEditor]);
+  }, [finalSvgContent, getSvgContainer, isAnimationEditor]);
 
   // Handle prefetching animation when a clip is selected
   const prefetchClipAnimation = useCallback((clipId: string) => {
@@ -940,7 +939,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
             if (response?.success && response.movie) {
               // Update storyboard state if needed
-              setCurrentStoryboard(prev => {
+              setCurrentStoryboard((prev: Storyboard) => {
                 if (JSON.stringify(prev.clips) !== JSON.stringify(response.movie?.clips)) {
                   console.log('[Visibility] Found updated movie state, updating storyboard');
                   // Ensure we always return a valid Storyboard
@@ -1081,7 +1080,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
       const resizeObserver = new ResizeObserver(() => {
         // Get container dimensions
-        if (containerRef.current && displaySvgContent) {
+        if (containerRef.current && finalSvgContent) {
           const containerWidth = containerRef.current.clientWidth;
           const containerHeight = containerRef.current.clientHeight;
 
@@ -1143,7 +1142,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Fallback for browsers without ResizeObserver
     return undefined;
-  }, [displaySvgContent, getSvgContainer, isAnimationEditor]);
+  }, [finalSvgContent, getSvgContainer, isAnimationEditor]);
 
   // Add a listener for network disconnections to prevent loading spinning forever
   useEffect(() => {
