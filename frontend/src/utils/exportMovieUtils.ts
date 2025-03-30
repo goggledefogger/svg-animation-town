@@ -74,7 +74,7 @@ export const exportMovieAsSvg = (
   if (options.includePrompts) {
     svgContent += `    <style>
       .subtitle-background {
-        fill: rgba(0, 0, 0, 0.7);
+        fill: rgba(0, 0, 0, 0.4);
         rx: 8;
         ry: 8;
       }
@@ -83,6 +83,7 @@ export const exportMovieAsSvg = (
         font-size: 14px;
         fill: white;
         text-anchor: middle;
+        text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.8);
       }
     </style>\n`;
   }
