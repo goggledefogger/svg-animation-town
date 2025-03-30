@@ -169,21 +169,38 @@ export function useStoryboardGenerator(
       };
     });
 
-    // Close modals immediately
-    console.log('Closing generation modals');
-    setShowGeneratingClipsModal(false);
-    setShowStoryboardGeneratorModal(false);
-
-    // Then verify final state
+    // Use a coordinated approach to prevent flickering:
+    // 1. First verify the final state to ensure we have all clips
+    // 2. Then close modals and select the first clip in a single batch
     verifyFinalState(storyboardId).then(() => {
-      // Auto-select the first clip when generation is complete
+      // Find the first clip to select
+      let firstClipId = null;
       if (currentStoryboard?.clips && currentStoryboard.clips.length > 0) {
         const sortedClips = [...currentStoryboard.clips].sort((a, b) => a.order - b.order);
         if (sortedClips[0]?.id) {
-          console.log(`Auto-selecting first clip: ${sortedClips[0].id}`);
-          setActiveClipId(sortedClips[0].id);
+          firstClipId = sortedClips[0].id;
+          console.log(`Auto-selecting first clip: ${firstClipId}`);
         }
       }
+
+      // Close modals and select first clip in a coordinated way to prevent flicker
+      console.log('Closing generation modals and selecting first clip');
+      // Use requestAnimationFrame to batch these updates together
+      requestAnimationFrame(() => {
+        // First close modals
+        setShowGeneratingClipsModal(false);
+        setShowStoryboardGeneratorModal(false);
+        
+        // Then select first clip if we found one
+        if (firstClipId) {
+          setActiveClipId(firstClipId);
+        }
+      });
+    }).catch(error => {
+      console.error('Error verifying final state:', error);
+      // If verification fails, still close modals to prevent being stuck
+      setShowGeneratingClipsModal(false);
+      setShowStoryboardGeneratorModal(false);
     });
   }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard, setActiveClipId, clearConditionalPolling]);
 
