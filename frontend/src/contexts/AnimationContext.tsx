@@ -38,7 +38,6 @@ export interface AnimationContextType {
   togglePlayPause: () => void;
   isReverse: boolean;
   setIsReverse: (isReverse: boolean) => void;
-  applyAnimationDuration: (duration: number) => void;
 }
 
 // Message type for chat history
@@ -1287,47 +1286,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [setSvgContent, setChatHistory, setAIProvider]);
 
-  // Apply animation duration to all animated elements
-  const applyAnimationDuration = useCallback((duration: number) => {
-    if (!svgRef) return;
-    
-    console.log(`[Animation] Applying duration: ${duration}s to all animations`);
-    
-    try {
-      // Apply to SMIL animations
-      const smilElements = svgRef.querySelectorAll('animate, animateTransform, animateMotion');
-      smilElements.forEach(element => {
-        // Store original duration if not already saved
-        if (!element.hasAttribute('data-original-dur') && element.hasAttribute('dur')) {
-          const originalDur = element.getAttribute('dur') || '1s';
-          element.setAttribute('data-original-dur', originalDur);
-        }
-        
-        // Set duration to the specified value
-        element.setAttribute('dur', `${duration}s`);
-      });
-      
-      // Apply to CSS animations
-      const cssElements = svgRef.querySelectorAll('[style*="animation"]');
-      cssElements.forEach(element => {
-        if (element instanceof SVGElement) {
-          // Store original duration if not already saved
-          if (!element.hasAttribute('data-original-duration')) {
-            const computedStyle = getComputedStyle(element);
-            element.setAttribute('data-original-duration', computedStyle.animationDuration);
-          }
-          
-          // Set animation duration
-          element.style.animationDuration = `${duration}s`;
-        }
-      });
-      
-      console.log(`[Animation] Applied duration ${duration}s to ${smilElements.length} SMIL and ${cssElements.length} CSS animations`);
-    } catch (error) {
-      console.error('Error applying animation duration:', error);
-    }
-  }, [svgRef]);
-
   return (
     <AnimationContext.Provider
       value={{
@@ -1351,7 +1309,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             setPlaybackSpeed(reverse ? -currentSpeed : currentSpeed);
           }
         },
-        applyAnimationDuration
       }}>
         {children}
     </AnimationContext.Provider>

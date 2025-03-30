@@ -6,7 +6,6 @@ interface SvgThumbnailProps {
   height?: string;
   className?: string;
   border?: boolean;
-  duration?: number;
 }
 
 const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
@@ -14,8 +13,7 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
   width = '100%',
   height = '100%',
   className = '',
-  border = false,
-  duration = 5
+  border = false
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -46,7 +44,7 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
     newSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     newSvg.innerHTML = svgElement.innerHTML;
 
-    // Ensure animations always play in thumbnails with consistent duration
+    // Ensure animations always play in thumbnails
     const smilElements = newSvg.querySelectorAll('animate, animateTransform, animateMotion');
     smilElements.forEach(element => {
       // Ensure SMIL animations start from the beginning
@@ -55,16 +53,13 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
       }
       // Make sure animations aren't paused
       element.removeAttribute('end');
-      // Set duration to match clip duration
-      element.setAttribute('dur', `${duration}s`);
     });
 
-    // Ensure CSS animations are running with consistent duration
+    // Ensure CSS animations are running
     const cssElements = newSvg.querySelectorAll('[style*="animation"]');
     cssElements.forEach(element => {
       if (element instanceof SVGElement && element.style) {
         element.style.animationPlayState = 'running';
-        element.style.animationDuration = `${duration}s`;
       }
     });
 
@@ -73,8 +68,7 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
       totalAnimations: smilElements.length + cssElements.length,
       smilAnimations: smilElements.length,
       cssAnimations: cssElements.length,
-      hasCssKeyframes: newSvg.querySelector('style')?.textContent?.includes('@keyframes') || false,
-      appliedDuration: duration
+      hasCssKeyframes: newSvg.querySelector('style')?.textContent?.includes('@keyframes') || false
     });
 
     // Check animation playback state right after creation
@@ -82,14 +76,13 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
       newlyCreated: true,
       automaticPlayback: true, // Thumbnails always play animations
       animationResetOnMount: true, // Always resets animations
-      appliedDuration: `${duration}s`, 
       timestamp: new Date().toISOString()
     });
 
     // Clear and append the new SVG
     containerRef.current.innerHTML = '';
     containerRef.current.appendChild(newSvg);
-  }, [svgContent, duration]);
+  }, [svgContent]);
 
   const borderClass = border ? 'border border-gray-700 rounded-md overflow-hidden' : '';
   const combinedClass = `svg-thumbnail ${borderClass} ${className}`;

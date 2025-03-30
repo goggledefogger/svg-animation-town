@@ -51,7 +51,14 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     if (!activeClip) return;
 
     // Store prompt and clip ID for animation editor to use
-    sessionStorage.setItem('pending_prompt', activeClip.prompt || 'Create an animation');
+    let enhancedPrompt = activeClip.prompt || 'Create an animation';
+    
+    // Add duration guidance to the prompt
+    if (activeClip.duration && !enhancedPrompt.includes('duration')) {
+      enhancedPrompt = `${enhancedPrompt}\n\nIMPORTANT: Create an animation that completes in approximately ${activeClip.duration} seconds.`;
+    }
+    
+    sessionStorage.setItem('pending_prompt', enhancedPrompt);
     localStorage.setItem('editing_clip_id', activeClip.id);
 
     // Store the animation ID if it exists
@@ -117,6 +124,9 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
           value={duration}
           onChange={(e) => setDuration(parseFloat(e.target.value))}
         />
+        <p className="text-xs text-gray-400 mt-1">
+          Animation timing will automatically adjust to match this duration when possible.
+        </p>
       </div>
 
       <div>

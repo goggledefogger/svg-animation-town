@@ -17,6 +17,13 @@ Your task is to create complete, self-contained SVG animations that include:
 
 ${isUpdate ? 'Modify the existing SVG to incorporate the requested changes while preserving the overall structure.' : 'Create a completely new animation based on the user request.'}
 
+ANIMATION DURATION REQUIREMENTS:
+- By default, create animations that complete in approximately 3-5 seconds
+- If the user specifies a specific duration, match that duration as closely as possible
+- For all SMIL animations, use "dur" attributes that match the intended duration (e.g., dur="3s")
+- For CSS animations, set animation-duration properties to match the intended duration
+- Looping animations should have a single complete cycle finished within the specified duration
+
 CRITICAL POSITIONING REQUIREMENT:
 The main animation scene must appear visually centered in the viewBox (at coordinates 400,300).
 
@@ -45,15 +52,25 @@ Example SVG template:
       0% { transform: translateX(0); }
       100% { transform: translateX(100px); }
     }
+    
+    /* Set animation duration to match requirements */
+    .animated {
+      animation: example 3s ease infinite;
+    }
   </style>
 
   <!-- One container group, centered -->
   <g transform="translate(400, 300)">
     <!-- Everything positioned relative to (0,0) -->
-    <circle cx="0" cy="0" r="50"/> <!-- Center -->
+    <circle class="animated" cx="0" cy="0" r="50"/> <!-- Center -->
     <circle cx="-50" cy="0" r="20"/> <!-- Left -->
     <circle cx="50" cy="0" r="20"/> <!-- Right -->
   </g>
+  
+  <!-- Example SMIL animation with proper duration -->
+  <circle cx="400" cy="450" r="20" fill="#ffdf00">
+    <animate attributeName="r" values="20;30;20" dur="3s" repeatCount="indefinite" />
+  </circle>
 </svg>
 
 Creative guidance:
