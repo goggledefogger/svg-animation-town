@@ -31,20 +31,43 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   style,
   isAnimationEditor = false
 }) => {
-  const { svgContent: contextSvgContent, setSvgContent } = useAnimation();
-  const { currentStoryboard, activeClipId, getActiveClip, updateClip, setCurrentStoryboard } = useMovie();
+  // Get animation context
+  const {
+    setSvgRef,
+    playing,
+    submitGenerateRequest,
+    getCurrentAnimationMetadata,
+    svgContentRef,
+    svgRef: currentSvgRef,
+    displaySvgContent,
+    setDisplaySvgContent,
+    hasMessageBeenSent,
+    setHasMessageBeenSent,
+  } = useAnimation();
+
+  // Get movie context if this is used in a movie editor
+  const {
+    getActiveClip,
+    isPlaying: moviePlaying,
+    activeClipId,
+  } = useMovie();
+  
+  // Get the active clip for duration reference
+  const activeClip = activeClipId ? getActiveClip() : null;
+
+  // Handle animation editor vs. movie editor context
+  const isAnimationEditor = activeClipId === undefined;
+
+  const { svgContent: contextSvgContent, setSvgContent, playing: animationPlaying } = useAnimation();
   const setSvgRef = useSvgRef();
   const { getBackgroundStyle, currentBackground } = useViewerPreferences();
   const containerRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
-  const currentSvgRef = useRef<SVGSVGElement | null>(null);
 
   // Add render counter to track excessive renders
   const renderCountRef = useRef(0);
   // Use a state variable to track whether we're showing the empty state or the SVG
   const [showEmptyState, setShowEmptyState] = useState(!isAnimationEditor);
-  // Track if a message has been sent to hide the empty state
-  const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
 
   // Helper function to create a placeholder SVG with an error message
   const createPlaceholderSvg = useCallback((message: string): string => {
@@ -210,6 +233,17 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Get the active clip for this render cycle
     const activeClip = getActiveClip();
 
+    // Add debugging for clip changes that might affect animation state
+    if (activeClip) {
+      console.log('[AnimationDebug] Clip change detected:', {
+        clipId: activeClip.id,
+        hasDirectSvgContent: Boolean(activeClip.svgContent && activeClip.svgContent.length > 100),
+        svgContentLength: activeClip?.svgContent?.length || 0,
+        hasCachedThumbnail: Boolean(activeClip.animationId),
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // If no active clip is available, show a placeholder only in movie editor context
     if (!activeClip) {
       console.log('[AnimationCanvas] No active clip available');
@@ -315,51 +349,113 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   }, [activeClipId, getActiveClip, updateClip, setSvgContent, createPlaceholderSvg, startLoading, endLoading,
      markLoadingInProgress, trackLoadedAnimation, getCachedContent, hasBeenLoaded]);
 
-  // Memoize the function to handle SVG element setup to avoid recreating it on every render
-  const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
-    // Only update reference if it's a different element
-    if (svgElement !== currentSvgRef.current) {
-      currentSvgRef.current = svgElement;
+  // Memoize the setupSvgElement function to avoid recreating it on every render
+  const setupSvgElement = React.useMemo(() => (element: SVGSVGElement) => {
+    // Set the current SVG reference
+    setSvgRef(element);
+    currentSvgRef.current = element;
 
-      // Force a small delay to ensure the SVG is fully loaded in the DOM
-      // This helps ensure animations can be properly paused/resumed
+    // Skip if no element
+    if (!element) return;
+
+    // Set the SVG to be fully responsive
+    if (!element.hasAttribute('viewBox')) {
+      // Get width and height if available
+      const width = element.getAttribute('width') || '800';
+      const height = element.getAttribute('height') || '600';
+      element.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    }
+
+    // Force width to be 100% to ensure proper scaling
+    element.setAttribute('width', '100%');
+    
+    // Get clip duration for animation normalization
+    const clipDuration = activeClipId ? (getActiveClip()?.duration || 5) : 5;
+    
+    // Set animation duration consistently
+    try {
+      // For SMIL animations
+      const smilElements = element.querySelectorAll('animate, animateTransform, animateMotion');
+      smilElements.forEach(anim => {
+        // Store original duration if not already saved
+        if (!anim.hasAttribute('data-original-dur')) {
+          const originalDur = anim.getAttribute('dur') || '1s';
+          anim.setAttribute('data-original-dur', originalDur);
+        }
+        
+        // Set duration to match clip duration
+        anim.setAttribute('dur', `${clipDuration}s`);
+        
+        // Ensure animation starts from the beginning
+        anim.setAttribute('begin', '0s');
+        anim.removeAttribute('end');
+      });
+      
+      // Reset CSS animations by temporarily disabling them and forcing a reflow
+      const cssElements = element.querySelectorAll('[style*="animation"]');
+      cssElements.forEach(el => {
+        if (el instanceof SVGElement && el.style) {
+          // Store original duration if not already saved
+          const computedStyle = getComputedStyle(el);
+          const originalDuration = computedStyle.animationDuration;
+          
+          if (!el.hasAttribute('data-original-duration')) {
+            el.setAttribute('data-original-duration', originalDuration);
+          }
+          
+          // Set duration to match clip duration
+          el.style.animationDuration = `${clipDuration}s`;
+          
+          // Force animations to restart by toggling animation-name
+          const originalAnimName = computedStyle.animationName;
+          el.style.animationName = 'none';
+          void (el as unknown as HTMLElement).offsetWidth; // Force reflow
+          el.style.animationName = originalAnimName;
+        }
+      });
+      
+      // Set playback state based on context
+      const playState = (isAnimationEditor ? playing : moviePlaying) ? 'running' : 'paused';
+      
+      // Debug log to capture animation state
       setTimeout(() => {
-        setSvgRef(svgElement);
-      }, 50);
+        try {
+          const isMoviePlaying = activeClipId && moviePlaying;
+          
+          // Check if animations are running
+          const smilElements = element.querySelectorAll('animate, animateTransform, animateMotion');
+          const cssElements = element.querySelectorAll('[style*="animation"]');
+          const animatedElements = [...Array.from(smilElements), ...Array.from(cssElements)];
+          
+          // Check animation timing
+          const animationDurations = Array.from(cssElements)
+            .map(el => getComputedStyle(el as Element).animationDuration)
+            .filter(d => d && d !== '0s');
+            
+          const smilDurations = Array.from(smilElements)
+            .map(el => (el as SVGElement).getAttribute('dur'))
+            .filter(Boolean);
+            
+          console.log('[AnimationDebug] Animation state after setup:', {
+            totalAnimatedElements: animatedElements.length,
+            animationsRunning: isMoviePlaying || playing,
+            clipDuration: clipDuration,
+            cssAnimatedCount: cssElements.length,
+            smilAnimatedCount: smilElements.length,
+            cssAnimationDurations: animationDurations.slice(0, 5), // Show first 5 durations
+            smilAnimationDurations: smilDurations.slice(0, 5), // Show first 5 durations
+            inMovieEditor: Boolean(activeClipId),
+            activeClipId: activeClipId,
+            desiredPlayState: playState
+          });
+        } catch (e) {
+          console.error('[AnimationDebug] Error checking animation state:', e);
+        }
+      }, 500);
+    } catch (e) {
+      console.error('[AnimationDebug] Error setting up SVG element:', e);
     }
-
-    // Get container dimensions (or use defaults if container not available)
-    const containerWidth = containerRef.current?.clientWidth || 800;
-    const containerHeight = containerRef.current?.clientHeight || 450;
-
-    // Ensure SVG has a viewBox if missing
-    if (!svgElement.getAttribute('viewBox')) {
-      // Default to 16:9 aspect ratio if no viewBox exists
-      const width = 800;
-      const height = 450;
-      svgElement.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    }
-
-    // Set width to 100% to use available space
-    svgElement.setAttribute('width', '100%');
-
-    // Calculate height based on viewBox aspect ratio
-    const viewBox = svgElement.getAttribute('viewBox');
-    if (viewBox) {
-      const [, , vbWidth, vbHeight] = viewBox.split(' ').map(parseFloat);
-      const aspectRatio = vbWidth / vbHeight;
-
-      // Set appropriate preserveAspectRatio to ensure proper centering
-      svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    }
-
-    // Ensure SVG doesn't overflow container
-    svgElement.style.maxWidth = '100%';
-    svgElement.style.maxHeight = '100%';
-    svgElement.style.display = 'block';
-    svgElement.style.margin = '0 auto';
-    svgElement.style.boxSizing = 'border-box';
-  }, [setSvgRef]);
+  }, [setSvgRef, activeClipId, moviePlaying, playing, isAnimationEditor, getActiveClip]);
 
   // Debounce SVG updates to prevent rapid re-renders
   const debouncedUpdateRef = useRef<number | null>(null);
@@ -430,17 +526,55 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           if (svgContainerRef.current) {
             // Only update if the content has actually changed
             if (svgContainerRef.current.innerHTML !== displaySvgContent) {
-            svgContainerRef.current.innerHTML = displaySvgContent;
+              // Log animation refresh state before updating content
+              console.log('[AnimationDebug] Animation refresh state:', {
+                usingContextPlayback: isAnimationEditor ? playing : moviePlaying,
+                lastContentHash: svgContainerRef.current.innerHTML?.length, 
+                newContentHash: displaySvgContent.length,
+                isContentReplaced: true,
+                timestamp: new Date().toISOString()
+              });
+              
+              svgContainerRef.current.innerHTML = displaySvgContent;
 
-            // Find the SVG element in the container
-            const svgElement = svgContainerRef.current.querySelector('svg');
-            if (svgElement) {
-              setupSvgElement(svgElement as SVGSVGElement);
-              setShowEmptyState(false);
-            } else {
-              // No SVG element found, show the empty state if no message has been sent
-              setShowEmptyState(!hasMessageBeenSent);
+              // Find the SVG element in the container
+              const svgElement = svgContainerRef.current.querySelector('svg');
+              if (svgElement) {
+                setupSvgElement(svgElement as SVGSVGElement);
+                
+                // Ensure animations are in the correct state based on context
+                try {
+                  const playState = (isAnimationEditor ? playing : moviePlaying) ? 'running' : 'paused';
+                  
+                  // For SMIL animations
+                  if (typeof svgElement.unpauseAnimations === 'function' && 
+                      typeof svgElement.pauseAnimations === 'function') {
+                    if (playState === 'running') {
+                      svgElement.unpauseAnimations();
+                    } else {
+                      svgElement.pauseAnimations();
+                    }
+                  }
+                  
+                  // For CSS animations
+                  const cssAnimations = svgElement.querySelectorAll('[style*="animation"]');
+                  cssAnimations.forEach(el => {
+                    if (el instanceof SVGElement && el.style) {
+                      el.style.animationPlayState = playState;
+                    }
+                  });
+                } catch (e) {
+                  console.error('[AnimationDebug] Error setting animation state:', e);
+                }
+                
+                setShowEmptyState(false);
+              } else {
+                // No SVG element found, show the empty state if no message has been sent
+                setShowEmptyState(!hasMessageBeenSent);
               }
+            } else {
+              // Log that content hasn't changed
+              console.log('[AnimationDebug] Content unchanged, skipping refresh');
             }
           }
           debouncedUpdateRef.current = null;
@@ -472,7 +606,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         debouncedUpdateRef.current = null;
       }
     };
-  }, [displaySvgContent, setupSvgElement, hasMessageBeenSent, isLoading, activeClipId]);
+  }, [displaySvgContent, setupSvgElement, hasMessageBeenSent, isLoading, activeClipId, isAnimationEditor, playing, moviePlaying]);
 
   // Monitor API calls to show loading state appropriately
   useEffect(() => {
@@ -973,7 +1107,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Fallback for browsers without ResizeObserver
     return undefined;
-  }, [displaySvgContent, getSvgContainer]);
+  }, [displaySvgContent, getSvgContainer, isAnimationEditor]);
 
   // Add a listener for network disconnections to prevent loading spinning forever
   useEffect(() => {

@@ -34,6 +34,11 @@ export interface AnimationContextType {
   canExportAsSvg: () => boolean;
   chatHistory: Message[];
   setChatHistory: React.Dispatch<React.SetStateAction<Message[]>>;
+  svgRef: SVGSVGElement | null;
+  togglePlayPause: () => void;
+  isReverse: boolean;
+  setIsReverse: (isReverse: boolean) => void;
+  applyAnimationDuration: (duration: number) => void;
 }
 
 // Message type for chat history
@@ -725,6 +730,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             animation.setAttribute('data-original-dur', originalDur);
           }
 
+          // Calculate new duration based on speed
+          const durationValue = parseFloat(originalDur);
+          const newDuration = isNaN(durationValue) ? 1 / speedAbs : durationValue / speedAbs;
+          animation.setAttribute('dur', `${newDuration}s`);
+
           // For reverse playback, set keyPoints and keyTimes appropriately
           if (isReverse) {
             animation.setAttribute('keyPoints', '1;0');
@@ -735,14 +745,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               animation.setAttribute('keyPoints', '0;1');
               animation.setAttribute('keyTimes', '0;1');
             }
-          }
-
-          // Parse the duration value
-          const durationMatch = originalDur.match(/([0-9.]+)([a-z]+)/);
-          if (durationMatch) {
-            const [_, value, unit] = durationMatch;
-            const newValue = parseFloat(value) / speedAbs;
-            animation.setAttribute('dur', `${newValue}${unit}`);
           }
         }
       });
@@ -1285,36 +1287,73 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [setSvgContent, setChatHistory, setAIProvider]);
 
+  // Apply animation duration to all animated elements
+  const applyAnimationDuration = useCallback((duration: number) => {
+    if (!svgRef) return;
+    
+    console.log(`[Animation] Applying duration: ${duration}s to all animations`);
+    
+    try {
+      // Apply to SMIL animations
+      const smilElements = svgRef.querySelectorAll('animate, animateTransform, animateMotion');
+      smilElements.forEach(element => {
+        // Store original duration if not already saved
+        if (!element.hasAttribute('data-original-dur') && element.hasAttribute('dur')) {
+          const originalDur = element.getAttribute('dur') || '1s';
+          element.setAttribute('data-original-dur', originalDur);
+        }
+        
+        // Set duration to the specified value
+        element.setAttribute('dur', `${duration}s`);
+      });
+      
+      // Apply to CSS animations
+      const cssElements = svgRef.querySelectorAll('[style*="animation"]');
+      cssElements.forEach(element => {
+        if (element instanceof SVGElement) {
+          // Store original duration if not already saved
+          if (!element.hasAttribute('data-original-duration')) {
+            const computedStyle = getComputedStyle(element);
+            element.setAttribute('data-original-duration', computedStyle.animationDuration);
+          }
+          
+          // Set animation duration
+          element.style.animationDuration = `${duration}s`;
+        }
+      });
+      
+      console.log(`[Animation] Applied duration ${duration}s to ${smilElements.length} SMIL and ${cssElements.length} CSS animations`);
+    } catch (error) {
+      console.error('Error applying animation duration:', error);
+    }
+  }, [svgRef]);
+
   return (
-    <AnimationContext.Provider value={{
-      svgContent,
-      playing,
-      playbackSpeed,
-      aiProvider,
-      setAIProvider,
-      setPlaying,
-      setSvgContent,
-      setSvgContentWithBroadcast,
-      setSvgRef,
-      generateAnimationFromPrompt,
-      updateAnimationFromPrompt,
-      generateAnimation,
-      loadPreset,
-      pauseAnimations,
-      resumeAnimations,
-      resetAnimations,
-      resetEverything,
-      setPlaybackSpeed,
-      saveAnimation,
-      loadAnimation,
-      getSavedAnimations,
-      deleteAnimation,
-      exportAnimation: exportAnimationFn,
-      canExportAsSvg: canExportAsSvgFn,
-      chatHistory,
-      setChatHistory
-    }}>
-      {children}
+    <AnimationContext.Provider
+      value={{
+        svgContent,
+        setSvgContent,
+        svgRef,
+        setSvgRef,
+        playing,
+        setPlaying,
+        playbackSpeed,
+        setPlaybackSpeed,
+        chatHistory,
+        setChatHistory,
+        svgRef,
+        togglePlayPause: pauseAnimations,
+        isReverse: typeof playbackSpeed === 'number' && playbackSpeed < 0,
+        setIsReverse: (reverse: boolean) => {
+          // If currently using a numeric speed, flip its sign based on reverse value
+          if (typeof playbackSpeed === 'number') {
+            const currentSpeed = Math.abs(playbackSpeed);
+            setPlaybackSpeed(reverse ? -currentSpeed : currentSpeed);
+          }
+        },
+        applyAnimationDuration
+      }}>
+        {children}
     </AnimationContext.Provider>
   );
 };

@@ -265,7 +265,7 @@ const AnimationList: React.FC<AnimationListProps> = ({
         {showThumbnails && (
           <div className="w-16 h-12 mr-2 overflow-hidden bg-gray-900 rounded flex-shrink-0">
             {thumbnails[animation.id] ? (
-              <SvgThumbnail svgContent={thumbnails[animation.id]} />
+              <SvgThumbnail svgContent={thumbnails[animation.id]} duration={3} />
             ) : loadingThumbnails[animation.id] ? (
               <div className="flex items-center justify-center h-full">
                 <div className="w-4 h-4 border-2 border-gray-300 border-t-bat-yellow rounded-full animate-spin"></div>

@@ -464,7 +464,7 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
                       loadClipThumbnail(clip);
                     }
                   }}>
-                    <SvgThumbnail svgContent={getClipSvgContent(clip)} />
+                    <SvgThumbnail svgContent={getClipSvgContent(clip)} duration={clip.duration} />
 
                     {/* Top overlay with clip name and number */}
                     <div className="absolute top-0 left-0 right-0 px-2 py-1 flex justify-between bg-gradient-to-b from-black/70 to-transparent">
