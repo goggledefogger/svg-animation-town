@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Message } from './AnimationContext';
 import { StoryboardResponse, StoryboardScene } from '../services/movie.api';
 import { AnimationApi, MovieStorageApi } from '../services/api';
+import { exportMovieAsSvg } from '../utils/exportMovieUtils';
+import { useViewerPreferences } from './ViewerPreferencesContext';
 
 // Define movie clip interface
 export interface MovieClip {
@@ -144,6 +146,9 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   // Playback state
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentPlaybackPosition, setCurrentPlaybackPosition] = useState(0);
+
+  // Viewer preferences
+  const { currentBackground } = useViewerPreferences();
 
   // Fetch default provider from backend on initial load
   useEffect(() => {
@@ -699,12 +704,14 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } else if (format === 'svg') {
-      // Export as a single SVG with all animations
-      // This is more complex and would need to combine all SVGs with proper timing
-      console.warn('SVG export not yet implemented');
-      // TODO: Implement SVG export
+      // Use our new movie exporter for SVG export
+      exportMovieAsSvg(currentStoryboard, currentStoryboard.name.replace(/\s+/g, '_'), {
+        includePrompts: true,
+        background: currentBackground,
+        includeBackground: true
+      });
     }
-  }, [currentStoryboard]);
+  }, [currentStoryboard, currentBackground]);
 
   // Create a storyboard from an LLM-generated response
   const createStoryboardFromResponse = useCallback(async (storyboardResponse: StoryboardResponse): Promise<Storyboard> => {

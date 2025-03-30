@@ -6,6 +6,7 @@ import ConfirmationModal from './ConfirmationModal';
 import ExportModal from './ExportModal';
 import AnimationList, { AnimationItem } from './AnimationList';
 import './Header.css'; // Import custom CSS for shimmer effect
+import { AnimationStorageApi } from '../services/api';
 
 interface HeaderProps {
   onExport?: () => void;
@@ -181,6 +182,76 @@ const EditorDropdown: React.FC<EditorDropdownProps> = ({
   );
 };
 
+// Add a new component for the export dropdown
+interface ExportDropdownProps {
+  isMovieEditorPage: boolean;
+  onExportSvg: () => void;
+  onExportJson: () => void;
+  dropdownRef: React.RefObject<HTMLDivElement>;
+}
+
+const ExportDropdown: React.FC<ExportDropdownProps> = ({
+  isMovieEditorPage,
+  onExportSvg,
+  onExportJson,
+  dropdownRef
+}) => {
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [dropdownRef]);
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setShowDropdown(!showDropdown)}
+        className={`flex items-center justify-center h-10 px-3 rounded transition-colors ${
+          showDropdown ? 'bg-bat-yellow text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'
+        } ${showDropdown ? 'ring-2 ring-bat-yellow' : ''}`}
+        aria-label="Export"
+        title="Export"
+      >
+        <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        <span>Export</span>
+        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {showDropdown && (
+        <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-md shadow-lg z-10">
+          <div className="py-1">
+            <button
+              onClick={() => { onExportSvg(); setShowDropdown(false); }}
+              className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+            >
+              Export as SVG Movie
+            </button>
+            <button
+              onClick={() => { onExportJson(); setShowDropdown(false); }}
+              className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+            >
+              Export as JSON
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Header: React.FC<HeaderProps> = ({
   onExport,
   onSave,
@@ -191,6 +262,7 @@ const Header: React.FC<HeaderProps> = ({
   onReset
 }) => {
   const { resetEverything, saveAnimation, loadAnimation, deleteAnimation, exportAnimation, svgContent, chatHistory } = useAnimation();
+  const { exportStoryboard } = useMovie();
   const location = useLocation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -203,6 +275,7 @@ const Header: React.FC<HeaderProps> = ({
   const animationListButtonRef = useRef<HTMLButtonElement>(null);
   const isMovieEditorPage = location.pathname === '/movie-editor';
   const isMobile = window.innerWidth < 768;
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   // Reset - refresh from server and clear session state
   const resetPage = useCallback(() => {
@@ -361,6 +434,14 @@ const Header: React.FC<HeaderProps> = ({
     );
   };
 
+  // Add a handler for JSON export
+  const handleExportJson = () => {
+    if (isMovieEditorPage) {
+      // Call directly to the exportStoryboard function in the movie context
+      exportStoryboard('json');
+    }
+  };
+
   return (
     <header className="bg-gotham-black shadow-lg border-b border-gray-700">
       {/* Desktop layout - single row */}
@@ -432,15 +513,24 @@ const Header: React.FC<HeaderProps> = ({
           />
 
           {/* Export Button - Yellow button */}
-          <ActionButton
-            onClick={isMovieEditorPage && onExport ? onExport : () => setShowExportModal(true)}
-            disabled={!isMovieEditorPage && !svgContent}
-            ariaLabel="Export"
-            title="Export"
-            icon={createIcon(iconPaths.export)}
-            text="Export"
-            yellow={true}
-          />
+          {isMovieEditorPage ? (
+            <ExportDropdown 
+              isMovieEditorPage={isMovieEditorPage}
+              onExportSvg={onExport || (() => {})}
+              onExportJson={handleExportJson}
+              dropdownRef={exportDropdownRef}
+            />
+          ) : (
+            <ActionButton
+              onClick={() => setShowExportModal(true)}
+              disabled={!svgContent}
+              ariaLabel="Export"
+              title="Export"
+              icon={createIcon(iconPaths.export)}
+              text="Export"
+              yellow={true}
+            />
+          )}
         </div>
 
         {/* Right section - dropdown */}
@@ -530,14 +620,25 @@ const Header: React.FC<HeaderProps> = ({
           />
 
           {/* Export Button - Yellow button */}
-          <ActionButton
-            onClick={isMovieEditorPage && onExport ? onExport : () => setShowExportModal(true)}
-            disabled={!isMovieEditorPage && !svgContent}
-            ariaLabel="Export"
-            title="Export"
-            icon={createIcon(iconPaths.export)}
-            yellow={true}
-          />
+          {isMovieEditorPage ? (
+            <ActionButton
+              onClick={onExport || (() => {})}
+              disabled={false}
+              ariaLabel="Export Movie"
+              title="Export Movie as SVG"
+              icon={createIcon(iconPaths.export)}
+              yellow={true}
+            />
+          ) : (
+            <ActionButton
+              onClick={() => setShowExportModal(true)}
+              disabled={!svgContent}
+              ariaLabel="Export"
+              title="Export"
+              icon={createIcon(iconPaths.export)}
+              yellow={true}
+            />
+          )}
         </div>
       </div>
 

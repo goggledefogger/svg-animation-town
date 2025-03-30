@@ -134,7 +134,8 @@ export function useStoryboardOperations(showToastNotification: (message: string,
   const handleExport = (format: 'json' | 'svg') => {
     try {
       exportStoryboard(format);
-      showToastNotification(`Storyboard exported as ${format.toUpperCase()} successfully!`);
+      const formatDisplay = format === 'svg' ? 'SVG Movie' : 'JSON';
+      showToastNotification(`Storyboard exported as ${formatDisplay} successfully!`);
       return true;
     } catch (error) {
       console.error('Error exporting storyboard:', error);
