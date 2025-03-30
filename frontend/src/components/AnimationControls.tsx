@@ -4,6 +4,7 @@ import { useMovie } from '../contexts/MovieContext';
 import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BackgroundPicker from './BackgroundPicker';
+import ReactDOM from 'react-dom';
 
 interface AnimationControlsProps {
   isPlaying?: boolean;
@@ -34,6 +35,13 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
   const [showSpeedOptions, setShowSpeedOptions] = useState(false);
   const [showBackgroundPicker, setShowBackgroundPicker] = useState(false);
   const backgroundButtonRef = useRef<HTMLDivElement>(null);
+  const speedButtonRef = useRef<HTMLDivElement>(null);
+  const speedMenuRef = useRef<HTMLDivElement>(null);
+  const [speedMenuPosition, setSpeedMenuPosition] = useState({ 
+    top: 0, 
+    left: 0, 
+    placement: 'top' as 'top' | 'bottom' 
+  });
 
   // Get the active clip
   const activeClip = activeClipId ? getActiveClip() : null;
@@ -97,6 +105,8 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
 
   // Change playback speed
   const handleSpeedChange = (speed: number | 'groovy') => {
+    // Changing playback speed should be seamless without interrupting the animation
+    // Just update the speed without affecting the current position
     setPlaybackSpeed(speed);
     setShowSpeedOptions(false);
   };
@@ -106,8 +116,126 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
     navigate('/movie-editor');
   };
 
+  // Calculate position for speed options popup
+  useEffect(() => {
+    if (!showSpeedOptions || !speedButtonRef.current) return;
+
+    const updateSpeedMenuPosition = () => {
+      const buttonRect = speedButtonRef.current?.getBoundingClientRect();
+      if (!buttonRect) return;
+
+      // Approximate height of the menu
+      const menuHeight = 120;
+      const menuWidth = 112; // Width of the menu (w-28)
+      const windowHeight = window.innerHeight;
+
+      // Determine if it should appear above or below
+      const placementPosition = buttonRect.top > menuHeight ? 'top' : 'bottom';
+
+      // Calculate position based on placement
+      let top: number;
+      if (placementPosition === 'top') {
+        top = buttonRect.top - menuHeight - 8; // Place above with margin
+      } else {
+        top = buttonRect.bottom + 8; // Place below with margin
+      }
+
+      // Ensure the menu stays within the viewport
+      if (top < 10) top = 10;
+      if (top + menuHeight > windowHeight - 10) {
+        top = windowHeight - menuHeight - 10;
+      }
+
+      // Calculate horizontal position (centered on the button)
+      let left = buttonRect.left + buttonRect.width / 2 - menuWidth / 2;
+      
+      // Make sure it doesn't go off-screen
+      if (left < 10) left = 10;
+      if (left + menuWidth > window.innerWidth - 10) {
+        left = window.innerWidth - menuWidth - 10;
+      }
+      
+      setSpeedMenuPosition({
+        top,
+        left,
+        placement: placementPosition
+      });
+    };
+
+    updateSpeedMenuPosition();
+    window.addEventListener('resize', updateSpeedMenuPosition);
+    window.addEventListener('scroll', updateSpeedMenuPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updateSpeedMenuPosition);
+      window.removeEventListener('scroll', updateSpeedMenuPosition, true);
+    };
+  }, [showSpeedOptions]);
+
+  // Handle click outside to close the speed menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showSpeedOptions &&
+        speedMenuRef.current &&
+        !speedMenuRef.current.contains(event.target as Node) &&
+        speedButtonRef.current &&
+        !speedButtonRef.current.contains(event.target as Node)
+      ) {
+        setShowSpeedOptions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSpeedOptions]);
+
   // If no content, don't show controls
   if (!hasContent) return null;
+
+  // Create speed options menu
+  const speedOptionsMenu = showSpeedOptions && (
+    ReactDOM.createPortal(
+      <div
+        ref={speedMenuRef}
+        className="fixed w-28 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-50"
+        style={{
+          top: `${speedMenuPosition.top}px`,
+          left: `${speedMenuPosition.left}px`,
+        }}
+      >
+        <div className="py-1">
+          <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 0.5 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange(0.5)}
+          >
+            0.5x
+          </button>
+          <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 1 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange(1)}
+          >
+            1x
+          </button>
+          <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 2 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange(2)}
+          >
+            2x
+          </button>
+          <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 'groovy' ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange('groovy')}
+          >
+            🕺 Groovy
+          </button>
+        </div>
+      </div>,
+      document.body
+    )
+  );
 
   return (
     <div className="flex items-center justify-between bg-gray-800 bg-opacity-90 rounded-md p-1 sm:p-1.5 md:p-2 shadow-lg backdrop-blur-sm w-full max-w-full overflow-hidden">
@@ -180,7 +308,7 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
           </button>
         )}
 
-        <div className="relative">
+        <div className="relative" ref={speedButtonRef}>
           <button
             className="text-white hover:text-bat-yellow p-1 rounded focus:outline-none"
             onClick={() => setShowSpeedOptions(!showSpeedOptions)}
@@ -191,36 +319,7 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
             </svg>
           </button>
 
-          {showSpeedOptions && (
-            <div className="absolute right-0 bottom-full mb-2 w-24 sm:w-28 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-50">
-              <div className="py-1">
-                <button
-                  className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 0.5 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
-                  onClick={() => handleSpeedChange(0.5)}
-                >
-                  0.5x
-                </button>
-                <button
-                  className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 1 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
-                  onClick={() => handleSpeedChange(1)}
-                >
-                  1x
-                </button>
-                <button
-                  className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 2 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
-                  onClick={() => handleSpeedChange(2)}
-                >
-                  2x
-                </button>
-                <button
-                  className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 'groovy' ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
-                  onClick={() => handleSpeedChange('groovy')}
-                >
-                  🕺 Groovy
-                </button>
-              </div>
-            </div>
-          )}
+          {speedOptionsMenu}
         </div>
       </div>
     </div>
