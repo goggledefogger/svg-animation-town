@@ -765,12 +765,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const pauseAnimations = useCallback(() => {
     if (svgRef) {
       try {
-        // Pause SMIL animations (animate tags)
-        svgRef.pauseAnimations();
-
-        // Pause CSS animations
-        controlCssAnimations('paused');
-
+        // Simply update the playing state - actual SVG pausing is handled in AnimationControls
+        // No need to manipulate the SVG directly here as it might cause unexpected resets
         setPlaying(false);
       } catch (error) {
         console.error('Error in pauseAnimations:', error);
@@ -778,17 +774,13 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     } else {
       console.warn('Cannot pause animations: SVG reference is null');
     }
-  }, [svgRef, controlCssAnimations]);
+  }, [svgRef]);
 
   const resumeAnimations = useCallback(() => {
     if (svgRef) {
       try {
-        // Resume SMIL animations (animate tags)
-        svgRef.unpauseAnimations();
-
-        // Resume CSS animations
-        controlCssAnimations('running');
-
+        // Simply update the playing state - actual SVG resuming is handled in AnimationControls
+        // No need to manipulate the SVG directly here as it might cause unexpected resets
         setPlaying(true);
       } catch (error) {
         console.error('Error in resumeAnimations:', error);
@@ -796,7 +788,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     } else {
       console.warn('Cannot resume animations: SVG reference is null');
     }
-  }, [svgRef, controlCssAnimations]);
+  }, [svgRef]);
 
   // Resets animations by cloning and replacing the SVG element
   const resetAnimations = useCallback(() => {
@@ -804,7 +796,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       try {
         // Use the enhanced resetAnimations utility function
         resetAnimationsUtil(svgRef);
-        
+
         // Ensure playing state is true
         setPlaying(true);
       } catch (error) {
