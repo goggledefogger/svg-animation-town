@@ -58,8 +58,6 @@ export const AnimationRegistryHelpers = {
     // Check if this animation ID is already stored
     const existingAnimation = GLOBAL_ANIMATION_REGISTRY.animations.get(animationId);
     if (existingAnimation) {
-      console.log(`[ANIMATION_REGISTRY] Animation ${animationId} already exists in registry (${existingAnimation.length} bytes)`);
-
       // Only update if we have better data
       if (svgContent.length > existingAnimation.length) {
         console.log(`[ANIMATION_REGISTRY] Updating with better SVG data (${svgContent.length} vs ${existingAnimation.length} bytes)`);
@@ -72,7 +70,6 @@ export const AnimationRegistryHelpers = {
           ...GLOBAL_ANIMATION_REGISTRY.metadata.get(animationId),
           ...metadata
         });
-        console.log(`[ANIMATION_REGISTRY] Updated metadata for animation ${animationId}`);
       }
 
       return;
@@ -222,7 +219,6 @@ export const AnimationRegistryHelpers = {
    */
   trackRequest: <T>(requestId: string, promise: Promise<T>): Promise<T> => {
     if (GLOBAL_ANIMATION_REGISTRY.pendingRequests.has(requestId)) {
-      console.log(`[ANIMATION_REGISTRY] Reusing existing request: ${requestId}`);
       return GLOBAL_ANIMATION_REGISTRY.pendingRequests.get(requestId) as Promise<T>;
     }
 

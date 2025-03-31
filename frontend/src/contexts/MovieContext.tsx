@@ -393,7 +393,41 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       return [];
     }
 
-    console.log(`[Validation] Validating ${clips.length} clips`);
+    // Add additional validation to check for clips that need animation content
+    const validateClips = (clips: MovieClip[]): void => {
+      const clipsNeedingContent = clips.filter(clip => {
+        return clip.animationId &&
+          (!clip.svgContent || clip.svgContent.length < 100);
+      });
+
+      if (clipsNeedingContent.length > 0) {
+        // Sync animation content in the background
+        const loadAnimationsInBackground = async () => {
+          try {
+            for (const clip of clipsNeedingContent) {
+              if (!clip.animationId) continue;
+
+              try {
+                const animation = await MovieStorageApi.getClipAnimation(clip.animationId);
+                if (animation && animation.svg) {
+                  // Update clip with animation content
+                  updateClip(clip.id, {
+                    svgContent: animation.svg,
+                    chatHistory: animation.chatHistory
+                  });
+                }
+              } catch (err) {
+                console.error(`[ClipSync] Failed to load animation for clip ${clip.id}:`, err);
+              }
+            }
+          } catch (err) {
+            console.error('[ClipSync] Error in background clip loading:', err);
+          }
+        };
+
+        loadAnimationsInBackground();
+      }
+    };
 
     // Check for clips with missing animation IDs
     const missingAnimationIds = clips.filter(clip => !clip.animationId);
@@ -405,14 +439,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     }
 
     // Verify SVG content sync with animation IDs
-    const svgMismatches = clips.filter(clip =>
-      clip.animationId &&
-      (!clip.svgContent || clip.svgContent.length < 100)
-    );
-
-    if (svgMismatches.length > 0) {
-      console.warn(`[Validation] Found ${svgMismatches.length} clips with animation IDs but missing/invalid SVG content`);
-    }
+    validateClips(clips);
 
     // Ensure clip orders are sequential and unique
     const orders = clips.map(clip => clip.order).sort((a, b) => a - b);
@@ -439,7 +466,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
     // Return the validated clips - for now we're just logging issues
     return clips;
-  }, []);
+  }, [updateClip]);
 
   // Load storyboard from API or local storage
   const loadStoryboard = useCallback(async (storyboardId: string) => {
@@ -477,7 +504,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Log generation status for debugging
       if (storyboard.generationStatus?.inProgress) {
         console.log(`Loading in-progress movie: ${storyboard.name} (${storyboard.id})`, storyboard.generationStatus);
-        
+
         // Add log for initializing state
         if (storyboard.generationStatus.status === 'initializing') {
           console.log(`[GENERATION_STATE] Found storyboard in initializing state, may need to restart generation. SessionId: ${storyboard.generationStatus.activeSessionId}`);
@@ -498,14 +525,10 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
           .map(async (clip) => {
             if (!clip.animationId) return;
 
-            console.log(`[ClipSync] Loading animation content for clip ${clip.id}, animation ID: ${clip.animationId}`);
-
             try {
               const animation = await MovieStorageApi.getClipAnimation(clip.animationId);
               if (animation && animation.svg) {
                 // Update clip with animation content
-                console.log(`[ClipSync] Successfully loaded animation for clip ${clip.id}`);
-
                 updateClip(clip.id, {
                   svgContent: animation.svg,
                   chatHistory: animation.chatHistory
