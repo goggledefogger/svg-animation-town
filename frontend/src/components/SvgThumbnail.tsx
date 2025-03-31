@@ -47,7 +47,7 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
 
     // Reset animations and ensure they always play in thumbnails
     resetAnimations(newSvg);
-    
+
     // Ensure CSS animations are always running in thumbnails
     const cssElements = newSvg.querySelectorAll('[style*="animation"]');
     cssElements.forEach(element => {
@@ -57,6 +57,7 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
     });
 
     // Add debug logging
+    /*
     console.log('[ThumbnailDebug] Animation elements in thumbnail:', {
       totalAnimations: newSvg.querySelectorAll('animate, animateTransform, animateMotion').length + cssElements.length,
       smilAnimations: newSvg.querySelectorAll('animate, animateTransform, animateMotion').length,
@@ -71,6 +72,7 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
       animationResetOnMount: true, // Always resets animations
       timestamp: new Date().toISOString()
     });
+    */
 
     // Clear and append the new SVG
     containerRef.current.innerHTML = '';

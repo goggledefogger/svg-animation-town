@@ -106,28 +106,29 @@ export const AnimationRegistryHelpers = {
       return { svg: null, metadata: null, status: 'not_found' };
     }
 
-    // Check if loading
+    // Check if we're still loading the animation
     if (GLOBAL_ANIMATION_REGISTRY.loadingStatus.has(animationId)) {
-      console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: loading`);
+      // console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: loading`);
       return { svg: null, metadata: null, status: 'loading' };
     }
 
-    // Check if failed
+    // Check if the animation previously failed to load
     if (GLOBAL_ANIMATION_REGISTRY.failedLoads.has(animationId)) {
-      console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: failed`);
+      // console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: failed`);
       return { svg: null, metadata: null, status: 'failed' };
     }
 
-    // Check if we have content
+    // Check if we already have the animation
     const svg = GLOBAL_ANIMATION_REGISTRY.animations.get(animationId) || null;
     const metadata = GLOBAL_ANIMATION_REGISTRY.metadata.get(animationId) || null;
 
     if (svg && svg.length > 100) {
-      console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: available (${svg.length} bytes)`);
+      // console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: available (${svg.length} bytes)`);
       return { svg, metadata, status: 'available' };
     }
 
-    console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: not_found`);
+    // Otherwise, we don't have it
+    // console.log(`[ANIMATION_REGISTRY_ACCESS] Animation ${animationId} status: not_found`);
     return { svg: null, metadata: null, status: 'not_found' };
   },
 
