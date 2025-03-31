@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useMovie } from '../contexts/MovieContext';
 import { useNavigate } from 'react-router-dom';
+import { addDurationGuidance } from '../utils/animationUtils';
 
 interface ClipEditorProps {
   onClipUpdate: () => void;
@@ -51,12 +52,8 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     if (!activeClip) return;
 
     // Store prompt and clip ID for animation editor to use
-    let enhancedPrompt = activeClip.prompt || 'Create an animation';
-    
-    // Add duration guidance to the prompt
-    if (activeClip.duration && !enhancedPrompt.includes('duration')) {
-      enhancedPrompt = `${enhancedPrompt}\n\nIMPORTANT: Create an animation that completes in approximately ${activeClip.duration} seconds.`;
-    }
+    // Use our utility to add duration guidance if needed
+    const enhancedPrompt = addDurationGuidance(activeClip.prompt || 'Create an animation', activeClip.duration || 5);
     
     sessionStorage.setItem('pending_prompt', enhancedPrompt);
     localStorage.setItem('editing_clip_id', activeClip.id);

@@ -5,6 +5,7 @@ import { useViewerPreferences } from './ViewerPreferencesContext';
 import { v4 as uuidv4 } from 'uuid';
 import { isMobileDevice, isFreshPageLoad } from '../utils/deviceUtils';
 import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
+import { resetAnimations as resetAnimationsUtil } from '../utils/animationUtils';
 
 // Define the context interface
 export interface AnimationContextType {
@@ -801,21 +802,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const resetAnimations = useCallback(() => {
     if (svgRef) {
       try {
-        // Get the parent element
-        const parent = svgRef.parentNode;
-        if (parent) {
-          // Create a deep clone of the SVG element
-          const clone = svgRef.cloneNode(true) as SVGSVGElement;
-
-          // Replace the original with the clone
-          parent.replaceChild(clone, svgRef);
-
-          // Update the ref to the new element
-          setSvgRef(clone);
-
-          // Ensure playing state is true
-          setPlaying(true);
-        }
+        // Use the enhanced resetAnimations utility function
+        resetAnimationsUtil(svgRef);
+        
+        // Ensure playing state is true
+        setPlaying(true);
       } catch (error) {
         console.error('Error resetting animations:', error);
 
@@ -837,7 +828,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     } else {
       setPlaying(true);
     }
-  }, [svgRef, svgContent, setPlaying, setSvgContent, setSvgRef]);
+  }, [svgRef, svgContent, setPlaying, setSvgContent]);
 
   // Completely reset everything to initial state
   const resetEverything = useCallback(() => {
@@ -1291,6 +1282,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       value={{
         svgContent,
         setSvgContent,
+        setSvgContentWithBroadcast,
         svgRef,
         setSvgRef,
         playing,
@@ -1299,7 +1291,22 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         setPlaybackSpeed,
         chatHistory,
         setChatHistory,
-        svgRef,
+        aiProvider,
+        setAIProvider,
+        generateAnimationFromPrompt,
+        updateAnimationFromPrompt,
+        generateAnimation,
+        loadPreset,
+        pauseAnimations,
+        resumeAnimations,
+        resetAnimations,
+        resetEverything,
+        saveAnimation,
+        loadAnimation,
+        getSavedAnimations,
+        deleteAnimation,
+        exportAnimation: exportAnimationFn,
+        canExportAsSvg: canExportAsSvgFn,
         togglePlayPause: pauseAnimations,
         isReverse: typeof playbackSpeed === 'number' && playbackSpeed < 0,
         setIsReverse: (reverse: boolean) => {

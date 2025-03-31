@@ -5,6 +5,7 @@ import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BackgroundPicker from './BackgroundPicker';
 import ReactDOM from 'react-dom';
+import { resetAnimations, pauseAllAnimations, resumeAllAnimations } from '../utils/animationUtils';
 
 interface AnimationControlsProps {
   isPlaying?: boolean;
@@ -27,7 +28,7 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
   hasContent: propHasContent,
   isEditingFromMovie = false
 }) => {
-  const { playing, pauseAnimations, resumeAnimations, resetAnimations, svgContent, playbackSpeed, setPlaybackSpeed } = useAnimation();
+  const { playing, pauseAnimations, resumeAnimations, svgContent, playbackSpeed, setPlaybackSpeed, svgRef } = useAnimation();
   const { activeClipId, getActiveClip, isPlaying: movieIsPlaying, setIsPlaying, setCurrentPlaybackPosition } = useMovie();
   const { currentBackground } = useViewerPreferences();
   const navigate = useNavigate();
@@ -81,9 +82,19 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
     } else {
       // Using animation playback controls
       if (playing) {
-        pauseAnimations();
+        console.log('[AnimationControls] Pausing animation');
+        // Use direct SVG manipulation instead of context
+        if (svgRef) {
+          pauseAllAnimations(svgRef);
+        }
+        pauseAnimations(); // For context state management only
       } else {
-        resumeAnimations();
+        console.log('[AnimationControls] Resuming animation');
+        // Use direct SVG manipulation instead of context
+        if (svgRef) {
+          resumeAllAnimations(svgRef);
+        }
+        resumeAnimations(); // For context state management only
       }
     }
   };
@@ -94,7 +105,47 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       // Use prop handler if provided
       onSeek(0);
     } else {
-      resetAnimations();
+      // Use the imported resetAnimations function directly on the SVG element
+      if (svgRef) {
+        console.log('[AnimationControls] Resetting animations with enhanced method');
+        
+        // Check for animation elements before reset
+        const smilElements = svgRef.querySelectorAll('animate, animateTransform, animateMotion');
+        const inlineStyleAnimations = svgRef.querySelectorAll('[style*="animation"]');
+        
+        // Also check for stylesheet-defined animations
+        let stylesheetAnimations = 0;
+        try {
+          const allElements = svgRef.querySelectorAll('*');
+          for (const el of Array.from(allElements)) {
+            if (el instanceof SVGElement) {
+              const computedStyle = window.getComputedStyle(el);
+              if (computedStyle.animationName && computedStyle.animationName !== 'none') {
+                stylesheetAnimations++;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[AnimationControls] Error checking for stylesheet animations:', e);
+        }
+        
+        console.log(`[AnimationControls] Found animations before reset: ${smilElements.length} SMIL, ${inlineStyleAnimations.length} inline CSS, ${stylesheetAnimations} stylesheet CSS`);
+        
+        // Force animations to start playing after reset
+        const wasPlaying = playing;
+        
+        // Perform the reset
+        resetAnimations(svgRef);
+        
+        // Make sure animations are playing after reset
+        if (!wasPlaying) {
+          resumeAnimations();
+        }
+        
+        console.log('[AnimationControls] Animation reset complete');
+      } else {
+        console.warn('[AnimationControls] Cannot reset animations - no SVG element reference');
+      }
 
       // Also reset clip position if we have an active clip
       if (activeClipId) {

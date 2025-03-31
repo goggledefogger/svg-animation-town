@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { resetAnimations } from '../utils/animationUtils';
 
 interface SvgThumbnailProps {
   svgContent: string;
@@ -44,18 +45,10 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
     newSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     newSvg.innerHTML = svgElement.innerHTML;
 
-    // Ensure animations always play in thumbnails
-    const smilElements = newSvg.querySelectorAll('animate, animateTransform, animateMotion');
-    smilElements.forEach(element => {
-      // Ensure SMIL animations start from the beginning
-      if (element.hasAttribute('begin')) {
-        element.setAttribute('begin', '0s');
-      }
-      // Make sure animations aren't paused
-      element.removeAttribute('end');
-    });
-
-    // Ensure CSS animations are running
+    // Reset animations and ensure they always play in thumbnails
+    resetAnimations(newSvg);
+    
+    // Ensure CSS animations are always running in thumbnails
     const cssElements = newSvg.querySelectorAll('[style*="animation"]');
     cssElements.forEach(element => {
       if (element instanceof SVGElement && element.style) {
@@ -65,8 +58,8 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
 
     // Add debug logging
     console.log('[ThumbnailDebug] Animation elements in thumbnail:', {
-      totalAnimations: smilElements.length + cssElements.length,
-      smilAnimations: smilElements.length,
+      totalAnimations: newSvg.querySelectorAll('animate, animateTransform, animateMotion').length + cssElements.length,
+      smilAnimations: newSvg.querySelectorAll('animate, animateTransform, animateMotion').length,
       cssAnimations: cssElements.length,
       hasCssKeyframes: newSvg.querySelector('style')?.textContent?.includes('@keyframes') || false
     });
