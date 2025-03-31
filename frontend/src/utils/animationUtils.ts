@@ -325,6 +325,37 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
     const isReverse = typeof playbackSpeed === 'number' && playbackSpeed < 0;
     const speedValue = typeof playbackSpeed === 'number' ? Math.abs(playbackSpeed) : 1;
 
+    // Update SMIL animation speed directly
+    if (playbackSpeed !== 'groovy') {
+      // Find all SMIL animation elements
+      const smilElements = element.querySelectorAll('animate, animateTransform, animateMotion');
+      smilElements.forEach(animation => {
+        // Store original duration if not already stored
+        if (!animation.getAttribute('data-original-dur') && animation.getAttribute('dur')) {
+          animation.setAttribute('data-original-dur', animation.getAttribute('dur') || '');
+        }
+
+        // Get original duration or current duration
+        const originalDur = parseFloat(animation.getAttribute('data-original-dur') || animation.getAttribute('dur') || '1s');
+        const newDuration = originalDur / speedValue;
+
+        // Apply the new duration
+        animation.setAttribute('dur', `${newDuration}s`);
+
+        // Handle direction for animations that support it
+        if (isReverse) {
+          animation.setAttribute('keyPoints', '1;0');
+          animation.setAttribute('keyTimes', '0;1');
+        } else {
+          // Only reset these if they were previously set to reverse
+          if (animation.getAttribute('keyPoints') === '1;0') {
+            animation.setAttribute('keyPoints', '0;1');
+            animation.setAttribute('keyTimes', '0;1');
+          }
+        }
+      });
+    }
+
     // Get CSS animations from style element
     const styleElement = element.querySelector('style');
     if (styleElement && styleElement.textContent) {
@@ -350,10 +381,8 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
             // Set animation direction
             animatedEl.style.animationDirection = isReverse ? 'reverse' : 'normal';
 
-            // Only adjust duration if resetting or doing initial setup
-            if (shouldReset || initialSetup) {
-              animatedEl.style.animationDuration = `calc(var(--animation-duration, 1s) / ${speedValue})`;
-            }
+            // Apply speed changes regardless of reset state
+            animatedEl.style.animationDuration = `calc(var(--animation-duration, 1s) / ${speedValue})`;
           }
         }
       });
@@ -371,10 +400,8 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
               // Set animation direction
               el.style.animationDirection = isReverse ? 'reverse' : 'normal';
 
-              // Only adjust duration if resetting or doing initial setup
-              if (shouldReset || initialSetup) {
-                el.style.animationDuration = `calc(var(--animation-duration, 1s) / ${speedValue})`;
-              }
+              // Apply speed changes regardless of reset state
+              el.style.animationDuration = `calc(var(--animation-duration, 1s) / ${speedValue})`;
             }
           }
         });
@@ -393,14 +420,12 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
           // Set animation direction
           el.style.animationDirection = isReverse ? 'reverse' : 'normal';
 
-          // Only adjust duration if resetting or doing initial setup
-          if (shouldReset || initialSetup) {
-            const currentDuration = window.getComputedStyle(el).animationDuration;
-            if (currentDuration && currentDuration !== '0s') {
-              const durationInS = parseFloat(currentDuration);
-              const newDuration = durationInS / speedValue;
-              el.style.animationDuration = `${newDuration}s`;
-            }
+          // Apply speed changes regardless of reset state
+          const currentDuration = window.getComputedStyle(el).animationDuration;
+          if (currentDuration && currentDuration !== '0s') {
+            const durationInS = parseFloat(currentDuration);
+            const newDuration = durationInS / speedValue;
+            el.style.animationDuration = `${newDuration}s`;
           }
         }
       }
@@ -422,14 +447,12 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
               // Set animation direction
               el.style.animationDirection = isReverse ? 'reverse' : 'normal';
 
-              // Only adjust duration if resetting or doing initial setup
-              if (shouldReset || initialSetup) {
-                const currentDuration = computedStyle.animationDuration;
-                if (currentDuration && currentDuration !== '0s') {
-                  const durationInS = parseFloat(currentDuration);
-                  const newDuration = durationInS / speedValue;
-                  el.style.animationDuration = `${newDuration}s`;
-                }
+              // Apply speed changes regardless of reset state
+              const currentDuration = computedStyle.animationDuration;
+              if (currentDuration && currentDuration !== '0s') {
+                const durationInS = parseFloat(currentDuration);
+                const newDuration = durationInS / speedValue;
+                el.style.animationDuration = `${newDuration}s`;
               }
             }
           }
