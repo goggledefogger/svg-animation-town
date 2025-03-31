@@ -6,7 +6,7 @@ import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 import { AnimationApi, MovieStorageApi } from '../services/api';
 import useAnimationLoader, { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
-import { resetAnimations, getPlaybackState } from '../utils/animationUtils';
+import { resetAnimations, getPlaybackState, setAnimationPlaybackState } from '../utils/animationUtils';
 
 // Add type for API response
 interface MovieResponse {
@@ -50,7 +50,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Create a proper ref for the current SVG element
   const currentSvgRef = useRef<SVGSVGElement | null>(null);
-  
+
   // Get the active clip for duration reference
   const activeClip = activeClipId ? getActiveClip() : null;
 
@@ -65,7 +65,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const [showEmptyState, setShowEmptyState] = useState(!isAnimationEditor);
   // Track if a message has been sent to hide the empty state
   const [hasMessageBeenSent, setHasMessageBeenSent] = useState(false);
-  
+
   // Track the SVG content to display
   const [displaySvgContent, setDisplaySvgContent] = useState<string>('');
 
@@ -223,19 +223,19 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Add loadAnimation helper function inside the component
   const loadAnimation = useCallback((animationId: string, clipId: string, existingSvgContent?: string) => {
     console.log(`[AnimationCanvas] Loading animation: ${animationId}, clipId: ${clipId}`);
-    
+
     // If we already have SVG content, use it directly
     if (existingSvgContent && existingSvgContent.length > 100) {
       setSvgContent(existingSvgContent);
       setShowEmptyState(false);
-      
+
       // Also cache the content for other components
       if (animationId) {
         trackLoadedAnimation(animationId, existingSvgContent);
       }
       return; // Skip further processing
     }
-    
+
     // If no direct SVG content but we have an animationId, check cache or load from server
     if (animationId) {
       // First check our global cache for the content
@@ -246,7 +246,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         updateClip(clipId, { svgContent: cachedContent });
         return;
       }
-      
+
       // If animation has already been loaded or attempted before, use registry
       if (hasBeenLoaded(animationId)) {
         const animationFromRegistry = AnimationRegistryHelpers.getAnimation(animationId);
@@ -261,32 +261,32 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         }
         return; // Skip loading if we've already tried recently
       }
-      
+
       // Need to load from server - show loading state
       console.log(`[AnimationCanvas] Need to load animation from server: ${animationId}`);
       setSvgContent(createPlaceholderSvg('Loading animation content...'));
       startLoading(true);
       markLoadingInProgress(animationId);
-      
+
       MovieStorageApi.getClipAnimation(animationId)
         .then((response: AnimationResponse | null) => {
           if (!response) {
             console.warn(`[AnimationCanvas] Received null response for animation ${animationId}`);
             return;
           }
-          
+
           if (response.svg) {
             console.log(`[AnimationCanvas] Successfully loaded animation ${animationId}: ${response.svg.length} bytes`);
             setSvgContent(response.svg);
             setShowEmptyState(false);
             updateClip(clipId, { svgContent: response.svg });
-            
+
             // Track in the global cache
             trackLoadedAnimation(animationId, response.svg);
           } else {
             console.warn(`[AnimationCanvas] Animation loaded but SVG content is missing: ${animationId}`);
             setSvgContent(createPlaceholderSvg('Animation content unavailable. Try the refresh button.'));
-            
+
             // Track the failed attempt
             trackLoadedAnimation(animationId);
           }
@@ -295,10 +295,10 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         .catch(error => {
           console.error(`[AnimationCanvas] Error loading animation ${animationId}: ${error.message}`);
           setSvgContent(createPlaceholderSvg(`Failed to load animation: ${error.message}`));
-          
+
           // Track the failed attempt
           trackLoadedAnimation(animationId);
-          
+
           endLoading();
         });
     } else {
@@ -344,19 +344,19 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       return;
     }
 
-    // Use the centralized load animation helper 
+    // Use the centralized load animation helper
     loadAnimation(
       activeClip.animationId || '',
       activeClip.id,
       activeClip.svgContent
     );
-    
+
   }, [activeClipId, getActiveClip, isAnimationEditor, createPlaceholderSvg, loadAnimation]);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
     // Add logging to inspect animation elements
-    console.log('[AnimationDebug] Setting up SVG element - Animation elements:', 
+    console.log('[AnimationDebug] Setting up SVG element - Animation elements:',
       {
         smilElements: svgElement.querySelectorAll('animate, animateTransform, animateMotion').length,
         cssAnimatedElements: svgElement.querySelectorAll('[style*="animation"]').length,
@@ -390,7 +390,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Set width to 100% to use available space
     svgElement.setAttribute('width', '100%');
-    
+
     // Calculate height based on viewBox aspect ratio
     const viewBox = svgElement.getAttribute('viewBox');
     if (viewBox) {
@@ -407,33 +407,22 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     svgElement.style.display = 'block';
     svgElement.style.margin = '0 auto';
     svgElement.style.boxSizing = 'border-box';
-    
+
     // Reset all animations for consistent behavior
+    // This is needed for initial setup, but we'll use setAnimationPlaybackState for pause/resume
     resetAnimations(svgElement);
-    
+
     // Set playback state based on current context
     const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
-    
-    // Apply the playback state to all animations
-    // For SMIL animations
-    const smilAnimations = svgElement.querySelectorAll('animate, animateTransform, animateMotion');
-    if (playState === 'running') {
-      svgElement.unpauseAnimations();
-    } else {
-      svgElement.pauseAnimations();
-    }
-    
-    // For CSS animations
-    const cssAnimations = svgElement.querySelectorAll('[style*="animation"]');
-    cssAnimations.forEach(el => {
-      if (el instanceof SVGElement && el.style) {
-        el.style.animationPlayState = playState;
-      }
-    });
-    
+
+    // Use our new function for setting playback state
+    setAnimationPlaybackState(svgElement, playState);
+
     // Log animation state after setup
+    const smilAnimations = svgElement.querySelectorAll('animate, animateTransform, animateMotion');
+    const cssAnimations = svgElement.querySelectorAll('[style*="animation"]');
     console.log(`[AnimationCanvas] SVG setup complete: ${smilAnimations.length} SMIL + ${cssAnimations.length} CSS animations. PlayState: ${playState}`);
-    
+
     return svgElement;
   }, [setSvgRef, activeClipId, moviePlaying, playing, isAnimationEditor]);
 
@@ -509,12 +498,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
               // Log animation refresh state before updating content
               console.log('[AnimationDebug] Animation refresh state:', {
                 usingContextPlayback: isAnimationEditor ? playing : moviePlaying,
-                lastContentHash: svgContainerRef.current.innerHTML?.length, 
+                lastContentHash: svgContainerRef.current.innerHTML?.length,
                 newContentHash: finalSvgContent.length,
                 isContentReplaced: true,
                 timestamp: new Date().toISOString()
               });
-              
+
               svgContainerRef.current.innerHTML = finalSvgContent;
 
               // Find the SVG element in the container
@@ -1026,32 +1015,20 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     if (!currentSvgRef.current) {
       return;
     }
-    
+
     const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
     console.log(`[AnimationCanvas] Playback state changed to: ${playState}`);
-    
-    // For SMIL animations
-    if (playState === 'running') {
-      currentSvgRef.current.unpauseAnimations();
-    } else {
-      currentSvgRef.current.pauseAnimations();
-    }
-    
-    // For CSS animations
-    const cssAnimations = currentSvgRef.current.querySelectorAll('[style*="animation"]');
-    cssAnimations.forEach(el => {
-      if (el instanceof SVGElement && el.style) {
-        el.style.animationPlayState = playState;
-      }
-    });
+
+    // Use our new function that properly handles pause/resume without reset
+    setAnimationPlaybackState(currentSvgRef.current, playState);
   }, [isAnimationEditor, playing, moviePlaying]);
 
   const handleSetContent = useCallback(async (svgContent: string) => {
     console.log(`[AnimationCanvas] handleSetContent called (${svgContent.length} chars)`);
-    
+
     // Content is being updated, so update it in our state
     setSvgContent(svgContent);
-    
+
     // Only update the active clip's svgContent if we're in the animation editor
     if (isAnimationEditor && activeClip && updateClip) {
       updateClip(activeClip.id, { svgContent });

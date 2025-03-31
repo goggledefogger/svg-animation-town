@@ -5,7 +5,7 @@ import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BackgroundPicker from './BackgroundPicker';
 import ReactDOM from 'react-dom';
-import { resetAnimations, pauseAllAnimations, resumeAllAnimations } from '../utils/animationUtils';
+import { resetAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationPlaybackState } from '../utils/animationUtils';
 
 interface AnimationControlsProps {
   isPlaying?: boolean;
@@ -38,10 +38,10 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
   const backgroundButtonRef = useRef<HTMLDivElement>(null);
   const speedButtonRef = useRef<HTMLDivElement>(null);
   const speedMenuRef = useRef<HTMLDivElement>(null);
-  const [speedMenuPosition, setSpeedMenuPosition] = useState({ 
-    top: 0, 
-    left: 0, 
-    placement: 'top' as 'top' | 'bottom' 
+  const [speedMenuPosition, setSpeedMenuPosition] = useState({
+    top: 0,
+    left: 0,
+    placement: 'top' as 'top' | 'bottom'
   });
 
   // Get the active clip
@@ -83,18 +83,20 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       // Using animation playback controls
       if (playing) {
         console.log('[AnimationControls] Pausing animation');
-        // Use direct SVG manipulation instead of context
+        // Use our new util function that handles all animation types correctly
         if (svgRef) {
-          pauseAllAnimations(svgRef);
+          setAnimationPlaybackState(svgRef, 'paused');
         }
-        pauseAnimations(); // For context state management only
+        // Update state
+        pauseAnimations();
       } else {
         console.log('[AnimationControls] Resuming animation');
-        // Use direct SVG manipulation instead of context
+        // Use our new util function that handles all animation types correctly
         if (svgRef) {
-          resumeAllAnimations(svgRef);
+          setAnimationPlaybackState(svgRef, 'running');
         }
-        resumeAnimations(); // For context state management only
+        // Update state
+        resumeAnimations();
       }
     }
   };
@@ -108,11 +110,11 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       // Use the imported resetAnimations function directly on the SVG element
       if (svgRef) {
         console.log('[AnimationControls] Resetting animations with enhanced method');
-        
+
         // Check for animation elements before reset
         const smilElements = svgRef.querySelectorAll('animate, animateTransform, animateMotion');
         const inlineStyleAnimations = svgRef.querySelectorAll('[style*="animation"]');
-        
+
         // Also check for stylesheet-defined animations
         let stylesheetAnimations = 0;
         try {
@@ -128,20 +130,20 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
         } catch (e) {
           console.error('[AnimationControls] Error checking for stylesheet animations:', e);
         }
-        
+
         console.log(`[AnimationControls] Found animations before reset: ${smilElements.length} SMIL, ${inlineStyleAnimations.length} inline CSS, ${stylesheetAnimations} stylesheet CSS`);
-        
+
         // Force animations to start playing after reset
         const wasPlaying = playing;
-        
+
         // Perform the reset
         resetAnimations(svgRef);
-        
+
         // Make sure animations are playing after reset
         if (!wasPlaying) {
           resumeAnimations();
         }
-        
+
         console.log('[AnimationControls] Animation reset complete');
       } else {
         console.warn('[AnimationControls] Cannot reset animations - no SVG element reference');
@@ -199,13 +201,13 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
 
       // Calculate horizontal position (centered on the button)
       let left = buttonRect.left + buttonRect.width / 2 - menuWidth / 2;
-      
+
       // Make sure it doesn't go off-screen
       if (left < 10) left = 10;
       if (left + menuWidth > window.innerWidth - 10) {
         left = window.innerWidth - menuWidth - 10;
       }
-      
+
       setSpeedMenuPosition({
         top,
         left,
