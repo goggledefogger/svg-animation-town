@@ -10,7 +10,7 @@ class UnifiedRateLimiter {
     const claudeMaxConcurrent = config.claude.rateLimiter.maxConcurrentRequests || 2;
     const openaiMaxConcurrent = config.openai.rateLimiter.maxConcurrentRequests || 10;
     const geminiMaxConcurrent = config.gemini.rateLimiter.maxConcurrentRequests || 10;
-    
+
     // For Claude, enforce a stricter limit to prevent 529 overload errors
     const claudeConcurrencyLimit = Math.min(claudeMaxConcurrent, 2);
 
@@ -196,9 +196,6 @@ class UnifiedRateLimiter {
 
     // If we already have a promise for this exact request, return it
     if (bucket.activePromises.has(requestKey)) {
-      console.log(`[Rate Limiter] Reusing existing request for ${provider}:`, {
-        args: args.map(arg => typeof arg === 'string' ? arg.substring(0, 50) : typeof arg)
-      });
       return bucket.activePromises.get(requestKey);
     }
 

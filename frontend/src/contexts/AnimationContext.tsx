@@ -809,8 +809,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         return;
       }
 
-      console.log(`[AnimationContext] Clip changed: ${clip.name || clip.id}`);
-
       // Clear any existing debounce timer
       if (clipChangeDebounceRef.current) {
         window.clearTimeout(clipChangeDebounceRef.current);
@@ -842,7 +840,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         const loadClipContent = async () => {
           // First - check if we have SVG content directly in the clip
           if (clip.svgContent && clip.svgContent.length > 100) {
-            console.log(`[AnimationContext] Using clip's SVG content directly (${clip.svgContent.length} bytes)`);
             setSvgContent(clip.svgContent);
 
             if (clip.chatHistory) {
@@ -851,7 +848,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
             // Set AI provider if available in clip data
             if (clip.provider) {
-              console.log(`[AnimationContext] Setting AI provider from clip: ${clip.provider}`);
               setAIProvider(clip.provider as 'openai' | 'claude' | 'gemini');
             }
 
@@ -989,7 +985,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
               // Apply running state to the SVG if available
               if (svgRef) {
-                console.log(`[AnimationContext] Auto-playing newly selected clip`);
                 controlAnimations(svgRef, {
                   playState: 'running',
                   shouldReset: false,

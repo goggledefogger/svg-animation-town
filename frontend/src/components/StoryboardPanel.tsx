@@ -87,17 +87,9 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
   const totalScenes = generationProgress?.total || storyboard?.generationStatus?.totalScenes || 0;
   const completedScenes = generationProgress?.current || storyboard?.generationStatus?.completedScenes || 0;
 
-  // Log the generation status for debugging
+  // Pass the storyboard status and progress to the children
   useEffect(() => {
-    if (hasGenerationStatus) {
-      console.log('StoryboardPanel generation status:', {
-        isGenerating,
-        completedScenes,
-        totalScenes,
-        storyboardStatus: storyboard?.generationStatus,
-        generationProgress
-      });
-    }
+    // No-op effect to track changes in generation status
   }, [hasGenerationStatus, isGenerating, completedScenes, totalScenes, storyboard?.generationStatus, generationProgress]);
 
   // Simple counter for display purposes

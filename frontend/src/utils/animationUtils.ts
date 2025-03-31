@@ -9,8 +9,6 @@
 export function resetAnimations(element: SVGElement): void {
   if (!element) return;
 
-  console.log('[Animation] Resetting animations - simplified method');
-
   try {
     // First pause all animations
     pauseAllAnimations(element);
@@ -68,8 +66,6 @@ export function resetAnimations(element: SVGElement): void {
 
     // After resetting, resume all animations
     resumeAllAnimations(element);
-
-    console.log('[Animation] Reset completed and animations resumed');
   } catch (e) {
     console.error('[Animation] Error during animation reset:', e);
   }
@@ -122,8 +118,6 @@ export function pauseAllAnimations(element: SVGElement): void {
         el.style.animationPlayState = 'paused';
       }
     });
-
-    console.log('[Animation] Paused all animations');
   } catch (e) {
     console.error('[Animation] Error pausing animations:', e);
   }
@@ -147,8 +141,6 @@ export function resumeAllAnimations(element: SVGElement): void {
         el.style.animationPlayState = 'running';
       }
     });
-
-    console.log('[Animation] Resumed all animations');
   } catch (e) {
     console.error('[Animation] Error resuming animations:', e);
   }
@@ -231,8 +223,6 @@ export function setAnimationPlaybackState(element: SVGElement, playState: 'runni
         });
       });
     }
-
-    console.log(`[Animation] Set playback state: ${playState} for all animations`);
   } catch (e) {
     console.error(`[Animation] Error setting playback state to ${playState}:`, e);
   }
@@ -263,13 +253,6 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
     playbackSpeed = 1,
     initialSetup = false
   } = options;
-
-  console.log(`[Animation] Controlling animations: ${JSON.stringify({
-    playState,
-    shouldReset,
-    speed: playbackSpeed,
-    initialSetup
-  })}`);
 
   try {
     // 1. Reset animations if requested (resets to time 0)
@@ -369,7 +352,6 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
 
             // Only adjust duration if resetting or doing initial setup
             if (shouldReset || initialSetup) {
-              console.log(`[Animation Debug] Modifying animation duration because shouldReset=${shouldReset} or initialSetup=${initialSetup}`);
               animatedEl.style.animationDuration = `calc(var(--animation-duration, 1s) / ${speedValue})`;
             }
           }
@@ -391,7 +373,6 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
 
               // Only adjust duration if resetting or doing initial setup
               if (shouldReset || initialSetup) {
-                console.log(`[Animation Debug] Modifying animation duration because shouldReset=${shouldReset} or initialSetup=${initialSetup}`);
                 el.style.animationDuration = `calc(var(--animation-duration, 1s) / ${speedValue})`;
               }
             }
@@ -414,7 +395,6 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
 
           // Only adjust duration if resetting or doing initial setup
           if (shouldReset || initialSetup) {
-            console.log(`[Animation Debug] Modifying animation duration because shouldReset=${shouldReset} or initialSetup=${initialSetup}`);
             const currentDuration = window.getComputedStyle(el).animationDuration;
             if (currentDuration && currentDuration !== '0s') {
               const durationInS = parseFloat(currentDuration);
@@ -444,7 +424,6 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
 
               // Only adjust duration if resetting or doing initial setup
               if (shouldReset || initialSetup) {
-                console.log(`[Animation Debug] Modifying animation duration because shouldReset=${shouldReset} or initialSetup=${initialSetup}`);
                 const currentDuration = computedStyle.animationDuration;
                 if (currentDuration && currentDuration !== '0s') {
                   const durationInS = parseFloat(currentDuration);
@@ -459,8 +438,6 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
     } catch (e) {
       console.error('[Animation] Error handling stylesheet animations:', e);
     }
-
-    console.log(`[Animation] Animation control applied with state: ${playState}`);
   } catch (e) {
     console.error('[Animation] Error controlling animations:', e);
   }

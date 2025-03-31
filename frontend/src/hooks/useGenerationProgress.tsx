@@ -62,12 +62,9 @@ export function useGenerationProgress({
   // Effect to handle SSE connection
   useEffect(() => {
     if (!sessionId) {
-      console.log('No session ID provided, skipping SSE setup');
       return;
     }
 
-    console.log(`[SSE] Setting up connection for session ${sessionId}`);
-    
     // Create the EventSource for Server-Sent Events
     const eventSource = new EventSource(`/api/movie/generate/${sessionId}/progress`);
     eventsRef.current = eventSource;
@@ -77,46 +74,41 @@ export function useGenerationProgress({
     // Handle incoming messages
     eventSource.onmessage = (event) => {
       if (!isMountedRef.current) {
-        console.log(`[SSE] Component unmounted, ignoring message for session ${sessionId}`);
         eventSource.close();
         return;
       }
 
       try {
         const data = JSON.parse(event.data);
-        
+
         // Only log important status changes and clip updates
         if (data.type === 'progress') {
           const progressData = data.data;
-          
+
           // Log clip updates
           if (progressData.newClip) {
-            console.log(`[SSE] Received new clip: scene ${progressData.newClip.clip.order + 1}`);
             onNewClip?.(progressData.newClip.clip);
           }
-          
+
           // Log status changes
           if (progressData.status && progressData.status !== lastStatusRef.current) {
-            console.log(`[SSE] Generation status changed to: ${progressData.status}`);
             lastStatusRef.current = progressData.status;
           }
-          
+
           // When complete, log completion event
           if (['completed', 'completed_with_errors', 'failed'].includes(progressData.status)) {
-            console.log(`[SSE] Generation completed with status: ${progressData.status}`);
-            
             // Update progress state first
             setProgress(progressData);
             setIsGenerating(false);
-            
+
             // Close the connection
             eventSource.close();
             eventsRef.current = null;
             activeSessionRef.current = null;
-            
+
             // Call cleanup first to ensure session is properly closed
             onCleanup?.(sessionId);
-            
+
             // Then call onComplete with the storyboard ID if available
             if (progressData.storyboardId) {
               onComplete?.(progressData.storyboardId);
@@ -125,7 +117,6 @@ export function useGenerationProgress({
 
           // Handle failure state
           if (progressData.status === 'failed') {
-            console.log(`[SSE] Generation failed`);
             eventSource.close();
             eventsRef.current = null;
             activeSessionRef.current = null;
@@ -133,7 +124,7 @@ export function useGenerationProgress({
             onCleanup?.(sessionId);
             onError?.('Generation failed. Please try again.');
           }
-          
+
           setProgress(progressData);
         }
       } catch (error) {
@@ -148,7 +139,7 @@ export function useGenerationProgress({
 
     // Handle connection open
     eventSource.onopen = () => {
-      console.log(`[SSE] Connection opened for session ${sessionId}`);
+      // Connection opened
     };
 
     // Handle errors
@@ -157,18 +148,14 @@ export function useGenerationProgress({
       // Only retry if not already retrying and the connection isn't closed
       if (!isRetryingRef.current && eventSource.readyState !== 2) {
         isRetryingRef.current = true;
-        console.log('[SSE] Attempting to reconnect...');
         setTimeout(() => {
           isRetryingRef.current = false;
         }, 5000); // Wait before allowing another retry
-      } else if (eventSource.readyState === 2) {
-        console.log('[SSE] Connection closed, not retrying');
       }
     };
 
     // Cleanup function to close the connection when the component unmounts
     return () => {
-      console.log(`[SSE] Cleaning up connection for session ${sessionId}`);
       if (eventSource) {
         eventSource.close();
         eventsRef.current = null;

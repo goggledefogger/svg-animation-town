@@ -234,8 +234,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Add loadAnimation helper function inside the component
   const loadAnimation = useCallback((animationId: string, clipId: string, existingSvgContent?: string) => {
-    console.log(`[AnimationCanvas] Loading animation: ${animationId}, clipId: ${clipId}`);
-
     // If we already have SVG content, use it directly
     if (existingSvgContent && existingSvgContent.length > 100) {
       setSvgContent(existingSvgContent);
@@ -450,7 +448,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     // Log animation state after setup
     const smilAnimations = svgElement.querySelectorAll('animate, animateTransform, animateMotion');
     const cssAnimations = svgElement.querySelectorAll('[style*="animation"]');
-    console.log(`[AnimationCanvas] SVG setup complete: ${smilAnimations.length} SMIL + ${cssAnimations.length} CSS animations. PlayState: ${playState}`);
 
     return svgElement;
   }, [setSvgRef, activeClipId, moviePlaying, playing, isAnimationEditor, playbackSpeed]);
@@ -531,6 +528,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
             // Only update if the content has actually changed
             if (svgContainerRef.current.innerHTML !== finalSvgContent) {
               // Log animation refresh state before updating content
+              /*
               console.log('[AnimationDebug] Animation refresh state:', {
                 usingContextPlayback: isAnimationEditor ? playing : moviePlaying,
                 lastContentHash: svgContainerRef.current.innerHTML?.length,
@@ -538,6 +536,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
                 isContentReplaced: true,
                 timestamp: new Date().toISOString()
               });
+              */
 
               svgContainerRef.current.innerHTML = finalSvgContent;
 
@@ -615,8 +614,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         }
         setHasMessageBeenSent(true);
         setShowEmptyState(false);
-      } else {
-        console.log('[Loading] Non-animation API call, not showing loading animation');
       }
     };
 

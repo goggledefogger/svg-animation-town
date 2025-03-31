@@ -648,27 +648,9 @@ export const MovieStorageApi = {
    */
   getMovie: async (id: string): Promise<{ success: boolean; movie: Storyboard } | null> => {
     try {
-      console.log(`Fetching movie with ID: ${id} from server`);
       const data = await fetchApi<any>(`/movie/${id}`);
 
       if (data.success && data.movie) {
-        // Log details about the loaded storyboard, specifically focusing on clips
-        console.log(`Successfully loaded movie '${data.movie.name}' (ID: ${id}) from server`);
-        console.log(`Movie clip data:`, {
-          clipCount: data.movie.clips?.length || 0,
-          hasClips: Array.isArray(data.movie.clips) && data.movie.clips.length > 0,
-          clipDetails: Array.isArray(data.movie.clips) ?
-            data.movie.clips.map((clip: any, index: number) => ({
-              index,
-              id: clip.id,
-              name: clip.name,
-              hasContent: !!clip.svgContent,
-              contentLength: clip.svgContent?.length || 0,
-              hasAnimationId: !!clip.animationId,
-              order: clip.order
-            })) : 'No clips'
-        });
-
         // If no clips found, this might be a server-side issue
         if (!data.movie.clips || data.movie.clips.length === 0) {
           console.warn(`Movie '${data.movie.name}' has no clips. This might indicate a server-side issue.`);
