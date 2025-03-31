@@ -14,6 +14,7 @@ declare global {
     initialAnimationSetupComplete?: boolean;
     preventAnimationReset?: boolean;
     _isPlaybackStateChanging?: boolean;
+    _isClipChanging?: boolean;
   }
 }
 
@@ -327,7 +328,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Skip excessive rerenders when clicking quickly through clips
     if (renderCountRef.current % 5 === 0) {
-      console.log(`[AnimationCanvas] useEffect calls per activeClipId: ${renderCountRef.current}`);
+      // console.log(`[AnimationCanvas] useEffect calls per activeClipId: ${renderCountRef.current}`);
     }
 
     // Get the active clip for this render cycle
@@ -335,6 +336,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Add debugging for clip changes that might affect animation state
     if (activeClip) {
+      /*
       console.log('[AnimationDebug] Clip change detected:', {
         clipId: activeClip.id,
         hasDirectSvgContent: Boolean(activeClip.svgContent && activeClip.svgContent.length > 100),
@@ -342,6 +344,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         hasCachedThumbnail: Boolean(activeClip.animationId),
         timestamp: new Date().toISOString()
       });
+      */
     }
 
     // If no active clip is available, show a placeholder only in movie editor context
@@ -367,6 +370,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
     // Add logging to inspect animation elements
+    /*
     console.log('[AnimationDebug] Setting up SVG element - Animation elements:',
       {
         smilElements: svgElement.querySelectorAll('animate, animateTransform, animateMotion').length,
@@ -375,6 +379,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         hasAnimationStyles: svgElement.querySelector('style')?.textContent?.includes('@keyframes') || false
       }
     );
+    */
 
     // Only update reference if it's a different element
     if (svgElement !== currentSvgRef.current) {
@@ -423,18 +428,23 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
 
     // Determine if we should reset
-    const shouldPerformReset = !window._isPlaybackStateChanging;
+    // Don't reset during playback changes or clip changes
+    const shouldPerformReset = !window._isPlaybackStateChanging && !window._isClipChanging;
 
     // Use our unified animation controller for initial setup
     controlAnimations(svgElement, {
       playState,
-      shouldReset: shouldPerformReset, // Only reset if not changing playback state
+      shouldReset: shouldPerformReset, // Only reset if not changing playback state or clip
       playbackSpeed, // Use current playback speed
       initialSetup: shouldPerformReset // This should match shouldReset
     });
 
     if (window._isPlaybackStateChanging) {
-      console.log('[AnimationCanvas] Preserving animation state during playback change - no reset');
+      // console.log('[AnimationCanvas] Preserving animation state during playback change - no reset');
+    }
+
+    if (window._isClipChanging) {
+      console.log('[AnimationCanvas] Preparing clip for auto-play - no reset');
     }
 
     // Log animation state after setup
@@ -664,7 +674,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           const containerWidth = containerRef.current.clientWidth;
           const containerHeight = containerRef.current.clientHeight;
 
-          console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
+          // console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
 
           // Trigger resize of SVG content
           const svgElement = getSvgContainer()?.querySelector('svg');
@@ -917,7 +927,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           const containerWidth = containerRef.current.clientWidth;
           const containerHeight = containerRef.current.clientHeight;
 
-          console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
+          // console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
 
           // Trigger resize of SVG content
           const svgElement = getSvgContainer()?.querySelector('svg');
@@ -931,35 +941,44 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
               const svgRatio = vbWidth / vbHeight;
               const containerRatio = containerWidth / containerHeight;
 
-              // Ensure the SVG fits within the container while maintaining aspect ratio
-              if (containerRatio > svgRatio) {
-                // Container is wider than SVG - fit to height
-                const height = containerHeight;
-                const width = height * svgRatio;
-                svgElement.setAttribute('width', `${width}px`);
-                svgElement.setAttribute('height', `${height}px`);
+              // Different behavior based on whether we're in the animation editor or movie editor
+              if (isAnimationEditor) {
+                // In Animation Editor - allow more height usage
+                svgElement.setAttribute('width', '100%');
+                svgElement.setAttribute('height', '100%');
+                svgElement.style.maxWidth = '100%';
+                // Don't constrain max-height to allow vertical filling
+                svgElement.style.maxHeight = 'none';
               } else {
-                // Container is taller than SVG - fit to width
-                const width = containerWidth;
-                const height = width / svgRatio;
-                svgElement.setAttribute('width', `${width}px`);
-                svgElement.setAttribute('height', `${height}px`);
+                // In Movie Editor - ensure it fits completely in the container
+                if (containerRatio > svgRatio) {
+                  // Container is wider than SVG - fit to height
+                  const height = containerHeight;
+                  const width = height * svgRatio;
+                  svgElement.setAttribute('width', `${width}px`);
+                  svgElement.setAttribute('height', `${height}px`);
+                } else {
+                  // Container is taller than SVG - fit to width
+                  const width = containerWidth;
+                  const height = width / svgRatio;
+                  svgElement.setAttribute('width', `${width}px`);
+                  svgElement.setAttribute('height', `${height}px`);
+                }
+
+                // Ensure SVG doesn't overflow container
+                svgElement.style.maxWidth = '100%';
+                svgElement.style.maxHeight = '100%';
               }
             } else {
               // If no viewBox, set a default one and use preserveAspectRatio
               svgElement.setAttribute('viewBox', '0 0 800 600');
-              svgElement.setAttribute('width', '100%');
-              svgElement.setAttribute('height', '100%');
+              svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
             }
 
-            // Ensure preserveAspectRatio is set correctly
+            // Common styling for both modes
             svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-            // Ensure proper centering
             svgElement.style.display = 'block';
             svgElement.style.margin = '0 auto';
-            svgElement.style.maxWidth = '100%';
-            svgElement.style.maxHeight = '100%';
           }
         }
       });

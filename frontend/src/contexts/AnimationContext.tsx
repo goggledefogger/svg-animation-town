@@ -90,6 +90,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const viewerPreferences = useViewerPreferences();
 
+  // Reference to store the last processed clip ID
+  const lastProcessedClipRef = useRef<string | null>(null);
+  // Debounce timer reference
+  const clipChangeDebounceRef = useRef<number | null>(null);
+
   // Fetch default provider from backend on initial load
   useEffect(() => {
     const fetchDefaultProvider = async () => {
@@ -799,156 +804,215 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Skip if no clip data
       if (!clip) return;
 
-      console.log(`[AnimationContext] Clip changed: ${clip.name || clip.id}`);
-
-      // First stop any existing animations
-      if (svgRef) {
-        try {
-          svgRef.pauseAnimations();
-        } catch (e) {
-          // Ignore pause errors
-        }
-      }
-
-      // Reset state before loading new content
-      setSvgContent('');
-      setChatHistory([]);
-
-      // First - check if we have SVG content directly in the clip
-      if (clip.svgContent && clip.svgContent.length > 100) {
-        console.log(`[AnimationContext] Using clip's SVG content directly (${clip.svgContent.length} bytes)`);
-        setSvgContent(clip.svgContent);
-
-        if (clip.chatHistory) {
-          setChatHistory(clip.chatHistory);
-        }
-
-        // Set AI provider if available in clip data
-        if (clip.provider) {
-          console.log(`[AnimationContext] Setting AI provider from clip: ${clip.provider}`);
-          setAIProvider(clip.provider as 'openai' | 'claude' | 'gemini');
-        }
-
-        // Also cache in the registry if we have an animationId
-        if (clip.animationId) {
-          AnimationRegistryHelpers.storeAnimation(
-            clip.animationId,
-            clip.svgContent,
-            {
-              chatHistory: clip.chatHistory,
-              provider: clip.provider
-            }
-          );
-        }
-
+      // Check if this is the same clip we're already processing
+      if (clipId === lastProcessedClipRef.current) {
         return;
       }
 
-      // Second - if animationId exists, check registry first
-      if (clip.animationId) {
-        const animationId = clip.animationId;
-        const result = AnimationRegistryHelpers.getAnimation(animationId);
+      console.log(`[AnimationContext] Clip changed: ${clip.name || clip.id}`);
 
-        // Handle each possible status
-        switch (result.status) {
-          case 'available':
-            if (result.svg) {
-              console.log(`[AnimationContext] Using cached animation from registry: ${animationId}`);
-              setSvgContent(result.svg);
+      // Clear any existing debounce timer
+      if (clipChangeDebounceRef.current) {
+        window.clearTimeout(clipChangeDebounceRef.current);
+        clipChangeDebounceRef.current = null;
+      }
 
-              // Set the chat history if available from registry
-              if (result.metadata?.chatHistory) {
-                setChatHistory(result.metadata.chatHistory);
-              }
+      // Set as the last processed clip
+      lastProcessedClipRef.current = clipId;
 
-              // Set AI provider if available in metadata, otherwise set to default
-              if (result.metadata?.provider) {
-                console.log(`Setting AI provider from loaded animation metadata: ${result.metadata.provider}`);
-                setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
-              } else {
-                console.log(`No provider found for animation ${animationId}, setting to default '${defaultProvider}'`);
-                setAIProvider(defaultProvider);
-              }
+      // Use a small debounce to prevent rapid switching issues
+      clipChangeDebounceRef.current = window.setTimeout(() => {
+        // Mark that we're in a clip change operation (prevent playback conflicts)
+        window._isClipChanging = true;
 
-              // Note: We can't update the clip here as updateClip is not available in this context
+        // First stop any existing animations
+        if (svgRef) {
+          try {
+            svgRef.pauseAnimations();
+          } catch (e) {
+            // Ignore pause errors
+          }
+        }
+
+        // Reset state before loading new content
+        setSvgContent('');
+        setChatHistory([]);
+
+        // Load SVG content with different approaches in sequence
+        const loadClipContent = async () => {
+          // First - check if we have SVG content directly in the clip
+          if (clip.svgContent && clip.svgContent.length > 100) {
+            console.log(`[AnimationContext] Using clip's SVG content directly (${clip.svgContent.length} bytes)`);
+            setSvgContent(clip.svgContent);
+
+            if (clip.chatHistory) {
+              setChatHistory(clip.chatHistory);
             }
-            break;
 
-          case 'loading':
-            console.log(`[AnimationContext] Animation ${animationId} is already loading, waiting`);
-            break;
+            // Set AI provider if available in clip data
+            if (clip.provider) {
+              console.log(`[AnimationContext] Setting AI provider from clip: ${clip.provider}`);
+              setAIProvider(clip.provider as 'openai' | 'claude' | 'gemini');
+            }
 
-          case 'failed':
-            console.log(`[AnimationContext] Animation previously failed to load: ${animationId}`);
-            break;
+            // Also cache in the registry if we have an animationId
+            if (clip.animationId) {
+              AnimationRegistryHelpers.storeAnimation(
+                clip.animationId,
+                clip.svgContent,
+                {
+                  chatHistory: clip.chatHistory,
+                  provider: clip.provider
+                }
+              );
+            }
 
-          case 'not_found':
-            // Not in registry, need to load it
-            console.log(`[AnimationContext] Loading animation from server: ${animationId}`);
+            return true;
+          }
 
-            // Create a request ID for this animation load
-            const requestId = `load-animation-${animationId}`;
+          // Second - if animationId exists, check registry first
+          if (clip.animationId) {
+            const animationId = clip.animationId;
+            const result = AnimationRegistryHelpers.getAnimation(animationId);
 
-            // Mark as loading
-            AnimationRegistryHelpers.markLoading(animationId);
+            // Handle each possible status
+            switch (result.status) {
+              case 'available':
+                if (result.svg) {
+                  console.log(`[AnimationContext] Using cached animation from registry: ${animationId}`);
+                  setSvgContent(result.svg);
 
-            // Create and track the request
-            const loadRequest = async () => {
-              try {
-                const response = await AnimationStorageApi.getAnimation(animationId);
-
-                // Handle both response formats (direct or wrapped)
-                const animation = response && response.success ? response.animation : response;
-
-                if (animation?.svg) {
-                  // Store in registry with metadata
-                  AnimationRegistryHelpers.storeAnimation(
-                    animationId,
-                    animation.svg,
-                    {
-                      chatHistory: animation.chatHistory,
-                      timestamp: animation.timestamp,
-                      provider: animation.provider
-                    }
-                  );
-
-                  // Set the SVG content
-                  setSvgContent(animation.svg);
-
-                  // Note: We can't update the clip here as updateClip is not available in this context
-
-                  // Set the chat history if available
-                  if (animation.chatHistory) {
-                    setChatHistory(animation.chatHistory);
+                  // Set the chat history if available from registry
+                  if (result.metadata?.chatHistory) {
+                    setChatHistory(result.metadata.chatHistory);
                   }
 
-                  // Set AI provider if available in animation data, otherwise default to defaultProvider
-                  if (animation.provider) {
-                    console.log(`Setting AI provider from loaded animation: ${animation.provider}`);
-                    setAIProvider(animation.provider as 'openai' | 'claude' | 'gemini');
+                  // Set AI provider if available in metadata, otherwise set to default
+                  if (result.metadata?.provider) {
+                    setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
                   } else {
-                    console.log(`No provider found for animation from server, setting to default '${defaultProvider}'`);
                     setAIProvider(defaultProvider);
                   }
 
-                  console.log(`[AnimationContext] Animation loaded: ${animationId}`);
-                  return animation;
-                } else {
-                  console.warn(`[AnimationContext] Animation loaded but no SVG content: ${animationId}`);
-                  AnimationRegistryHelpers.markFailed(animationId);
-                  return null;
+                  return true;
                 }
-              } catch (error) {
-                console.error(`[AnimationContext] Error loading animation: ${error}`);
-                AnimationRegistryHelpers.markFailed(animationId);
-                return null;
-              }
-            };
+                break;
 
-            AnimationRegistryHelpers.trackRequest(requestId, loadRequest());
-            break;
-        }
-      }
+              case 'loading':
+                return false;
+
+              case 'failed':
+                return false;
+
+              case 'not_found':
+                // Not in registry, need to load it
+                console.log(`[AnimationContext] Loading animation from server: ${animationId}`);
+
+                // Create a request ID for this animation load
+                const requestId = `load-animation-${animationId}`;
+                // Mark as loading
+                AnimationRegistryHelpers.markLoading(animationId);
+
+                try {
+                  const response = await AnimationStorageApi.getAnimation(animationId);
+                  // Handle both response formats (direct or wrapped)
+                  const animation = response && response.success ? response.animation : response;
+
+                  if (animation?.svg) {
+                    // Store in registry with metadata
+                    AnimationRegistryHelpers.storeAnimation(
+                      animationId,
+                      animation.svg,
+                      {
+                        chatHistory: animation.chatHistory,
+                        timestamp: animation.timestamp,
+                        provider: animation.provider
+                      }
+                    );
+
+                    // Make sure this is still the clip we want to display
+                    if (clipId === lastProcessedClipRef.current) {
+                      // Set the SVG content
+                      setSvgContent(animation.svg);
+
+                      // Set the chat history if available
+                      if (animation.chatHistory) {
+                        setChatHistory(animation.chatHistory);
+                      }
+
+                      // Set AI provider if available in animation data, otherwise default to defaultProvider
+                      if (animation.provider) {
+                        setAIProvider(animation.provider as 'openai' | 'claude' | 'gemini');
+                      } else {
+                        setAIProvider(defaultProvider);
+                      }
+
+                      console.log(`[AnimationContext] Animation loaded: ${animationId}`);
+                      return true;
+                    } else {
+                      return false;
+                    }
+                  } else {
+                    AnimationRegistryHelpers.markFailed(animationId);
+                    return false;
+                  }
+                } catch (error) {
+                  console.error(`[AnimationContext] Error loading animation: ${error}`);
+                  AnimationRegistryHelpers.markFailed(animationId);
+                  return false;
+                }
+            }
+          }
+
+          return false;
+        };
+
+        // Load content and then auto-play when ready
+        loadClipContent().then(success => {
+          // Verify this is still the clip we want to display
+          if (clipId !== lastProcessedClipRef.current) {
+            window._isClipChanging = false;
+            return;
+          }
+
+          if (success) {
+            // Give SVG time to load into DOM before auto-playing
+            setTimeout(() => {
+              // Verify again that this is still the clip we want to display
+              if (clipId !== lastProcessedClipRef.current) {
+                window._isClipChanging = false;
+                return;
+              }
+
+              // Auto-play when a new clip is selected
+              setPlaying(true);
+
+              // Apply running state to the SVG if available
+              if (svgRef) {
+                console.log(`[AnimationContext] Auto-playing newly selected clip`);
+                controlAnimations(svgRef, {
+                  playState: 'running',
+                  shouldReset: false,
+                  playbackSpeed,
+                  initialSetup: false
+                });
+              }
+
+              // Clear the clip changing flag
+              window._isClipChanging = false;
+
+              // Dispatch event to notify other components
+              window.dispatchEvent(new CustomEvent('clip-autoplay'));
+            }, 150);
+          } else {
+            // If loading failed, still clear the flag
+            window._isClipChanging = false;
+          }
+        });
+
+        // Clear the debounce reference
+        clipChangeDebounceRef.current = null;
+      }, 50); // Short debounce to handle rapid clip switching
     };
 
     // Add event listener
@@ -957,8 +1021,44 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Cleanup
     return () => {
       window.removeEventListener('clip-changed', handleClipChanged);
+      if (clipChangeDebounceRef.current) {
+        window.clearTimeout(clipChangeDebounceRef.current);
+      }
     };
-  }, [svgRef, setSvgContent, setChatHistory, setAIProvider]);
+  }, [svgRef, setSvgContent, setChatHistory, setAIProvider, defaultProvider, playbackSpeed]);
+
+  // Listen for animation-reset events from other components
+  useEffect(() => {
+    const handleAnimationReset = () => {
+      // Ensure we're in play mode after a reset
+      setPlaying(true);
+    };
+
+    const handleClipAutoPlay = () => {
+      // Ensure we're in play mode when a clip is changed
+      setPlaying(true);
+
+      // Apply running state to the SVG if available
+      if (svgRef) {
+        setTimeout(() => {
+          controlAnimations(svgRef, {
+            playState: 'running',
+            shouldReset: false,
+            playbackSpeed,
+            initialSetup: false
+          });
+        }, 50);
+      }
+    };
+
+    window.addEventListener('animation-reset', handleAnimationReset);
+    window.addEventListener('clip-autoplay', handleClipAutoPlay);
+
+    return () => {
+      window.removeEventListener('animation-reset', handleAnimationReset);
+      window.removeEventListener('clip-autoplay', handleClipAutoPlay);
+    };
+  }, [svgRef, playbackSpeed]);
 
   // Load an animation from server by name
   const loadAnimation = useCallback(async (name: string): Promise<ChatData | null> => {
