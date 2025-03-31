@@ -6,7 +6,16 @@ import { MovieClip, Storyboard } from '../contexts/MovieContext';
 import EmptyState from './EmptyState';
 import { AnimationApi, MovieStorageApi } from '../services/api';
 import useAnimationLoader, { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
-import { resetAnimations, getPlaybackState, setAnimationPlaybackState } from '../utils/animationUtils';
+import { resetAnimations, getPlaybackState, controlAnimations } from '../utils/animationUtils';
+
+// Declare a module augmentation to add our custom property to Window
+declare global {
+  interface Window {
+    initialAnimationSetupComplete?: boolean;
+    preventAnimationReset?: boolean;
+    _isPlaybackStateChanging?: boolean;
+  }
+}
 
 // Add type for API response
 interface MovieResponse {
@@ -35,7 +44,9 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Get animation context
   const {
     setSvgRef,
-    playing
+    playing,
+    svgRef: contextSvgRef,
+    playbackSpeed
   } = useAnimation();
 
   // Get movie context if this is used in a movie editor
@@ -408,15 +419,23 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     svgElement.style.margin = '0 auto';
     svgElement.style.boxSizing = 'border-box';
 
-    // Reset all animations for consistent behavior
-    // This is needed for initial setup, but we'll use setAnimationPlaybackState for pause/resume
-    resetAnimations(svgElement);
-
-    // Set playback state based on current context
+    // Get playback state and speed
     const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
 
-    // Use our new function for setting playback state
-    setAnimationPlaybackState(svgElement, playState);
+    // Determine if we should reset
+    const shouldPerformReset = !window._isPlaybackStateChanging;
+
+    // Use our unified animation controller for initial setup
+    controlAnimations(svgElement, {
+      playState,
+      shouldReset: shouldPerformReset, // Only reset if not changing playback state
+      playbackSpeed, // Use current playback speed
+      initialSetup: shouldPerformReset // This should match shouldReset
+    });
+
+    if (window._isPlaybackStateChanging) {
+      console.log('[AnimationCanvas] Preserving animation state during playback change - no reset');
+    }
 
     // Log animation state after setup
     const smilAnimations = svgElement.querySelectorAll('animate, animateTransform, animateMotion');
@@ -424,7 +443,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     console.log(`[AnimationCanvas] SVG setup complete: ${smilAnimations.length} SMIL + ${cssAnimations.length} CSS animations. PlayState: ${playState}`);
 
     return svgElement;
-  }, [setSvgRef, activeClipId, moviePlaying, playing, isAnimationEditor]);
+  }, [setSvgRef, activeClipId, moviePlaying, playing, isAnimationEditor, playbackSpeed]);
 
   // Debounce SVG updates to prevent rapid re-renders
   const debouncedUpdateRef = useRef<number | null>(null);
@@ -467,6 +486,12 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   useEffect(() => {
     // Skip if we have no container to update
     if (!svgContainerRef.current) {
+      return;
+    }
+
+    // Skip content updates during playback state changes to prevent resets
+    if (window._isPlaybackStateChanging) {
+      console.log('[AnimationCanvas] Skipping content update during playback state change');
       return;
     }
 
@@ -1019,9 +1044,23 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
     console.log(`[AnimationCanvas] Playback state changed to: ${playState}`);
 
-    // Use our new function that properly handles pause/resume without reset
-    setAnimationPlaybackState(currentSvgRef.current, playState);
-  }, [isAnimationEditor, playing, moviePlaying]);
+    // Set a flag to prevent content refresh during pause/resume operations
+    window._isPlaybackStateChanging = true;
+
+    // Use our unified controller for state changes - WITHOUT resetting
+    controlAnimations(currentSvgRef.current, {
+      playState,
+      shouldReset: false, // Don't reset when just changing playback state
+      playbackSpeed, // Use current playback speed
+      initialSetup: false // This should match shouldReset - both false for playback changes
+    });
+
+    // Clear the flag after a short delay to allow animations to stabilize
+    setTimeout(() => {
+      window._isPlaybackStateChanging = false;
+    }, 100);
+
+  }, [isAnimationEditor, playing, moviePlaying, playbackSpeed]);
 
   const handleSetContent = useCallback(async (svgContent: string) => {
     console.log(`[AnimationCanvas] handleSetContent called (${svgContent.length} chars)`);
