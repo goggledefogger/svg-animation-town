@@ -1076,7 +1076,23 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       window._isPlaybackStateChanging = false;
     }, 100);
 
-  }, [isAnimationEditor, playing, moviePlaying, playbackSpeed]);
+  }, [isAnimationEditor, playing, moviePlaying]);
+
+  // Add dedicated effect for handling playback speed changes
+  useEffect(() => {
+    // Skip if no SVG element is available
+    if (!currentSvgRef.current) {
+      return;
+    }
+    // Apply speed change to current animations without affecting playback state
+    controlAnimations(currentSvgRef.current, {
+      playState: getPlaybackState(isAnimationEditor, playing, moviePlaying),
+      shouldReset: false, // Don't reset when changing speed
+      playbackSpeed,
+      initialSetup: true // Force initialSetup to true to apply the speed change
+    });
+
+  }, [playbackSpeed, isAnimationEditor, playing, moviePlaying]);
 
   const handleSetContent = useCallback(async (svgContent: string) => {
     console.log(`[AnimationCanvas] handleSetContent called (${svgContent.length} chars)`);
