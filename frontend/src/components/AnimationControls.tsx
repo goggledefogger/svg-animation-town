@@ -146,8 +146,6 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       onSeek(0);
     } else {
       if (svgRef) {
-        console.log('[AnimationControls] Resetting animations with unified controller');
-
         // Use the unified controller to reset animations
         controlAnimations(svgRef, {
           playState: 'running',
@@ -160,8 +158,6 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
         if (!playing) {
           resumeAnimations();
         }
-
-        console.log('[AnimationControls] Animation reset complete');
       } else {
         console.warn('[AnimationControls] Cannot reset animations - no SVG element reference');
       }
@@ -175,9 +171,29 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
 
   // Change playback speed
   const handleSpeedChange = (speed: number | 'groovy') => {
+    // Set flag to prevent content refresh during speed change operation
+    window._isPlaybackStateChanging = true;
+
     // Changing playback speed should be seamless without interrupting the animation
     // Just update the speed without affecting the current position
     setPlaybackSpeed(speed);
+
+    // Directly apply the speed change to the SVG
+    if (svgRef) {
+      console.log(`[AnimationControls] Applying speed change to ${speed}`);
+      controlAnimations(svgRef, {
+        playState: playing ? 'running' : 'paused',
+        shouldReset: false,
+        playbackSpeed: speed,
+        initialSetup: true // Force initialization to apply speed change
+      });
+    }
+
+    // Clear the flag after a short delay
+    setTimeout(() => {
+      window._isPlaybackStateChanging = false;
+    }, 100);
+
     setShowSpeedOptions(false);
   };
 
@@ -195,7 +211,7 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       if (!buttonRect) return;
 
       // Approximate height of the menu
-      const menuHeight = 120;
+      const menuHeight = 210; // Increased from 180 to account for new 0.25x option
       const menuWidth = 112; // Width of the menu (w-28)
       const windowHeight = window.innerHeight;
 
@@ -278,6 +294,12 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       >
         <div className="py-1">
           <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 0.25 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange(0.25)}
+          >
+            0.25x
+          </button>
+          <button
             className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 0.5 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
             onClick={() => handleSpeedChange(0.5)}
           >
@@ -294,6 +316,18 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
             onClick={() => handleSpeedChange(2)}
           >
             2x
+          </button>
+          <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 5 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange(5)}
+          >
+            5x
+          </button>
+          <button
+            className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 10 ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
+            onClick={() => handleSpeedChange(10)}
+          >
+            10x
           </button>
           <button
             className={`w-full text-left px-2 sm:px-3 py-1 sm:py-1.5 text-xs ${playbackSpeed === 'groovy' ? 'text-bat-yellow' : 'text-white'} hover:bg-gray-800`}
