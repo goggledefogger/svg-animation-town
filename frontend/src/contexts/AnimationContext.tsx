@@ -533,8 +533,14 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       const currentSpeeds = new Map();
       // For tracking direction for each element
       const currentDirections = new Map();
+      // For tracking transition timing for Bezier curves
+      const currentTransitions = new Map();
+      // For tracking target speeds
+      const targetSpeeds = new Map();
+      // Track progress through transitions
+      const transitionProgress = new Map();
 
-      // For groovy mode, we'll gradually change the speed with smooth transitions
+      // For groovy mode, we'll gradually change the speed with smooth Bezier transitions
       groovyIntervalRef.current = window.setInterval(() => {
         // Get all animated elements
         const animatedElements = svgRef.querySelectorAll('[style*="animation"], animate, animateTransform, animateMotion');
@@ -546,7 +552,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           // Get current speed or initialize with a value between 0.5 and 1.5
           let currentSpeed = currentSpeeds.get(elementKey);
           let currentDirection = currentDirections.get(elementKey);
+          let currentTransition = currentTransitions.get(elementKey);
+          let targetSpeed = targetSpeeds.get(elementKey);
+          let progress = transitionProgress.get(elementKey) || 0;
 
+          // Initialize values if they don't exist
           if (currentSpeed === undefined) {
             currentSpeed = 0.5 + Math.random();
             currentSpeeds.set(elementKey, currentSpeed);
@@ -557,29 +567,58 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             currentDirections.set(elementKey, currentDirection);
           }
 
-          // Gradually change speed - either faster or slower with small increments
-          // Random value between -0.15 and 0.15 for gentle acceleration/deceleration
-          const speedChange = (Math.random() * 0.3) - 0.15;
+          if (currentTransition === undefined) {
+            // Generate a random cubic-bezier curve for more interesting easing
+            const x1 = Math.random() * 0.8;
+            const y1 = Math.random();
+            const x2 = 0.2 + Math.random() * 0.8;
+            const y2 = Math.random();
+            currentTransition = `cubic-bezier(${x1.toFixed(2)}, ${y1.toFixed(2)}, ${x2.toFixed(2)}, ${y2.toFixed(2)})`;
+            currentTransitions.set(elementKey, currentTransition);
+          }
 
-          // Update current speed, keeping it between 0.25 and 3
-          let newSpeed = currentSpeed + speedChange;
-          newSpeed = Math.max(0.25, Math.min(3, newSpeed));
+          // Set a new target speed if needed
+          if (targetSpeed === undefined || progress >= 1) {
+            // More extreme speed range for more dynamic effects - between 0.15 and 4
+            targetSpeed = 0.15 + Math.random() * 3.85;
+            targetSpeeds.set(elementKey, targetSpeed);
+            progress = 0;
 
-          // Small chance to change direction (5% chance)
-          if (Math.random() < 0.05) {
+            // Generate a new transition curve periodically
+            if (Math.random() < 0.3) {
+              const x1 = Math.random() * 0.8;
+              const y1 = Math.random();
+              const x2 = 0.2 + Math.random() * 0.8;
+              const y2 = Math.random();
+              currentTransition = `cubic-bezier(${x1.toFixed(2)}, ${y1.toFixed(2)}, ${x2.toFixed(2)}, ${y2.toFixed(2)})`;
+              currentTransitions.set(elementKey, currentTransition);
+            }
+          }
+
+          // Update progress through the transition (0 to 1)
+          progress += 0.03 + (Math.random() * 0.02); // Slightly randomize progress increase
+          progress = Math.min(1, progress);
+          transitionProgress.set(elementKey, progress);
+
+          // Calculate new speed using cubic-bezier interpolation
+          // Simple linear interpolation for now - the cubic-bezier is applied via CSS
+          const newSpeed = currentSpeed + ((targetSpeed - currentSpeed) * progress);
+          currentSpeeds.set(elementKey, newSpeed);
+
+          // Small chance to change direction (5% chance), but with crossfade effect
+          const directionChangeThreshold = 0.05;
+          if (Math.random() < directionChangeThreshold) {
             currentDirection = currentDirection === 'normal' ? 'reverse' : 'normal';
             currentDirections.set(elementKey, currentDirection);
           }
-
-          // Apply the new speed to the element
-          currentSpeeds.set(elementKey, newSpeed);
 
           if (element instanceof SVGElement && element.style) {
             // For CSS animations
             element.style.animationDirection = currentDirection;
             element.style.animationDuration = `${3 / newSpeed}s`;
-            // Add smooth transition for animation-duration
-            element.style.transition = 'animation-duration 1.5s ease-in-out';
+
+            // Add smooth Bezier curve transition for animation-duration
+            element.style.transition = `animation-duration 1.5s ${currentTransition}`;
           } else if (element instanceof SVGAnimateElement ||
                     element instanceof SVGAnimateTransformElement ||
                     element instanceof SVGAnimateMotionElement) {
@@ -592,11 +631,16 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               element.setAttribute('keyTimes', '0;1');
             }
 
+            // Store original duration if not already stored
+            if (!element.getAttribute('data-original-dur') && element.getAttribute('dur')) {
+              element.setAttribute('data-original-dur', element.getAttribute('dur') || '');
+            }
+
             const dur = parseFloat(element.getAttribute('data-original-dur') || element.getAttribute('dur') || '1s');
             element.setAttribute('dur', `${dur / newSpeed}s`);
           }
         });
-      }, 1500); // Update speeds every 1.5 seconds for smoother transitions
+      }, 800); // Update more frequently for smoother transitions
     } else {
       // For normal speed changes, use our unified controller
       controlAnimations(svgRef, {

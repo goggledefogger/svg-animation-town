@@ -498,7 +498,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Skip content updates during playback state changes to prevent resets
     if (window._isPlaybackStateChanging) {
-      console.log('[AnimationCanvas] Skipping content update during playback state change');
       return;
     }
 
@@ -1058,8 +1057,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     }
 
     const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
-    console.log(`[AnimationCanvas] Playback state changed to: ${playState}`);
-
     // Set a flag to prevent content refresh during pause/resume operations
     window._isPlaybackStateChanging = true;
 
