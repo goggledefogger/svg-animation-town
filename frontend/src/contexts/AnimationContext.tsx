@@ -5,7 +5,7 @@ import { useViewerPreferences } from './ViewerPreferencesContext';
 import { v4 as uuidv4 } from 'uuid';
 import { isMobileDevice, isFreshPageLoad } from '../utils/deviceUtils';
 import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
-import { resetAnimations as resetAnimationsUtil } from '../utils/animationUtils';
+import { resetAnimations as resetAnimationsUtil, controlAnimations } from '../utils/animationUtils';
 
 // Define the context interface
 export interface AnimationContextType {
@@ -512,112 +512,6 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     return requestPromise;
   };
 
-  // Update helper function to control CSS animations to handle reverse playback
-  const controlCssAnimations = useCallback((playState: 'running' | 'paused') => {
-    if (!svgRef) return;
-
-    try {
-      // Get all animated elements that have CSS animations
-      const styleElement = svgRef.querySelector('style');
-      if (!styleElement) {
-        return;
-      }
-
-      // Find elements with CSS animations by looking for IDs mentioned in keyframes
-      const styleContent = styleElement.textContent || '';
-
-      // More comprehensive approach to find animated elements
-      // 1. Find IDs in style blocks with animation properties
-      const animatedElementIds = Array.from(styleContent.matchAll(/#([a-zA-Z0-9_-]+)\s*{[^}]*animation[^}]*}/g))
-        .map(match => match[1]);
-
-      // 2. Also find class-based animations
-      const animatedClassSelectors = Array.from(styleContent.matchAll(/\.([a-zA-Z0-9_-]+)\s*{[^}]*animation[^}]*}/g))
-        .map(match => match[1]);
-
-      // Get current playback speed (except in groovy mode which is handled separately)
-      const isReverse = typeof playbackSpeed === 'number' && playbackSpeed < 0;
-      const speedValue = typeof playbackSpeed === 'number' ? Math.abs(playbackSpeed) : 1;
-
-      // Apply play state and speed to elements with IDs
-      animatedElementIds.forEach(id => {
-        const element = svgRef.getElementById(id);
-        if (element) {
-          (element as SVGElement).style.animationPlayState = playState;
-
-          // Set direction and speed for non-groovy modes
-          if (playbackSpeed !== 'groovy') {
-            (element as SVGElement).style.animationDirection = isReverse ? 'reverse' : 'normal';
-            (element as SVGElement).style.animationDuration =
-              `calc(var(--animation-duration, 1s) / ${speedValue})`;
-          }
-        }
-      });
-
-      // Apply play state and speed to elements with animated classes
-      animatedClassSelectors.forEach(className => {
-        const elements = svgRef.getElementsByClassName(className);
-        Array.from(elements).forEach(element => {
-          (element as SVGElement).style.animationPlayState = playState;
-
-          // Set direction and speed for non-groovy modes
-          if (playbackSpeed !== 'groovy') {
-            (element as SVGElement).style.animationDirection = isReverse ? 'reverse' : 'normal';
-            (element as SVGElement).style.animationDuration =
-              `calc(var(--animation-duration, 1s) / ${speedValue})`;
-          }
-        });
-      });
-
-      // Fallback approach - find all elements with style attribute containing animation
-      const allElements = svgRef.querySelectorAll('*');
-      allElements.forEach(element => {
-        const style = (element as SVGElement).getAttribute('style');
-        if (style && style.includes('animation')) {
-          (element as SVGElement).style.animationPlayState = playState;
-
-          // Set direction and speed for non-groovy modes
-          if (playbackSpeed !== 'groovy' && style.includes('animation-duration')) {
-            // Set animation direction
-            (element as SVGElement).style.animationDirection = isReverse ? 'reverse' : 'normal';
-
-            const durationMatch = style.match(/animation-duration:\s*([^;]+)/);
-            if (durationMatch) {
-              const originalDuration = durationMatch[1];
-              const newStyle = style.replace(
-                /animation-duration:\s*([^;]+)/,
-                `animation-duration: calc(${originalDuration} / ${speedValue})`
-              );
-              (element as SVGElement).setAttribute('style', newStyle);
-            }
-          }
-        }
-      });
-
-      // Additional approach - find elements with inline style attributes containing animation
-      const elementsWithStyle = svgRef.querySelectorAll('[style*="animation"]');
-      elementsWithStyle.forEach((element) => {
-        (element as SVGElement).style.animationPlayState = playState;
-
-        // Set direction and speed for non-groovy modes
-        if (playbackSpeed !== 'groovy') {
-          // Set animation direction
-          (element as SVGElement).style.animationDirection = isReverse ? 'reverse' : 'normal';
-
-          const currentDuration = getComputedStyle(element).animationDuration;
-          if (currentDuration && currentDuration !== '0s') {
-            const durationInS = parseFloat(currentDuration);
-            const newDuration = durationInS / speedValue;
-            (element as SVGElement).style.animationDuration = `${newDuration}s`;
-          }
-        }
-      });
-
-    } catch (error) {
-      console.error('Error controlling CSS animations:', error);
-    }
-  }, [svgRef, playbackSpeed]);
-
   // Apply playback speed changes
   useEffect(() => {
     if (!svgRef) return;
@@ -629,6 +523,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     if (playbackSpeed === 'groovy' && playing) {
+      // For groovy mode, keep the existing implementation which handles dynamic speed changes
       // For tracking current speeds for smooth transitions in groovy mode
       const currentSpeeds = new Map();
       // For tracking direction for each element
@@ -697,76 +592,30 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           }
         });
       }, 1500); // Update speeds every 1.5 seconds for smoother transitions
-    } else if (typeof playbackSpeed === 'number' && playing) {
-      // For reverse playback (speed = -1)
-      const isReverse = playbackSpeed < 0;
-      const speedAbs = Math.abs(playbackSpeed);
-
-      // Apply to CSS animations first
-      const cssAnimatedElements = svgRef.querySelectorAll('[style*="animation"]');
-      cssAnimatedElements.forEach(element => {
-        if (element instanceof SVGElement) {
-          // Set the animation direction based on speed
-          element.style.animationDirection = isReverse ? 'reverse' : 'normal';
-
-          // Get current duration info from computed style
-          const currentDuration = getComputedStyle(element).animationDuration;
-          if (currentDuration && currentDuration !== '0s') {
-            const durationInS = parseFloat(currentDuration);
-            const newDuration = durationInS / speedAbs;
-            element.style.animationDuration = `${newDuration}s`;
-          }
-        }
+    } else {
+      // For normal speed changes, use our unified controller
+      controlAnimations(svgRef, {
+        playState: playing ? 'running' : 'paused',
+        shouldReset: false, // Don't reset when changing speed
+        playbackSpeed: playbackSpeed,
+        initialSetup: false
       });
-
-      // Apply fixed speed to SMIL animations
-      const smilAnimations = svgRef.querySelectorAll('animate, animateTransform, animateMotion');
-      smilAnimations.forEach(animation => {
-        // Get original duration from a data attribute or current attribute
-        const originalDur = animation.getAttribute('data-original-dur') || animation.getAttribute('dur');
-        if (originalDur) {
-          // Store original duration if not already saved
-          if (!animation.getAttribute('data-original-dur')) {
-            animation.setAttribute('data-original-dur', originalDur);
-          }
-
-          // Calculate new duration based on speed
-          const durationValue = parseFloat(originalDur);
-          const newDuration = isNaN(durationValue) ? 1 / speedAbs : durationValue / speedAbs;
-          animation.setAttribute('dur', `${newDuration}s`);
-
-          // For reverse playback, set keyPoints and keyTimes appropriately
-          if (isReverse) {
-            animation.setAttribute('keyPoints', '1;0');
-            animation.setAttribute('keyTimes', '0;1');
-          } else {
-            // Reset to normal direction if previously reversed
-            if (animation.getAttribute('keyPoints') === '1;0') {
-              animation.setAttribute('keyPoints', '0;1');
-              animation.setAttribute('keyTimes', '0;1');
-            }
-          }
-        }
-      });
-
-      // Apply fixed speed to CSS animations via controlCssAnimations function
-      controlCssAnimations(playing ? 'running' : 'paused');
     }
-
-    return () => {
-      if (groovyIntervalRef.current) {
-        clearInterval(groovyIntervalRef.current);
-        groovyIntervalRef.current = null;
-      }
-    };
-  }, [playbackSpeed, svgRef, playing, controlCssAnimations]);
+  }, [svgRef, playbackSpeed, playing]);
 
   // Animation control methods
   const pauseAnimations = useCallback(() => {
     if (svgRef) {
       try {
-        // Simply update the playing state - actual SVG pausing is handled in AnimationControls
-        // No need to manipulate the SVG directly here as it might cause unexpected resets
+        // Use our unified controller for consistent pause behavior
+        controlAnimations(svgRef, {
+          playState: 'paused',
+          shouldReset: false,
+          playbackSpeed,
+          initialSetup: false
+        });
+
+        // Update state
         setPlaying(false);
       } catch (error) {
         console.error('Error in pauseAnimations:', error);
@@ -774,13 +623,20 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     } else {
       console.warn('Cannot pause animations: SVG reference is null');
     }
-  }, [svgRef]);
+  }, [svgRef, playbackSpeed]);
 
   const resumeAnimations = useCallback(() => {
     if (svgRef) {
       try {
-        // Simply update the playing state - actual SVG resuming is handled in AnimationControls
-        // No need to manipulate the SVG directly here as it might cause unexpected resets
+        // Use our unified controller for consistent resume behavior
+        controlAnimations(svgRef, {
+          playState: 'running',
+          shouldReset: false,
+          playbackSpeed,
+          initialSetup: false
+        });
+
+        // Update state
         setPlaying(true);
       } catch (error) {
         console.error('Error in resumeAnimations:', error);
@@ -788,14 +644,19 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     } else {
       console.warn('Cannot resume animations: SVG reference is null');
     }
-  }, [svgRef]);
+  }, [svgRef, playbackSpeed]);
 
   // Resets animations by cloning and replacing the SVG element
   const resetAnimations = useCallback(() => {
     if (svgRef) {
       try {
-        // Use the enhanced resetAnimations utility function
-        resetAnimationsUtil(svgRef);
+        // Use our unified controller for consistent reset behavior
+        controlAnimations(svgRef, {
+          playState: 'running',
+          shouldReset: true,
+          playbackSpeed,
+          initialSetup: false
+        });
 
         // Ensure playing state is true
         setPlaying(true);
@@ -820,7 +681,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     } else {
       setPlaying(true);
     }
-  }, [svgRef, svgContent, setPlaying, setSvgContent]);
+  }, [svgRef, svgContent, setPlaying, setSvgContent, playbackSpeed]);
 
   // Completely reset everything to initial state
   const resetEverything = useCallback(() => {

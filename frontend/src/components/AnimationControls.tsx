@@ -5,7 +5,15 @@ import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BackgroundPicker from './BackgroundPicker';
 import ReactDOM from 'react-dom';
-import { resetAnimations, pauseAllAnimations, resumeAllAnimations, setAnimationPlaybackState } from '../utils/animationUtils';
+import { resetAnimations, controlAnimations } from '../utils/animationUtils';
+
+// Declare a module augmentation to add our custom property to Window
+declare global {
+  interface Window {
+    preventAnimationReset?: boolean;
+    _isPlaybackStateChanging?: boolean;
+  }
+}
 
 interface AnimationControlsProps {
   isPlaying?: boolean;
@@ -83,20 +91,50 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       // Using animation playback controls
       if (playing) {
         console.log('[AnimationControls] Pausing animation');
-        // Use our new util function that handles all animation types correctly
+
+        // Set flag to prevent content refresh during pause operation
+        window._isPlaybackStateChanging = true;
+
+        // Use the unified controller to pause animations
         if (svgRef) {
-          setAnimationPlaybackState(svgRef, 'paused');
+          controlAnimations(svgRef, {
+            playState: 'paused',
+            shouldReset: false,
+            playbackSpeed,
+            initialSetup: false
+          });
         }
+
         // Update state
         pauseAnimations();
+
+        // Clear the flag after a short delay
+        setTimeout(() => {
+          window._isPlaybackStateChanging = false;
+        }, 100);
       } else {
         console.log('[AnimationControls] Resuming animation');
-        // Use our new util function that handles all animation types correctly
+
+        // Set flag to prevent content refresh during resume operation
+        window._isPlaybackStateChanging = true;
+
+        // Use the unified controller to resume animations
         if (svgRef) {
-          setAnimationPlaybackState(svgRef, 'running');
+          controlAnimations(svgRef, {
+            playState: 'running',
+            shouldReset: false,
+            playbackSpeed,
+            initialSetup: false
+          });
         }
+
         // Update state
         resumeAnimations();
+
+        // Clear the flag after a short delay
+        setTimeout(() => {
+          window._isPlaybackStateChanging = false;
+        }, 100);
       }
     }
   };
@@ -107,40 +145,19 @@ const AnimationControls: React.FC<AnimationControlsProps> = ({
       // Use prop handler if provided
       onSeek(0);
     } else {
-      // Use the imported resetAnimations function directly on the SVG element
       if (svgRef) {
-        console.log('[AnimationControls] Resetting animations with enhanced method');
+        console.log('[AnimationControls] Resetting animations with unified controller');
 
-        // Check for animation elements before reset
-        const smilElements = svgRef.querySelectorAll('animate, animateTransform, animateMotion');
-        const inlineStyleAnimations = svgRef.querySelectorAll('[style*="animation"]');
-
-        // Also check for stylesheet-defined animations
-        let stylesheetAnimations = 0;
-        try {
-          const allElements = svgRef.querySelectorAll('*');
-          for (const el of Array.from(allElements)) {
-            if (el instanceof SVGElement) {
-              const computedStyle = window.getComputedStyle(el);
-              if (computedStyle.animationName && computedStyle.animationName !== 'none') {
-                stylesheetAnimations++;
-              }
-            }
-          }
-        } catch (e) {
-          console.error('[AnimationControls] Error checking for stylesheet animations:', e);
-        }
-
-        console.log(`[AnimationControls] Found animations before reset: ${smilElements.length} SMIL, ${inlineStyleAnimations.length} inline CSS, ${stylesheetAnimations} stylesheet CSS`);
+        // Use the unified controller to reset animations
+        controlAnimations(svgRef, {
+          playState: 'running',
+          shouldReset: true,
+          playbackSpeed,
+          initialSetup: true
+        });
 
         // Force animations to start playing after reset
-        const wasPlaying = playing;
-
-        // Perform the reset
-        resetAnimations(svgRef);
-
-        // Make sure animations are playing after reset
-        if (!wasPlaying) {
+        if (!playing) {
           resumeAnimations();
         }
 
