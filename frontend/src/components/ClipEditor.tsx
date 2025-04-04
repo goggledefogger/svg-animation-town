@@ -16,6 +16,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
   const [duration, setDuration] = useState(5);
   const [order, setOrder] = useState(0);
   const [prompt, setPrompt] = useState('');
+  const [isDirty, setIsDirty] = useState(false);
 
   // Load clip data when active clip changes
   useEffect(() => {
@@ -26,6 +27,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
         setDuration(clip.duration || 5);
         setOrder(clip.order);
         setPrompt(clip.prompt || '');
+        setIsDirty(false);
       }
     }
   }, [activeClipId, getActiveClip]);
@@ -41,7 +43,13 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
       prompt
     });
 
+    setIsDirty(false);
     onClipUpdate();
+  };
+
+  const handleInputChange = (setter: Function, value: any) => {
+    setter(value);
+    setIsDirty(true);
   };
 
   // Navigate to animation editor with stored prompt
@@ -51,126 +59,138 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     const activeClip = getActiveClip();
     if (!activeClip) return;
 
-    // Store prompt and clip ID for animation editor to use
-    // Use our utility to add duration guidance if needed
     const enhancedPrompt = addDurationGuidance(activeClip.prompt || 'Create an animation', activeClip.duration || 5);
     
     sessionStorage.setItem('pending_prompt', enhancedPrompt);
     localStorage.setItem('editing_clip_id', activeClip.id);
 
-    // Store the animation ID if it exists
     if (activeClip.animationId) {
       sessionStorage.setItem('load_animation_id', activeClip.animationId);
-      // Important: Flag that we're editing a clip from the movie editor
       sessionStorage.setItem('editing_from_movie', 'true');
-
-      // If the clip has a provider setting, also pass that so the animation editor uses the same AI
       if (activeClip.provider) {
         sessionStorage.setItem('animation_provider', activeClip.provider);
       }
     } else if (activeClip.svgContent) {
-      // If there's no animation ID but we have SVG content, store it directly
       sessionStorage.setItem('clip_svg_content', activeClip.svgContent);
-      // Important: Flag that we're editing a clip from the movie editor
       sessionStorage.setItem('editing_from_movie', 'true');
-
-      // If the clip has a provider setting, also pass that
       if (activeClip.provider) {
         sessionStorage.setItem('animation_provider', activeClip.provider);
       }
     }
 
-    // Navigate to animation editor
     navigate('/animation-editor');
   };
 
   // If no clip is selected, show a placeholder
   if (!activeClipId) {
     return (
-      <div className="text-gray-400 text-center p-4">
-        Select a clip to edit its properties
+      <div className="flex items-center justify-center h-full p-3">
+        <div className="text-gray-400 text-center p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+          <svg className="w-8 h-8 mx-auto mb-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+          </svg>
+          <p className="text-sm font-medium">Select a clip to edit</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <label htmlFor="clip-name" className="block text-sm font-medium text-gray-300 mb-1">
-          Clip Name
-        </label>
-        <input
-          id="clip-name"
-          type="text"
-          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </div>
+    <div className="h-full flex flex-col bg-gray-900">
+      <div className="flex-1 overflow-y-auto px-3 pt-3 flex flex-col gap-3 min-h-0">
+        <div className="bg-gray-800/50 rounded-lg p-3 space-y-3 flex-shrink-0">
+          <div>
+            <label htmlFor="clip-name" className="block text-xs font-medium mb-1 text-gray-400">
+              Clip Name
+            </label>
+            <input
+              id="clip-name"
+              type="text"
+              className="w-full px-2.5 py-1.5 bg-gray-700 rounded border border-gray-600 text-white 
+                       focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              value={name}
+              onChange={(e) => handleInputChange(setName, e.target.value)}
+              placeholder="Enter clip name"
+            />
+          </div>
 
-      <div>
-        <label htmlFor="clip-duration" className="block text-sm font-medium text-gray-300 mb-1">
-          Duration (seconds)
-        </label>
-        <input
-          id="clip-duration"
-          type="number"
-          min="0.5"
-          step="0.5"
-          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
-          value={duration}
-          onChange={(e) => setDuration(parseFloat(e.target.value))}
-        />
-        <p className="text-xs text-gray-400 mt-1">
-          Animation timing will automatically adjust to match this duration when possible.
-        </p>
-      </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col">
+              <label htmlFor="clip-duration" className="block text-xs font-medium mb-1 text-gray-400">
+                Duration (sec)
+              </label>
+              <input
+                id="clip-duration"
+                type="number"
+                min="0.5"
+                step="0.5"
+                className="w-full px-2.5 py-1.5 bg-gray-700 rounded border border-gray-600 text-white 
+                         focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                value={duration}
+                onChange={(e) => handleInputChange(setDuration, parseFloat(e.target.value))}
+              />
+            </div>
 
-      <div>
-        <label htmlFor="clip-order" className="block text-sm font-medium text-gray-300 mb-1">
-          Order in Storyboard
-        </label>
-        <input
-          id="clip-order"
-          type="number"
-          min="0"
-          step="1"
-          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
-          value={order}
-          onChange={(e) => setOrder(parseInt(e.target.value, 10))}
-        />
-      </div>
+            <div className="flex flex-col">
+              <label htmlFor="clip-order" className="block text-xs font-medium mb-1 text-gray-400">
+                Order
+              </label>
+              <input
+                id="clip-order"
+                type="number"
+                min="0"
+                step="1"
+                className="w-full px-2.5 py-1.5 bg-gray-700 rounded border border-gray-600 text-white 
+                         focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                value={order}
+                onChange={(e) => handleInputChange(setOrder, parseInt(e.target.value, 10))}
+              />
+            </div>
+          </div>
+        </div>
 
-      <div>
-        <label htmlFor="clip-prompt" className="block text-sm font-medium text-gray-300 mb-1">
-          Scene Prompt
-        </label>
-        <textarea
-          id="clip-prompt"
-          className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white min-h-24 resize-y cursor-not-allowed opacity-75"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          placeholder="No prompt saved for this clip"
-          readOnly
-          disabled
-        />
-        <div className="mt-2">
+        <div className="bg-gray-800/50 rounded-lg p-3 flex flex-col flex-1">
+          <label htmlFor="clip-prompt" className="block text-xs font-medium mb-1 text-gray-400 flex-shrink-0">
+            Scene Prompt
+          </label>
+          <textarea
+            id="clip-prompt"
+            className="flex-1 w-full px-2.5 py-1.5 bg-gray-700 rounded border border-gray-600 text-gray-300 
+                     resize-none cursor-not-allowed focus:outline-none text-sm min-h-[80px]"
+            value={prompt}
+            onChange={(e) => handleInputChange(setPrompt, e.target.value)}
+            placeholder="No prompt saved for this clip"
+            readOnly
+            disabled
+          />
+          
           <button
             onClick={navigateToAnimationEditor}
             disabled={!prompt}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 
+                    text-white text-sm py-1.5 rounded mt-2 focus:outline-none font-medium transition-colors flex 
+                    items-center justify-center gap-1.5 flex-shrink-0"
           >
-            Edit in Animation Editor
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+            <span>Edit in Animation Editor</span>
           </button>
         </div>
       </div>
 
-      <div className="pt-2">
+      <div className="border-t border-gray-700 px-3 py-2 bg-gray-900 flex-shrink-0">
         <button
           onClick={handleSave}
-          className="w-full bg-green-600 hover:bg-green-500 text-white p-2 rounded focus:outline-none focus:ring-2 focus:ring-green-400"
+          disabled={!isDirty}
+          className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 
+                   text-white text-sm py-1.5 rounded focus:outline-none font-medium transition-colors flex 
+                   items-center justify-center gap-1.5"
         >
-          Save Changes
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>{isDirty ? 'Save Changes' : 'No Changes to Save'}</span>
         </button>
       </div>
     </div>
