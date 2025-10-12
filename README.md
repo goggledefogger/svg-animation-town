@@ -8,7 +8,9 @@ Gotham Animation Studio reimagines animation creation by integrating a conversat
 
 Born from a simple bat signal SVG, this project demonstrates how natural language can become the primary interface for digital creation, making animation accessible to everyone regardless of technical expertise.
 
-![Gotham Animation Studio](https://placeholder-image.com/gotham-studio-screenshot.jpg)
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/a86d96f2-a023-4e48-9c4d-655b5e3d024f" />
+
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/9c748ea8-34b9-4ef6-9b1b-f136f8804724" />
 
 ## Architecture Overview
 
