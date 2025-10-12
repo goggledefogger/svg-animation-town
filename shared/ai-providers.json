@@ -23,6 +23,11 @@
         "useCase": "Reliable multi-turn JSON and SVG generation."
       },
       {
+        "id": "gpt-4o",
+        "label": "GPT-4o",
+        "useCase": "More capable than mini, good for complex animations."
+      },
+      {
         "id": "gpt-5",
         "label": "GPT-5",
         "useCase": "Highest quality, complex choreography or scenes."

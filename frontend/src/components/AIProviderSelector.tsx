@@ -25,7 +25,10 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
         id: 'openai',
         displayName: 'OpenAI',
         defaultModel: 'gpt-4o-mini',
-        models: [{ id: 'gpt-4o-mini', label: 'GPT-4o Mini', useCase: 'Balanced default for SVG animations' }]
+        models: [
+          { id: 'gpt-4o-mini', label: 'GPT-4o Mini', useCase: 'Balanced default for SVG animations' },
+          { id: 'gpt-4o', label: 'GPT-4o', useCase: 'More capable than mini, good for complex animations' }
+        ]
       },
       {
         id: 'anthropic',
