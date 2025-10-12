@@ -76,6 +76,40 @@ function modelSupportsTemperature(provider, modelId) {
 }
 
 /**
+ * Get the maximum output tokens for a model.
+ * Returns null if not specified (meaning use provider default).
+ * Also handles versioned model IDs by checking if they start with a known model ID.
+ * @param {string} provider
+ * @param {string} modelId
+ * @returns {number|null}
+ */
+function getMaxOutputTokens(provider, modelId) {
+  const metadata = getProviderMetadata(provider);
+  if (!metadata || !metadata.models) {
+    return null;
+  }
+
+  // First try exact match
+  let model = metadata.models.find(entry => entry.id === modelId);
+
+  // If no exact match, try to find a model whose ID is a prefix of the requested model
+  // This handles cases like "claude-3-5-haiku-20241022" matching "claude-3-5-haiku-latest"
+  if (!model) {
+    model = metadata.models.find(entry => {
+      // Check if the modelId starts with the registry ID (removing -latest suffix)
+      const baseId = entry.id.replace('-latest', '');
+      return modelId.startsWith(baseId);
+    });
+  }
+
+  if (!model || typeof model.maxOutputTokens === 'undefined') {
+    return null;
+  }
+
+  return model.maxOutputTokens;
+}
+
+/**
  * Resolve a model ID for a provider, falling back to defaults when needed.
  * Unknown models are allowed so that experimental IDs can be configured,
  * but when no model is provided we always return the recommended default.
@@ -121,5 +155,6 @@ module.exports = {
   getDefaultModel,
   resolveModelId,
   modelSupportsTemperature,
+  getMaxOutputTokens,
   getPublicProviderInfo
 };

@@ -43,22 +43,26 @@
       {
         "id": "claude-3-5-haiku-latest",
         "label": "Claude 3.5 Haiku",
-        "useCase": "Fastest Claude tier with good SVG JSON skills."
+        "useCase": "Fastest Claude tier with good SVG JSON skills.",
+        "maxOutputTokens": 8192
       },
       {
         "id": "claude-3-7-sonnet-latest",
         "label": "Claude 3.7 Sonnet (Latest)",
-        "useCase": "Recommended default, balanced quality and cost."
+        "useCase": "Recommended default, balanced quality and cost.",
+        "maxOutputTokens": 16384
       },
       {
         "id": "claude-sonnet-4-5",
         "label": "Claude Sonnet 4.5",
-        "useCase": "Upgraded Sonnet for detailed motion or styling."
+        "useCase": "Upgraded Sonnet for detailed motion or styling.",
+        "maxOutputTokens": 16384
       },
       {
         "id": "claude-opus-4-1",
         "label": "Claude Opus 4.1",
-        "useCase": "Top tier Claude for the most demanding sequences."
+        "useCase": "Top tier Claude for the most demanding sequences.",
+        "maxOutputTokens": 16384
       }
     ]
   },

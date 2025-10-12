@@ -37,7 +37,7 @@ const anthropicConfig = {
   apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
   model: resolveModelId('anthropic', process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL),
   temperature: parseFloatWithDefault(process.env.ANTHROPIC_TEMPERATURE || process.env.CLAUDE_TEMPERATURE, 0.7),
-  maxTokens: parseIntWithDefault(process.env.ANTHROPIC_MAX_TOKENS || process.env.CLAUDE_MAX_TOKENS, 12000),
+  maxTokens: parseIntWithDefault(process.env.ANTHROPIC_MAX_TOKENS || process.env.CLAUDE_MAX_TOKENS, 8192),
   rateLimiter: {
     tokensPerMinute: parseIntWithDefault(
       process.env.ANTHROPIC_RATE_LIMIT_TOKENS_PER_MINUTE || process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE,

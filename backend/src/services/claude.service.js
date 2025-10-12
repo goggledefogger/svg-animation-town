@@ -9,6 +9,7 @@ const {
 const { ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
 const rateLimiter = require('./unified-rate-limiter.service');
+const { getMaxOutputTokens } = require('../utils/provider-utils');
 
 // Add a unique identifier for this client instance
 const clientId = Math.random().toString(36).substring(7);
@@ -187,9 +188,15 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
       ? options.temperature
       : config.anthropic.temperature;
 
+    // Get model-specific max tokens, fallback to config default
+    const modelMaxTokens = getMaxOutputTokens('anthropic', modelId);
+    const maxTokens = modelMaxTokens !== null ? modelMaxTokens : config.anthropic.maxTokens;
+
+    console.log(`[Claude Service] Using model ${modelId} with max_tokens: ${maxTokens}`);
+
     const response = await anthropic.messages.create({
       model: modelId,
-      max_tokens: config.anthropic.maxTokens,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [
         { role: 'user', content: userPrompt }

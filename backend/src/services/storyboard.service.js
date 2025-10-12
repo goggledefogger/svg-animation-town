@@ -4,7 +4,7 @@ const config = require('../config');
 const { getGeminiClient, Type } = require('./shared-gemini-client');
 const unifiedRateLimiter = require('./unified-rate-limiter.service');
 const anthropic = require('./shared-claude-client');
-const { normalizeProvider, resolveModelId, getDefaultModel } = require('../utils/provider-utils');
+const { normalizeProvider, resolveModelId, getDefaultModel, getMaxOutputTokens } = require('../utils/provider-utils');
 
 // Add a unique identifier for this client instance
 const clientId = Math.random().toString(36).substring(7);
@@ -231,7 +231,7 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes, model) => {
 
   try {
     console.log('[Storyboard Service] Using unified rate limiter for Claude request');
-    
+
     // Strategic log #1: Log the current service state before Claude API call
     console.log(`[CLAUDE_DEBUG] Sending request to Claude with provider: ${config.aiProvider}, fallback available: ${config.aiProvider !== 'anthropic'}, token: ${config.anthropic.apiKey ? 'valid' : 'missing'}`);
 
@@ -240,15 +240,21 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes, model) => {
 
     console.log('Sending storyboard generation request to Claude');
     console.log(`Using prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
-    
+
     const modelId = resolveModelId('anthropic', model || config.anthropic.model);
+
+    // Get model-specific max tokens, fallback to config default
+    const modelMaxTokens = getMaxOutputTokens('anthropic', modelId);
+    const maxTokens = modelMaxTokens !== null ? modelMaxTokens : config.anthropic.maxTokens;
+
+    console.log(`[Storyboard Service] Using model ${modelId} with max_tokens: ${maxTokens}`);
 
     // Use the unified rate limiter to make the request
     const completion = await unifiedRateLimiter.executeRequest(
       async () => {
         return await anthropic.messages.create({
           model: modelId,
-          max_tokens: config.anthropic.maxTokens,
+          max_tokens: maxTokens,
           system: systemPrompt,
           messages: [
             { role: 'user', content: userPrompt }
@@ -355,13 +361,13 @@ exports.generateStoryboardWithClaude = async (prompt, numScenes, model) => {
       // Strategic error log for Claude overload errors
       console.error(`[CLAUDE_OVERLOAD_ERROR] Claude service is overloaded despite unified rate limiting:
         - Claude bucket: ${JSON.stringify(unifiedRateLimiter.buckets?.anthropic || {})}
-        - Used configuration: maxConcurrent=${unifiedRateLimiter.buckets?.anthropic?.maxConcurrent || 'N/A'}, 
+        - Used configuration: maxConcurrent=${unifiedRateLimiter.buckets?.anthropic?.maxConcurrent || 'N/A'},
           tokensPerMinute=${unifiedRateLimiter.buckets?.anthropic?.maxTokens || 'N/A'},
           tokensPerRequest=${unifiedRateLimiter.buckets?.anthropic?.tokensPerRequest || 'N/A'}
         - Request size: ~${numScenes || 'default'} scenes, ~${prompt?.length || 0} chars in prompt
         This appears to be a Claude service capacity issue - our rate limiting is correctly configured
         but Claude is still reporting overload.`);
-      
+
       throw new ServiceUnavailableError(`Failed to generate storyboard with Claude: API overloaded. Please try again later or switch to another AI provider.`);
     }
 
