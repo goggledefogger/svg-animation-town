@@ -1,26 +1,33 @@
 import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, useEffect } from 'react';
 import { AnimationApi, AnimationStorageApi } from '../services/api';
+import type { AnimationGenerateResult } from '../services/api';
 import { exportAnimation as exportAnimationUtil, canExportAsSvg } from '../utils/exportUtils';
 import { useViewerPreferences } from './ViewerPreferencesContext';
 import { v4 as uuidv4 } from 'uuid';
 import { isMobileDevice, isFreshPageLoad } from '../utils/deviceUtils';
 import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 import { resetAnimations as resetAnimationsUtil, controlAnimations } from '../utils/animationUtils';
+import type { AIProviderId, AIProviderInfo } from '@/types/ai';
+import { buildProviderSelection, normalizeProviderId } from '@/utils/providerUtils';
 
 // Define the context interface
 export interface AnimationContextType {
   svgContent: string;
   playing: boolean;
   playbackSpeed: number | 'groovy';
-  aiProvider: 'openai' | 'claude' | 'gemini';
-  setAIProvider: (provider: 'openai' | 'claude' | 'gemini') => void;
+  aiProvider: AIProviderId;
+  aiModel: string;
+  setAIProvider: (provider: AIProviderId) => void;
+  setAIModel: (model: string) => void;
+  availableProviders: AIProviderInfo[];
+  defaultModels: Record<AIProviderId, string>;
   setPlaying: (playing: boolean) => void;
   setSvgContent: React.Dispatch<React.SetStateAction<string>>;
   setSvgContentWithBroadcast: (newContent: string | ((prev: string) => string), source?: string) => void;
   setSvgRef: (ref: SVGSVGElement | null) => void;
   generateAnimationFromPrompt: (prompt: string) => Promise<string>;
   updateAnimationFromPrompt: (prompt: string) => Promise<string>;
-  generateAnimation: (prompt: string) => Promise<any>;
+  generateAnimation: (prompt: string) => Promise<AnimationGenerateResult>;
   loadPreset: (presetName: string) => Promise<string>;
   pauseAnimations: () => void;
   resumeAnimations: () => void;
@@ -67,8 +74,15 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [svgContent, setSvgContent] = useState<string>('');
   const [playing, setPlaying] = useState<boolean>(true);
   const [svgRef, setSvgRefState] = useState<SVGSVGElement | null>(null);
-  const [aiProvider, setAIProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
-  const [defaultProvider, setDefaultProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
+  const [aiProvider, setAIProviderState] = useState<AIProviderId>('openai');
+  const [aiModel, setAIModelState] = useState<string>('');
+  const [defaultProvider, setDefaultProvider] = useState<AIProviderId>('openai');
+  const [defaultModels, setDefaultModels] = useState<Record<AIProviderId, string>>({
+    openai: '',
+    anthropic: '',
+    google: ''
+  });
+  const [availableProviders, setAvailableProviders] = useState<AIProviderInfo[]>([]);
   const [playbackSpeed, setPlaybackSpeed] = useState<number | 'groovy'>(1);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   const groovyIntervalRef = useRef<number | null>(null);
@@ -90,28 +104,113 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const viewerPreferences = useViewerPreferences();
 
+  const getDefaultModelForProvider = useCallback(
+    (providerId: AIProviderId) => {
+      if (defaultModels[providerId]) {
+        return defaultModels[providerId];
+      }
+
+      const providerInfo = availableProviders.find((info) => info.id === providerId);
+      return providerInfo?.defaultModel || '';
+    },
+    [availableProviders, defaultModels]
+  );
+
+  const setAIProvider = useCallback((providerId: AIProviderId) => {
+    setAIProviderState(providerId);
+    setAIModelState((prevModel) => {
+      const nextModel = getDefaultModelForProvider(providerId);
+      return nextModel || prevModel;
+    });
+  }, [getDefaultModelForProvider]);
+
+  const setAIModel = useCallback((modelId: string) => {
+    setAIModelState(modelId);
+  }, []);
+
+  const applyProviderSelectionFromData = useCallback(
+    (providerValue?: string | null, modelValue?: string | null) => {
+      const normalized = normalizeProviderId(providerValue);
+      if (normalized) {
+        setAIProvider(normalized);
+        if (modelValue) {
+          setAIModel(modelValue);
+        }
+      } else {
+        setAIProvider(defaultProvider);
+      }
+    },
+    [defaultProvider, setAIProvider, setAIModel]
+  );
+
   // Reference to store the last processed clip ID
   const lastProcessedClipRef = useRef<string | null>(null);
   // Debounce timer reference
   const clipChangeDebounceRef = useRef<number | null>(null);
 
-  // Fetch default provider from backend on initial load
+  // Fetch provider configuration from backend on initial load
   useEffect(() => {
-    const fetchDefaultProvider = async () => {
+    const fetchProviderConfig = async () => {
       try {
         const response = await fetch('/api/config');
         const data = await response.json();
-        if (data.config && data.config.aiProvider) {
-          console.log(`Setting default AI provider from backend: ${data.config.aiProvider}`);
-          // Set both the current provider and store the default for future use
-          setAIProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
-          setDefaultProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
+
+        if (!data.config) {
+          return;
         }
+
+        const providers: AIProviderInfo[] = Array.isArray(data.config.providers)
+          ? data.config.providers
+          : [];
+
+        if (providers.length > 0) {
+          setAvailableProviders(providers);
+        }
+
+        const combinedDefaults: Record<AIProviderId, string> = {
+          openai: '',
+          anthropic: '',
+          google: ''
+        };
+
+        const applyDefaults = (map?: Record<string, string>) => {
+          if (!map) return;
+          Object.entries(map).forEach(([key, value]) => {
+            const normalized = normalizeProviderId(key);
+            if (normalized && typeof value === 'string') {
+              combinedDefaults[normalized] = value;
+            }
+          });
+        };
+
+        applyDefaults(data.config.defaults);
+        applyDefaults(data.config.currentModels);
+
+        providers.forEach((providerInfo) => {
+          if (!combinedDefaults[providerInfo.id]) {
+            combinedDefaults[providerInfo.id] = providerInfo.defaultModel;
+          }
+        });
+
+        setDefaultModels(combinedDefaults);
+
+        const backendProvider = normalizeProviderId(data.config.aiProvider) || 'openai';
+        const initialSelection = buildProviderSelection(providers, {
+          provider: backendProvider,
+          model: combinedDefaults[backendProvider]
+        });
+
+        console.log(`Setting default AI provider from backend: ${initialSelection.provider} (${initialSelection.model})`);
+
+        setAIProviderState(initialSelection.provider);
+        setAIModelState(initialSelection.model);
+        setDefaultProvider(initialSelection.provider);
       } catch (error) {
-        console.error('Error fetching default provider:', error);
+        console.error('Error fetching provider configuration:', error);
       }
     };
-    fetchDefaultProvider();
+
+    fetchProviderConfig();
   }, []);
 
   // Try to restore state from session storage on initial load
@@ -142,7 +241,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             setChatHistory(parsedState.chatHistory);
           }
           if (parsedState.aiProvider) {
-            setAIProvider(parsedState.aiProvider);
+            const normalized = normalizeProviderId(parsedState.aiProvider) || defaultProvider;
+            setAIProvider(normalized);
+          }
+          if (parsedState.aiModel) {
+            setAIModel(parsedState.aiModel);
           }
           if (parsedState.playbackSpeed !== undefined) {
             setPlaybackSpeed(parsedState.playbackSpeed);
@@ -168,6 +271,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           svgContent,
           chatHistory,
           aiProvider,
+          aiModel,
           playbackSpeed,
           timestamp: new Date().toISOString()
         };
@@ -210,7 +314,14 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [svgContent, chatHistory, aiProvider, playbackSpeed]);
+  }, [svgContent, chatHistory, aiProvider, aiModel, playbackSpeed]);
+
+  useEffect(() => {
+    sessionStorage.setItem('animation_provider', aiProvider);
+    if (aiModel) {
+      sessionStorage.setItem('animation_model', aiModel);
+    }
+  }, [aiProvider, aiModel]);
 
   // Create a stable reference for setting the SVG reference
   const setSvgRef = useCallback((ref: SVGSVGElement | null) => {
@@ -237,7 +348,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
       const result = await AnimationStorageApi.saveAnimation(
         name,
         svgContent,
-        chatHistory
+        chatHistory,
+        {
+          provider: aiProvider,
+          model: aiModel
+        }
       );
 
       console.log(`Animation saved to server with ID: ${result.id}`);
@@ -256,7 +371,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
           id: result.id, // Always store the server ID for reference
           svg: svgContent,
           chatHistory,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          provider: aiProvider,
+          model: aiModel
         };
 
         // Save back to localStorage as cache
@@ -276,7 +393,9 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         savedAnimations[name] = {
           svg: svgContent,
           chatHistory,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          provider: aiProvider,
+          model: aiModel
         };
 
         localStorage.setItem('savedAnimations', JSON.stringify(savedAnimations));
@@ -332,17 +451,21 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Generate animation directly via API, returning raw API response
-  const generateAnimation = useCallback(async (prompt: string) => {
+  const generateAnimation = useCallback(async (prompt: string): Promise<AnimationGenerateResult> => {
     try {
       console.log(`Generating animation via API with prompt: "${prompt}"`);
-      const result = await AnimationApi.generate(prompt, aiProvider);
+      const result = await AnimationApi.generate(prompt, {
+        provider: aiProvider,
+        model: aiModel
+      });
+      applyProviderSelectionFromData(result.provider, result.model);
       // Return the full result including animation ID if available
       return result;
     } catch (error) {
       console.error('Error generating animation via API:', error);
       throw error;
     }
-  }, [aiProvider]);
+  }, [aiProvider, aiModel, applyProviderSelectionFromData]);
 
   // Generate a new animation from a prompt
   const generateAnimationFromPrompt = async (prompt: string): Promise<string> => {
@@ -361,8 +484,12 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Create a promise for this request
     const requestPromise = (async () => {
       try {
-        const result = await AnimationApi.generate(prompt, aiProvider);
+        const result = await AnimationApi.generate(prompt, {
+          provider: aiProvider,
+          model: aiModel
+        });
         console.log('Generated animation result');
+        applyProviderSelectionFromData(result.provider, result.model);
 
         // Set the SVG content with broadcast
         setSvgContentWithBroadcast(result.svg, 'new-animation');
@@ -473,8 +600,12 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Create a promise for this request
     const requestPromise = (async () => {
       try {
-        const result = await AnimationApi.update(prompt, originalSvg, aiProvider);
+        const result = await AnimationApi.update(prompt, originalSvg, {
+          provider: aiProvider,
+          model: aiModel
+        });
         console.log('Received updated animation result from API');
+        applyProviderSelectionFromData(result.provider, result.model);
 
         // Check if the SVG actually changed
         const svgChanged = result.svg !== originalSvg;
@@ -891,8 +1022,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             }
 
             // Set AI provider if available in clip data
-            if (clip.provider) {
-              setAIProvider(clip.provider as 'openai' | 'claude' | 'gemini');
+            if (clip.provider || clip.model) {
+              applyProviderSelectionFromData(clip.provider, clip.model);
             }
 
             // Also cache in the registry if we have an animationId
@@ -902,7 +1033,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 clip.svgContent,
                 {
                   chatHistory: clip.chatHistory,
-                  provider: clip.provider
+                  provider: clip.provider,
+                  model: clip.model
                 }
               );
             }
@@ -928,10 +1060,10 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   }
 
                   // Set AI provider if available in metadata, otherwise set to default
-                  if (result.metadata?.provider) {
-                    setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
+                  if (result.metadata?.provider || result.metadata?.model) {
+                    applyProviderSelectionFromData(result.metadata.provider, result.metadata.model);
                   } else {
-                    setAIProvider(defaultProvider);
+                    applyProviderSelectionFromData(defaultProvider, defaultModels[defaultProvider]);
                   }
 
                   return true;
@@ -966,7 +1098,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                       {
                         chatHistory: animation.chatHistory,
                         timestamp: animation.timestamp,
-                        provider: animation.provider
+                        provider: animation.provider,
+                        model: animation.model
                       }
                     );
 
@@ -981,11 +1114,7 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                       }
 
                       // Set AI provider if available in animation data, otherwise default to defaultProvider
-                      if (animation.provider) {
-                        setAIProvider(animation.provider as 'openai' | 'claude' | 'gemini');
-                      } else {
-                        setAIProvider(defaultProvider);
-                      }
+                      applyProviderSelectionFromData(animation.provider, animation.model);
 
                       console.log(`[AnimationContext] Animation loaded: ${animationId}`);
                       return true;
@@ -1135,12 +1264,12 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
             }
 
             // Set AI provider if available in metadata, otherwise set to default
-            if (result.metadata?.provider) {
-              console.log(`Setting AI provider from loaded animation metadata: ${result.metadata.provider}`);
-              setAIProvider(result.metadata.provider as 'openai' | 'claude' | 'gemini');
+            if (result.metadata?.provider || result.metadata?.model) {
+              console.log(`Setting AI provider from loaded animation metadata: ${result.metadata?.provider}`);
+              applyProviderSelectionFromData(result.metadata?.provider, result.metadata?.model);
             } else {
               console.log(`No provider found for animation ${animationId}, setting to default '${defaultProvider}'`);
-              setAIProvider(defaultProvider);
+              applyProviderSelectionFromData(defaultProvider, defaultModels[defaultProvider]);
             }
 
             return {
@@ -1172,13 +1301,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
               }
 
               // Set AI provider if available in animation data, otherwise default to defaultProvider
-              if (animationData.provider) {
-                console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
-                setAIProvider(animationData.provider as 'openai' | 'claude' | 'gemini');
-              } else {
-                console.log(`No provider found for animation from server, setting to default '${defaultProvider}'`);
-                setAIProvider(defaultProvider);
-              }
+              console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
+              applyProviderSelectionFromData(animationData.provider, animationData.model);
 
               // Also store in registry for future use
               AnimationRegistryHelpers.storeAnimation(
@@ -1187,7 +1311,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                 {
                   chatHistory: animationData.chatHistory,
                   timestamp: animationData.timestamp,
-                  provider: animationData.provider
+                  provider: animationData.provider,
+                  model: animationData.model
                 }
               );
 
@@ -1224,13 +1349,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                   }
 
                   // Set AI provider if available in animation data, otherwise default to defaultProvider
-                  if (animationData.provider) {
-                    console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
-                    setAIProvider(animationData.provider as 'openai' | 'claude' | 'gemini');
-                  } else {
-                    console.log(`No provider found for animation from search, setting to default '${defaultProvider}'`);
-                    setAIProvider(defaultProvider);
-                  }
+                  console.log(`Setting AI provider from loaded animation: ${animationData.provider}`);
+                  applyProviderSelectionFromData(animationData.provider, animationData.model);
 
                   // Store in registry
                   AnimationRegistryHelpers.storeAnimation(
@@ -1239,7 +1359,8 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
                     {
                       chatHistory: animationData.chatHistory,
                       timestamp: animationData.timestamp,
-                      provider: animationData.provider
+                      provider: animationData.provider,
+                      model: animationData.model
                     }
                   );
 
@@ -1284,7 +1405,11 @@ export const AnimationProvider: React.FC<{ children: ReactNode }> = ({ children 
         chatHistory,
         setChatHistory,
         aiProvider,
+        aiModel,
         setAIProvider,
+        setAIModel,
+        availableProviders,
+        defaultModels,
         generateAnimationFromPrompt,
         updateAnimationFromPrompt,
         generateAnimation,

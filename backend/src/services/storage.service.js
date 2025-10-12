@@ -85,8 +85,13 @@ class StorageService {
         svg: animation.svg,
         chatHistory: animation.chatHistory || [],
         provider: animation.provider,
+        model: animation.model,
         timestamp: animation.createdAt || new Date().toISOString()
       };
+
+      if (animation.error) {
+        animationData.error = animation.error;
+      }
 
       // Ensure storage directory exists
       await this._ensureDirectoryExists(ANIMATIONS_DIR);
@@ -379,7 +384,8 @@ class StorageService {
             // CRITICAL: Ensure animation ID is preserved regardless of other properties
             animationId: clip.animationId,
             // Store provider info to help with resumption
-            provider: clip.provider
+            provider: clip.provider,
+            model: clip.model
           };
 
           return optimizedClip;
@@ -395,7 +401,8 @@ class StorageService {
           description: scene.description,
           svgPrompt: scene.svgPrompt,
           duration: scene.duration,
-          provider: scene.provider // Make sure provider is preserved for resumption
+          provider: scene.provider,
+          model: scene.model
         }));
       }
 
@@ -411,6 +418,7 @@ class StorageService {
         generationStatus,
         // Store AI provider for resumable generation
         aiProvider: storyboard.aiProvider,
+        aiModel: storyboard.aiModel,
         // Store optimized original scenes
         originalScenes: optimizedOriginalScenes,
         // Store validation results for diagnostics

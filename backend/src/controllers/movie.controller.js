@@ -4,12 +4,13 @@ const config = require('../config');
 const storageService = require('../services/storage.service');
 const { v4: uuidv4 } = require('uuid');
 const animationService = require('../services/animation.service');
+const { normalizeProvider, resolveModelId } = require('../utils/provider-utils');
 
 /**
  * Generate a storyboard from a text prompt
  */
 exports.generateStoryboard = asyncHandler(async (req, res) => {
-  const { prompt, provider, numScenes } = req.body;
+  const { prompt, provider, numScenes, model } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
@@ -18,7 +19,7 @@ exports.generateStoryboard = asyncHandler(async (req, res) => {
   try {
     // Use the dedicated storyboard service - completely separate from SVG generation
     console.log(`Generating storyboard for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
-    const storyboard = await StoryboardService.generateStoryboard(prompt, provider, numScenes);
+    const storyboard = await StoryboardService.generateStoryboard(prompt, provider, numScenes, model);
 
     // By this point storyboard should be fully validated and ready to return
     console.log(`Successfully generated storyboard outline with ${storyboard.scenes.length} scenes`);
@@ -38,7 +39,7 @@ exports.generateStoryboard = asyncHandler(async (req, res) => {
  * This will both generate the animation and update the movie JSON file
  */
 exports.generateScene = asyncHandler(async (req, res) => {
-  const { prompt, provider, movieContext } = req.body;
+  const { prompt, provider, model, movieContext } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
@@ -52,7 +53,7 @@ exports.generateScene = asyncHandler(async (req, res) => {
     console.log(`Generating scene animation for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
     console.log('Movie context:', movieContext);
     // Log provider information for debugging provider-specific issues
-    console.log(`Using animation provider: ${provider || config.aiProvider}`);
+    console.log(`Using animation provider: ${provider || config.aiProvider}${model ? ` (model: ${model})` : ''}`);
 
     // 3. Load the existing movie from storage before starting animation generation
     let movie = await storageService.getMovie(movieContext.storyboardId);
@@ -83,7 +84,7 @@ exports.generateScene = asyncHandler(async (req, res) => {
     // 1. Generate animation using animationService
     let animationResult;
     try {
-      animationResult = await animationService.generateAnimation(prompt, provider);
+      animationResult = await animationService.generateAnimation(prompt, { provider, model });
 
       if (!animationResult || !animationResult.svg) {
         throw new Error('Animation generation failed: No SVG content returned');
@@ -91,11 +92,11 @@ exports.generateScene = asyncHandler(async (req, res) => {
 
       // Add more detailed logging for provider-specific debugging
       console.log(`Successfully generated animation for scene ${movieContext.sceneIndex + 1} with animation ID: ${animationResult.animationId || 'None'}`);
-      console.log(`Animation provider: ${provider || config.aiProvider}, SVG content length: ${animationResult.svg.length}`);
+      console.log(`Animation provider: ${animationResult.provider}, model: ${animationResult.model}, SVG content length: ${animationResult.svg.length}`);
 
       // Explicitly validate that we have a valid animationId for tracking
       if (!animationResult.animationId) {
-        console.warn(`WARNING: Generated animation has no animationId. Provider: ${provider || config.aiProvider}`);
+        console.warn(`WARNING: Generated animation has no animationId. Provider: ${animationResult.provider}`);
         // Generate a fallback ID to ensure tracking works
         animationResult.animationId = uuidv4();
         console.log(`Created fallback animation ID: ${animationResult.animationId}`);
@@ -106,16 +107,23 @@ exports.generateScene = asyncHandler(async (req, res) => {
           name: `Generated Animation for Scene ${movieContext.sceneIndex + 1}`,
           svg: animationResult.svg,
           timestamp: new Date().toISOString(),
-          provider: provider || config.aiProvider
+          provider: animationResult.provider,
+          model: animationResult.model
         });
       }
     } catch (animationError) {
       console.error('Error generating animation:', animationError);
       // Create fallback animation result with error SVG
+      const fallbackProviderKey = provider ? normalizeProvider(provider) || config.aiProvider : config.aiProvider;
+      const fallbackConfig = config.providers[fallbackProviderKey];
+      const fallbackModel = resolveModelId(fallbackProviderKey, model || fallbackConfig?.model);
+
       animationResult = {
         svg: createErrorSvg(animationError.message || 'Unknown error generating animation'),
         message: `Error: ${animationError.message || 'Unknown error'}`,
-        animationId: uuidv4() // Create a placeholder ID for tracking
+        animationId: uuidv4(), // Create a placeholder ID for tracking
+        provider: fallbackProviderKey,
+        model: fallbackModel
       };
 
       // Save the error animation
@@ -125,7 +133,8 @@ exports.generateScene = asyncHandler(async (req, res) => {
           name: `Error Animation for Scene ${movieContext.sceneIndex + 1}`,
           svg: animationResult.svg,
           timestamp: new Date().toISOString(),
-          provider: provider || config.aiProvider,
+          provider: animationResult.provider,
+          model: animationResult.model,
           error: animationError.message
         });
       }
@@ -162,7 +171,8 @@ exports.generateScene = asyncHandler(async (req, res) => {
       chatHistory: chatHistory,
       animationId: animationResult.animationId, // Ensure animation ID is preserved
       createdAt: new Date(),
-      provider: provider || config.aiProvider
+      provider: animationResult.provider,
+      model: animationResult.model
     };
 
     // Log new clip details to verify animation ID is set

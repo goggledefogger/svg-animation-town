@@ -1,4 +1,5 @@
 const config = require('../config');
+const { normalizeProvider } = require('../utils/provider-utils');
 
 /**
  * Unified rate limiter for managing API request rates across providers
@@ -7,20 +8,20 @@ const config = require('../config');
 class UnifiedRateLimiter {
   constructor() {
     // Ensure maxConcurrent has default values and proper property names
-    const claudeMaxConcurrent = config.claude.rateLimiter.maxConcurrentRequests || 2;
+    const anthropicMaxConcurrent = config.anthropic.rateLimiter.maxConcurrentRequests || 2;
     const openaiMaxConcurrent = config.openai.rateLimiter.maxConcurrentRequests || 10;
-    const geminiMaxConcurrent = config.gemini.rateLimiter.maxConcurrentRequests || 10;
+    const googleMaxConcurrent = config.google.rateLimiter.maxConcurrentRequests || 10;
 
     // For Claude, enforce a stricter limit to prevent 529 overload errors
-    const claudeConcurrencyLimit = Math.min(claudeMaxConcurrent, 2);
+    const anthropicConcurrencyLimit = Math.min(anthropicMaxConcurrent, 2);
 
     this.buckets = {
-      claude: {
-        tokens: config.claude.rateLimiter.tokensPerMinute,
-        maxTokens: config.claude.rateLimiter.tokensPerMinute,
-        tokensPerRequest: config.claude.rateLimiter.tokensPerRequest || 1600,
+      anthropic: {
+        tokens: config.anthropic.rateLimiter.tokensPerMinute,
+        maxTokens: config.anthropic.rateLimiter.tokensPerMinute,
+        tokensPerRequest: config.anthropic.rateLimiter.tokensPerRequest || 1600,
         currentRequests: 0,
-        maxConcurrent: claudeConcurrencyLimit,
+        maxConcurrent: anthropicConcurrencyLimit,
         lastRefill: Date.now(),
         pendingRequests: new Set(),
         activePromises: new Map()
@@ -35,12 +36,12 @@ class UnifiedRateLimiter {
         pendingRequests: new Set(),
         activePromises: new Map()
       },
-      gemini: {
-        tokens: config.gemini.rateLimiter.tokensPerMinute,
-        maxTokens: config.gemini.rateLimiter.tokensPerMinute,
-        tokensPerRequest: config.gemini.rateLimiter.tokensPerRequest || 2000,
+      google: {
+        tokens: config.google.rateLimiter.tokensPerMinute,
+        maxTokens: config.google.rateLimiter.tokensPerMinute,
+        tokensPerRequest: config.google.rateLimiter.tokensPerRequest || 2000,
         currentRequests: 0,
-        maxConcurrent: geminiMaxConcurrent,
+        maxConcurrent: googleMaxConcurrent,
         lastRefill: Date.now(),
         pendingRequests: new Set(),
         activePromises: new Map()
@@ -48,22 +49,35 @@ class UnifiedRateLimiter {
     };
 
     console.log('[Rate Limiter] Initialized with config:', {
-      claude: {
-        tokensPerMinute: config.claude.rateLimiter.tokensPerMinute,
-        maxConcurrent: claudeConcurrencyLimit,
-        tokensPerRequest: this.buckets.claude.tokensPerRequest
+      anthropic: {
+        tokensPerMinute: config.anthropic.rateLimiter.tokensPerMinute,
+        maxConcurrent: anthropicConcurrencyLimit,
+        tokensPerRequest: this.buckets.anthropic.tokensPerRequest
       },
       openai: {
         tokensPerMinute: config.openai.rateLimiter.tokensPerMinute,
         maxConcurrent: openaiMaxConcurrent,
         tokensPerRequest: this.buckets.openai.tokensPerRequest
       },
-      gemini: {
-        tokensPerMinute: config.gemini.rateLimiter.tokensPerMinute,
-        maxConcurrent: geminiMaxConcurrent,
-        tokensPerRequest: this.buckets.gemini.tokensPerRequest
+      google: {
+        tokensPerMinute: config.google.rateLimiter.tokensPerMinute,
+        maxConcurrent: googleMaxConcurrent,
+        tokensPerRequest: this.buckets.google.tokensPerRequest
       }
     });
+  }
+
+  resolveProviderKey(provider) {
+    const normalized = normalizeProvider(provider);
+    if (normalized && this.buckets[normalized]) {
+      return normalized;
+    }
+
+    if (this.buckets[provider]) {
+      return provider;
+    }
+
+    throw new Error(`Unknown provider: ${provider}`);
   }
 
   /**
@@ -71,7 +85,8 @@ class UnifiedRateLimiter {
    * @param {string} provider - The provider to refill tokens for
    */
   refillTokens(provider) {
-    const bucket = this.buckets[provider];
+    const providerKey = this.resolveProviderKey(provider);
+    const bucket = this.buckets[providerKey];
     const now = Date.now();
     const timePassed = now - bucket.lastRefill;
     const tokensToAdd = Math.floor((timePassed / 60000) * bucket.maxTokens);
@@ -80,7 +95,7 @@ class UnifiedRateLimiter {
       const oldTokens = bucket.tokens;
       bucket.tokens = Math.min(bucket.maxTokens, bucket.tokens + tokensToAdd);
       bucket.lastRefill = now;
-      console.log(`[Rate Limiter] Refilled ${provider} tokens:`, {
+      console.log(`[Rate Limiter] Refilled ${providerKey} tokens:`, {
         added: tokensToAdd,
         before: oldTokens,
         after: bucket.tokens,
@@ -95,13 +110,14 @@ class UnifiedRateLimiter {
    * @returns {boolean} Whether we can make a request
    */
   canMakeRequest(provider) {
-    const bucket = this.buckets[provider];
-    this.refillTokens(provider);
+    const providerKey = this.resolveProviderKey(provider);
+    const bucket = this.buckets[providerKey];
+    this.refillTokens(providerKey);
 
     const hasCapacity = bucket.currentRequests < bucket.maxConcurrent;
     const hasTokens = bucket.tokens >= bucket.tokensPerRequest;
 
-    console.log(`[Rate Limiter] Checking ${provider} capacity:`, {
+    console.log(`[Rate Limiter] Checking ${providerKey} capacity:`, {
       hasCapacity,
       hasTokens,
       currentRequests: bucket.currentRequests,
@@ -119,7 +135,8 @@ class UnifiedRateLimiter {
    * @returns {number} Milliseconds until next refill
    */
   getTimeUntilNextRefill(provider) {
-    const bucket = this.buckets[provider];
+    const providerKey = this.resolveProviderKey(provider);
+    const bucket = this.buckets[providerKey];
     const now = Date.now();
     const timeSinceLastRefill = now - bucket.lastRefill;
     const msPerMinute = 60000;
@@ -138,19 +155,20 @@ class UnifiedRateLimiter {
    * @param {string} provider - The provider to wait for
    */
   async waitForCapacity(provider) {
-    const bucket = this.buckets[provider];
+    const providerKey = this.resolveProviderKey(provider);
+    const bucket = this.buckets[providerKey];
     let attempts = 0;
     const maxAttempts = 10;
 
     // Keep trying until we successfully acquire capacity
     while (true) {
       // Atomically check and acquire capacity
-      if (this.canMakeRequest(provider)) {
+      if (this.canMakeRequest(providerKey)) {
         // Immediately claim the capacity
         bucket.currentRequests++;
         bucket.tokens -= bucket.tokensPerRequest;
 
-        console.log(`[Rate Limiter] Acquired capacity for ${provider}:`, {
+        console.log(`[Rate Limiter] Acquired capacity for ${providerKey}:`, {
           newCount: bucket.currentRequests,
           maxConcurrent: bucket.maxConcurrent,
           remainingTokens: bucket.tokens
@@ -161,12 +179,12 @@ class UnifiedRateLimiter {
 
       attempts++;
       if (attempts > maxAttempts) {
-        throw new Error(`Rate limit exceeded for ${provider} after ${maxAttempts} attempts`);
+        throw new Error(`Rate limit exceeded for ${providerKey} after ${maxAttempts} attempts`);
       }
 
-      const waitTime = this.getTimeUntilNextRefill(provider);
+      const waitTime = this.getTimeUntilNextRefill(providerKey);
 
-      console.log(`[Rate Limiter] Waiting ${Math.round(waitTime)}ms for ${provider} token refill:`, {
+      console.log(`[Rate Limiter] Waiting ${Math.round(waitTime)}ms for ${providerKey} token refill:`, {
         currentTokens: bucket.tokens,
         maxTokens: bucket.maxTokens,
         currentRequests: bucket.currentRequests,
@@ -187,11 +205,8 @@ class UnifiedRateLimiter {
    * @returns {Promise} Result of the function
    */
   async executeRequest(fn, args, provider) {
-    if (!this.buckets[provider]) {
-      throw new Error(`Unknown provider: ${provider}`);
-    }
-
-    const bucket = this.buckets[provider];
+    const providerKey = this.resolveProviderKey(provider);
+    const bucket = this.buckets[providerKey];
     const requestKey = JSON.stringify(args);
 
     // If we already have a promise for this exact request, return it
@@ -201,9 +216,9 @@ class UnifiedRateLimiter {
 
     const promise = (async () => {
       // Wait for and acquire capacity atomically
-      await this.waitForCapacity(provider);
+      await this.waitForCapacity(providerKey);
 
-      console.log(`[Rate Limiter] Starting ${provider} request:`, {
+      console.log(`[Rate Limiter] Starting ${providerKey} request:`, {
         concurrent: bucket.currentRequests,
         maxConcurrent: bucket.maxConcurrent,
         remainingTokens: bucket.tokens,
@@ -220,7 +235,7 @@ class UnifiedRateLimiter {
         ]);
         return result;
       } catch (error) {
-        console.error(`[Rate Limiter] ${provider} request failed:`, error);
+        console.error(`[Rate Limiter] ${providerKey} request failed:`, error);
         throw error;
       } finally {
         // Always clean up, even if the request failed

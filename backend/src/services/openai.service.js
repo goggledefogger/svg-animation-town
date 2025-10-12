@@ -52,7 +52,7 @@ const buildOpenAIUserPrompt = (userPrompt, currentSvg = '', isUpdate = false) =>
  * @param {boolean} isUpdate - Whether this is an update
  * @returns {string} Response with SVG content
  */
-const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false) => {
+const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false, options = {}) => {
   if (!config.openai.apiKey) {
     throw new ServiceUnavailableError('OpenAI API key is not configured');
   }
@@ -65,21 +65,35 @@ const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false) =
     console.log(`[OpenAI Service ${clientId}] Starting request with client instance ${clientId}`);
     console.log(`[OpenAI Service ${clientId}] Current active requests: ${openai.activeRequests || 0}`);
 
-    // Adjust temperature slightly lower for updates to improve consistency
-    const temperature = isUpdate
-      ? Math.max(0.1, config.openai.temperature - 0.1)
-      : config.openai.temperature;
+    const modelId = options.model || config.openai.model;
 
-    // Call OpenAI API with structured output
-    const completion = await openai.chat.completions.create({
-      model: config.openai.model,
+    const hasTemperatureOverride = Object.prototype.hasOwnProperty.call(options, 'temperature');
+    const temperatureSource = hasTemperatureOverride ? options.temperature : config.openai.temperature;
+    let requestTemperature;
+
+    if (typeof temperatureSource === 'number') {
+      requestTemperature = isUpdate
+        ? Math.max(0.1, temperatureSource - 0.1)
+        : temperatureSource;
+    } else {
+      requestTemperature = undefined;
+    }
+
+    const requestPayload = {
+      model: modelId,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      temperature: temperature,
       response_format: { type: "json_object" }
-    });
+    };
+
+    if (typeof requestTemperature === 'number') {
+      requestPayload.temperature = requestTemperature;
+    }
+
+    // Call OpenAI API with structured output
+    const completion = await openai.chat.completions.create(requestPayload);
 
     console.log(`[OpenAI Service ${clientId}] Request completed`);
 
@@ -135,8 +149,8 @@ const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false) =
  * @param {string} prompt - User's animation request
  * @returns {string} OpenAI response with SVG content
  */
-exports.generateAnimation = async (prompt) => {
-  return processSvgWithOpenAI(prompt, '', false);
+exports.generateAnimation = async (prompt, options = {}) => {
+  return processSvgWithOpenAI(prompt, '', false, options);
 };
 
 /**
@@ -146,8 +160,8 @@ exports.generateAnimation = async (prompt) => {
  * @param {string} currentSvg - Current SVG content (if any)
  * @returns {string} OpenAI response with updated SVG content
  */
-exports.updateAnimation = async (prompt, currentSvg = '') => {
-  return processSvgWithOpenAI(prompt, currentSvg, true);
+exports.updateAnimation = async (prompt, currentSvg = '', options = {}) => {
+  return processSvgWithOpenAI(prompt, currentSvg, true, options);
 };
 
 /**
@@ -157,7 +171,7 @@ exports.updateAnimation = async (prompt, currentSvg = '') => {
  * @param {string} prompt - The prompt to send to OpenAI
  * @returns {string} - Raw text response from OpenAI
  */
-exports.generateRawResponse = async (prompt) => {
+exports.generateRawResponse = async (prompt, options = {}) => {
   if (!config.openai.apiKey) {
     throw new ServiceUnavailableError('OpenAI API key is not configured');
   }
@@ -166,8 +180,13 @@ exports.generateRawResponse = async (prompt) => {
     console.log('Sending raw text request to OpenAI with JSON formatting hint');
 
     // Call OpenAI API requesting a JSON response but without structured output
-    const completion = await openai.chat.completions.create({
-      model: config.openai.model,
+    const modelId = options.model || config.openai.model;
+
+    const hasTemperatureOverride = Object.prototype.hasOwnProperty.call(options, 'temperature');
+    const defaultRawTemperature = 0.1;
+    const temperatureSource = hasTemperatureOverride ? options.temperature : defaultRawTemperature;
+    const requestPayload = {
+      model: modelId,
       messages: [
         {
           role: 'system',
@@ -175,9 +194,14 @@ exports.generateRawResponse = async (prompt) => {
         },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.1, // Lower temperature for more deterministic JSON responses
       response_format: { type: "json_object" } // Request JSON formatted response
-    });
+    };
+
+    if (typeof temperatureSource === 'number') {
+      requestPayload.temperature = temperatureSource;
+    }
+
+    const completion = await openai.chat.completions.create(requestPayload);
 
     if (!completion.choices || !completion.choices.length) {
       console.error('Empty response from OpenAI API');

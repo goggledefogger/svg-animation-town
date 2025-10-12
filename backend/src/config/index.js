@@ -1,82 +1,121 @@
-/**
- * Application configuration settings
- */
-const config = {
-  // Server configuration
-  server: {
-    port: process.env.PORT || 3001,
-    nodeEnv: process.env.NODE_ENV || 'development',
-    isProduction: process.env.NODE_ENV === 'production',
-  },
+const {
+  normalizeProvider,
+  resolveModelId,
+  getDefaultModel,
+  getPublicProviderInfo
+} = require('../utils/provider-utils');
 
-  // OpenAI configuration
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    temperature: 0.7,
-    maxTokens: 12000,
-    // Rate limiter configuration
-    rateLimiter: {
-      tokensPerMinute: parseInt(process.env.OPENAI_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 10000,
-      tokensPerRequest: parseInt(process.env.OPENAI_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 2000,
-      maxConcurrentRequests: parseInt(process.env.OPENAI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 10
-    }
-  },
-
-  // Claude configuration
-  claude: {
-    apiKey: process.env.CLAUDE_API_KEY,
-    model: process.env.CLAUDE_MODEL || 'claude-3-7-sonnet-20250219',
-    temperature: 0.7,
-    maxTokens: 12000,
-    // Rate limiter configuration
-    rateLimiter: {
-      tokensPerMinute: parseInt(process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 8000,
-      tokensPerRequest: parseInt(process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 1600,
-      maxConcurrentRequests: parseInt(process.env.CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 10
-    }
-  },
-
-  // Gemini configuration
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
-    model: process.env.GEMINI_MODEL || 'gemini-2.5-pro-exp-03-25',
-    temperature: 0.7,
-    maxTokens: 12000,
-    // Rate limiter configuration
-    rateLimiter: {
-      tokensPerMinute: parseInt(process.env.GEMINI_RATE_LIMIT_TOKENS_PER_MINUTE, 10) || 10000,
-      tokensPerRequest: parseInt(process.env.GEMINI_RATE_LIMIT_TOKENS_PER_REQUEST, 10) || 2000,
-      maxConcurrentRequests: parseInt(process.env.GEMINI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10) || 10
-    }
-  },
-
-  // AI Provider selection
-  aiProvider: process.env.AI_PROVIDER || 'openai', // 'openai', 'claude', or 'gemini'
-
-  // Cors configuration
-  cors: {
-    origin: process.env.CORS_ORIGIN || '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  },
+const parseIntWithDefault = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-// Validate required environment variables
+const parseFloatWithDefault = (value, fallback) => {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const serverConfig = {
+  port: process.env.PORT || 3001,
+  nodeEnv: process.env.NODE_ENV || 'development',
+  isProduction: process.env.NODE_ENV === 'production'
+};
+
+const openaiConfig = {
+  apiKey: process.env.OPENAI_API_KEY,
+  model: resolveModelId('openai', process.env.OPENAI_MODEL),
+  temperature: parseFloatWithDefault(process.env.OPENAI_TEMPERATURE, 0.7),
+  maxTokens: parseIntWithDefault(process.env.OPENAI_MAX_TOKENS, 12000),
+  rateLimiter: {
+    tokensPerMinute: parseIntWithDefault(process.env.OPENAI_RATE_LIMIT_TOKENS_PER_MINUTE, 10000),
+    tokensPerRequest: parseIntWithDefault(process.env.OPENAI_RATE_LIMIT_TOKENS_PER_REQUEST, 2000),
+    maxConcurrentRequests: parseIntWithDefault(process.env.OPENAI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS, 10)
+  }
+};
+
+const anthropicConfig = {
+  apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY,
+  model: resolveModelId('anthropic', process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL),
+  temperature: parseFloatWithDefault(process.env.ANTHROPIC_TEMPERATURE || process.env.CLAUDE_TEMPERATURE, 0.7),
+  maxTokens: parseIntWithDefault(process.env.ANTHROPIC_MAX_TOKENS || process.env.CLAUDE_MAX_TOKENS, 12000),
+  rateLimiter: {
+    tokensPerMinute: parseIntWithDefault(
+      process.env.ANTHROPIC_RATE_LIMIT_TOKENS_PER_MINUTE || process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE,
+      8000
+    ),
+    tokensPerRequest: parseIntWithDefault(
+      process.env.ANTHROPIC_RATE_LIMIT_TOKENS_PER_REQUEST || process.env.CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST,
+      1600
+    ),
+    maxConcurrentRequests: parseIntWithDefault(
+      process.env.ANTHROPIC_RATE_LIMIT_MAX_CONCURRENT_REQUESTS || process.env.CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS,
+      10
+    )
+  }
+};
+
+const googleConfig = {
+  apiKey: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
+  model: resolveModelId('google', process.env.GOOGLE_MODEL || process.env.GEMINI_MODEL),
+  temperature: parseFloatWithDefault(process.env.GOOGLE_TEMPERATURE || process.env.GEMINI_TEMPERATURE, 0.7),
+  maxTokens: parseIntWithDefault(process.env.GOOGLE_MAX_TOKENS || process.env.GEMINI_MAX_TOKENS, 12000),
+  rateLimiter: {
+    tokensPerMinute: parseIntWithDefault(
+      process.env.GOOGLE_RATE_LIMIT_TOKENS_PER_MINUTE || process.env.GEMINI_RATE_LIMIT_TOKENS_PER_MINUTE,
+      10000
+    ),
+    tokensPerRequest: parseIntWithDefault(
+      process.env.GOOGLE_RATE_LIMIT_TOKENS_PER_REQUEST || process.env.GEMINI_RATE_LIMIT_TOKENS_PER_REQUEST,
+      2000
+    ),
+    maxConcurrentRequests: parseIntWithDefault(
+      process.env.GOOGLE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS || process.env.GEMINI_RATE_LIMIT_MAX_CONCURRENT_REQUESTS,
+      10
+    )
+  }
+};
+
+const normalizedProvider = normalizeProvider(process.env.AI_PROVIDER) || 'openai';
+
+const config = {
+  server: serverConfig,
+  providers: {
+    openai: openaiConfig,
+    anthropic: anthropicConfig,
+    google: googleConfig
+  },
+  openai: openaiConfig,
+  anthropic: anthropicConfig,
+  // Legacy aliases retained for backwards compatibility
+  claude: anthropicConfig,
+  google: googleConfig,
+  gemini: googleConfig,
+  aiProvider: normalizedProvider,
+  cors: {
+    origin: process.env.CORS_ORIGIN || '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  },
+  defaults: {
+    openai: getDefaultModel('openai'),
+    anthropic: getDefaultModel('anthropic'),
+    google: getDefaultModel('google')
+  },
+  publicProviders: getPublicProviderInfo()
+};
+
 const validateConfig = () => {
-  // Check for at least one API key based on provider or both
   if (config.aiProvider === 'openai' && !config.openai.apiKey) {
     console.warn('Warning: OpenAI API key is missing but OpenAI is selected as the provider.');
   }
 
-  if (config.aiProvider === 'claude' && !config.claude.apiKey) {
-    console.warn('Warning: Claude API key is missing but Claude is selected as the provider.');
+  if (config.aiProvider === 'anthropic' && !config.anthropic.apiKey) {
+    console.warn('Warning: Anthropic API key is missing but Anthropic is selected as the provider.');
   }
 
-  if (config.aiProvider === 'gemini' && !config.gemini.apiKey) {
-    console.warn('Warning: Gemini API key is missing but Gemini is selected as the provider.');
+  if (config.aiProvider === 'google' && !config.google.apiKey) {
+    console.warn('Warning: Google Gemini API key is missing but Google is selected as the provider.');
   }
 
-  // Validate other common settings
   const otherRequiredVars = [];
   const missingEnvVars = otherRequiredVars.filter(envVar => !process.env[envVar]);
 
@@ -86,7 +125,6 @@ const validateConfig = () => {
   }
 };
 
-// Call the validation function
 validateConfig();
 
 module.exports = config;

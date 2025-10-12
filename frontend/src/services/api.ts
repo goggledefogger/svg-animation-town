@@ -3,6 +3,7 @@ import { ApiError as CustomApiError } from './movie.api';
 import { Storyboard } from '../contexts/MovieContext';
 import { GLOBAL_ANIMATION_REGISTRY, AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 import { Message } from '../contexts/AnimationContext';
+import type { AIProviderId } from '@/types/ai';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -98,6 +99,19 @@ export async function fetchApi<T>(
   }
 }
 
+export interface AnimationRequestOptions {
+  provider?: AIProviderId;
+  model?: string;
+}
+
+export interface AnimationGenerateResult {
+  svg: string;
+  message: string;
+  animationId?: string;
+  provider?: AIProviderId;
+  model?: string;
+}
+
 /**
  * Animation API endpoints for working with SVG animations
  */
@@ -107,16 +121,24 @@ export const AnimationApi = {
    */
   generate: async (
     prompt: string,
-    provider: 'openai' | 'claude' | 'gemini' = 'openai'
-  ): Promise<{ svg: string; message: string; animationId?: string }> => {
+    options: AnimationRequestOptions = {}
+  ): Promise<AnimationGenerateResult> => {
+    const { provider, model } = options;
+
     // Only log provider choice, not the prompt
-    console.log(`Generating animation using ${provider}`);
+    console.log(
+      `Generating animation using ${provider ?? 'default'}${model ? ` (model: ${model})` : ''}`
+    );
 
     try {
       // Set a longer timeout for mobile devices that may have slow connections
+      const payload: Record<string, unknown> = { prompt };
+      if (provider) payload.provider = provider;
+      if (model) payload.model = model;
+
       const fetchOptions = {
         method: 'POST',
-        body: JSON.stringify({ prompt, provider }),
+        body: JSON.stringify(payload),
       };
 
       // Get timeout value from env or use 5 minutes as default
@@ -157,10 +179,15 @@ export const AnimationApi = {
             console.warn('API generate endpoint did not return an animation ID');
           }
 
+          const resolvedProvider: AIProviderId | undefined = data.metadata?.provider ?? provider ?? undefined;
+          const resolvedModel: string | undefined = data.metadata?.model ?? model ?? undefined;
+
           return {
             svg: data.svg,
             message: data.message || 'Animation created successfully!',
-            animationId: data.animationId // Include the animation ID if provided by backend
+            animationId: data.animationId, // Include the animation ID if provided by backend
+            provider: resolvedProvider,
+            model: resolvedModel
           };
         } else if (data.elements && Array.isArray(data.elements)) {
           console.error('Received legacy element-based response that will not work with the new version');
@@ -216,7 +243,9 @@ export const AnimationApi = {
 
       return {
         svg: errorSvg,
-        message: `Error: ${errorMessage}`
+        message: `Error: ${errorMessage}`,
+        provider,
+        model
       };
     }
   },
@@ -227,18 +256,20 @@ export const AnimationApi = {
    */
   generateWithMovieContext: async (
     prompt: string,
-    provider: 'openai' | 'claude' | 'gemini' = 'openai',
-    movieContext: {
-      storyboardId: string;
-      sceneIndex: number;
-      sceneCount: number;
-      sceneDuration?: number;
-      sceneDescription?: string;
+    {
+      provider,
+      model,
+      movieContext
+    }: AnimationRequestOptions & {
+      movieContext: {
+        storyboardId: string;
+        sceneIndex: number;
+        sceneCount: number;
+        sceneDuration?: number;
+        sceneDescription?: string;
+      };
     }
-  ): Promise<{
-    svg: string;
-    message: string;
-    animationId?: string;
+  ): Promise<AnimationGenerateResult & {
     movieUpdateStatus?: {
       storyboardId: string;
       clipId: string;
@@ -260,16 +291,20 @@ export const AnimationApi = {
       }, timeoutMs);
 
       try {
+        const payload: Record<string, unknown> = {
+          prompt,
+          movieContext
+        };
+
+        if (provider) payload.provider = provider;
+        if (model) payload.model = model;
+
         // Call the API with timeout protection and movie context
         const data = await fetchApi<any>(
           '/movie/generate-scene',
           {
             method: 'POST',
-            body: JSON.stringify({
-              prompt,
-              provider,
-              movieContext
-            }),
+            body: JSON.stringify(payload),
             signal: controller.signal
           }
         );
@@ -284,6 +319,8 @@ export const AnimationApi = {
             message: data.message || 'Animation created successfully!',
             animationId: data.animationId,
             movieUpdateStatus: data.movieUpdateStatus,
+            provider: data.metadata?.provider ?? provider,
+            model: data.metadata?.model ?? model
           };
         } else {
           throw new Error('Invalid response: missing SVG content');
@@ -314,7 +351,9 @@ export const AnimationApi = {
 
       return {
         svg: errorSvg,
-        message: `Error: ${errorMessage}`
+        message: `Error: ${errorMessage}`,
+        provider,
+        model
       };
     }
   },
@@ -325,10 +364,11 @@ export const AnimationApi = {
   update: async (
     prompt: string,
     currentSvg: string,
-    provider: 'openai' | 'claude' | 'gemini' = 'openai'
-  ): Promise<{ svg: string; message: string }> => {
+    providerOptions: AnimationRequestOptions = {}
+  ): Promise<{ svg: string; message: string; provider?: AIProviderId; model?: string }> => {
+    const { provider, model } = providerOptions;
     console.log('Updating animation with prompt:', prompt);
-    console.log('Using AI provider:', provider);
+    console.log('Using AI provider:', provider ?? 'default', model ? `model: ${model}` : '');
     console.log('Current SVG length:', currentSvg?.length || 0);
 
     if (!currentSvg || currentSvg.length < 10 || !currentSvg.includes('<svg')) {
@@ -342,7 +382,7 @@ export const AnimationApi = {
         '/animation/update',
         {
           method: 'POST',
-          body: JSON.stringify({ prompt, currentSvg, provider }),
+          body: JSON.stringify({ prompt, currentSvg, provider, model }),
         }
       );
 
@@ -362,13 +402,17 @@ export const AnimationApi = {
 
         return {
           svg: data.svg,
-          message: data.message || 'Animation updated successfully!'
+          message: data.message || 'Animation updated successfully!',
+          provider: data.metadata?.provider ?? provider,
+          model: data.metadata?.model ?? model
         };
       } else if (data.elements && Array.isArray(data.elements)) {
         console.warn('Received legacy element-based response. Using fallback error SVG.');
         return {
           svg: createFallbackSvg('Legacy element response received. Please update backend.'),
-          message: data.message || 'Animation updated successfully (legacy format).'
+          message: data.message || 'Animation updated successfully (legacy format).',
+          provider,
+          model
         };
       } else {
         console.error('Invalid response format:', data);
@@ -453,9 +497,11 @@ export const AnimationStorageApi = {
     name: string,
     svgContent: string,
     chatHistory?: any[],
-    provider?: 'openai' | 'claude' | 'gemini'
+    providerOptions: AnimationRequestOptions = {}
   ): Promise<{ id: string }> => {
     console.log(`Saving animation with name: ${name}`);
+
+    const { provider, model } = providerOptions;
 
     try {
       const data = await fetchApi<any>(
@@ -466,7 +512,8 @@ export const AnimationStorageApi = {
             name,
             svg: svgContent,
             chatHistory,
-            provider
+            provider,
+            model
           }),
         }
       );

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import type { AIProviderId } from '@/types/ai';
 
 // Define a more comprehensive animation registry that can store all types of animation data
 interface AnimationRegistry {
@@ -12,7 +13,8 @@ interface AnimationRegistry {
     name?: string;
     timestamp?: string;
     chatHistory?: any[];
-    provider?: 'openai' | 'claude' | 'gemini';
+    provider?: AIProviderId;
+    model?: string;
   }>;
 
   // Tracking for API requests
@@ -47,7 +49,8 @@ export const AnimationRegistryHelpers = {
       name?: string;
       timestamp?: string;
       chatHistory?: any[];
-      provider?: 'openai' | 'claude' | 'gemini';
+      provider?: AIProviderId;
+      model?: string;
     }
   ) => {
     if (!animationId || !svgContent || svgContent.length < 100) {

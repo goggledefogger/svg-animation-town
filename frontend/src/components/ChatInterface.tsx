@@ -7,6 +7,7 @@ import MessageInput from './MessageInput';
 import AIProviderSelector from './AIProviderSelector';
 import { useMovie } from '../contexts/MovieContext';
 import { useNavigate } from 'react-router-dom';
+import type { AIProviderId } from '@/types/ai';
 
 interface ChatInterfaceProps {
   onClose?: () => void;
@@ -40,6 +41,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     loadAnimation,
     getSavedAnimations,
     setAIProvider,
+    setAIModel,
   } = useAnimation();
 
   const { saveCurrentAnimationAsClip, updateClip } = useMovie();
@@ -311,7 +313,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   useEffect(() => {
     const loadAnimationId = sessionStorage.getItem('load_animation_id');
     const isEditingFromMovie = sessionStorage.getItem('editing_from_movie') === 'true';
-    const storedProvider = sessionStorage.getItem('animation_provider') as 'openai' | 'claude' | 'gemini' | null;
+    const storedProvider = sessionStorage.getItem('animation_provider') as AIProviderId | null;
+    const storedModel = sessionStorage.getItem('animation_model');
 
     // Set state based on session storage
     setIsEditingFromMovie(isEditingFromMovie);
@@ -320,6 +323,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
     if (storedProvider && isEditingFromMovie) {
       console.log(`Setting AI provider to: ${storedProvider} (from movie clip)`);
       setAIProvider(storedProvider);
+      if (storedModel) {
+        setAIModel(storedModel);
+      }
     }
 
     if (loadAnimationId) {
@@ -375,7 +381,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
         sessionStorage.removeItem('editing_from_movie');
       }
     }
-  }, [loadAnimation, setSvgContent, setSvgContentWithBroadcast, setAIProvider]);
+  }, [loadAnimation, setSvgContent, setSvgContentWithBroadcast, setAIProvider, setAIModel]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">

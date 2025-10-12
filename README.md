@@ -83,7 +83,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 ## Installation & Setup
 
 ### Prerequisites
-- Node.js (v14+)
+- Node.js (v20+)
 - npm or yarn
 - OpenAI API key or Anthropic Claude API key
 
@@ -98,17 +98,24 @@ The AI assistant becomes your creative partner - understanding context, making i
    OPENAI_API_KEY=your_openai_api_key_here
    OPENAI_MODEL=gpt-4o-mini
 
-   # Claude configuration (optional)
-   CLAUDE_API_KEY=your_claude_api_key_here
-   CLAUDE_MODEL=claude-3-7-sonnet-20250219
+   # Anthropic Claude configuration (optional)
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+   ANTHROPIC_MODEL=claude-3-7-sonnet-latest
 
-   # Default AI Provider (openai or claude)
+   # Google Gemini configuration (optional)
+   GOOGLE_API_KEY=your_gemini_api_key_here
+   GOOGLE_MODEL=gemini-2.5-flash
+
+   # Default AI Provider (openai, anthropic, google)
    AI_PROVIDER=openai
 
    # Rate Limiter Configuration
-   CLAUDE_RATE_LIMIT_TOKENS_PER_MINUTE=8000
-   CLAUDE_RATE_LIMIT_TOKENS_PER_REQUEST=1600
-   CLAUDE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=2
+   ANTHROPIC_RATE_LIMIT_TOKENS_PER_MINUTE=8000
+   ANTHROPIC_RATE_LIMIT_TOKENS_PER_REQUEST=1600
+   ANTHROPIC_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=2
+   GOOGLE_RATE_LIMIT_TOKENS_PER_MINUTE=10000
+   GOOGLE_RATE_LIMIT_TOKENS_PER_REQUEST=2000
+   GOOGLE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=10
    ```
 4. Start the backend server: `npm run dev`
 
@@ -131,11 +138,12 @@ The AI assistant becomes your creative partner - understanding context, making i
 5. Open your browser to `http://localhost:3000`
 
 ## Basic Usage
-1. Type your animation request in the chat interface (e.g., "Create a night sky with stars that twinkle randomly")
-2. Review the AI's implementation in the preview window
-3. Make additional requests to refine or expand your animation (e.g., "Make the stars blue instead of white")
-4. Use the timeline scrubber to review specific frames
-5. Adjust the animation duration if needed
+1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-5 family, Anthropic Claude 4.x, or Google Gemini 2.5 tiers)
+2. Type your animation request in the chat interface (e.g., "Create a night sky with stars that twinkle randomly")
+3. Review the AI's implementation in the preview window
+4. Make additional requests to refine or expand your animation (e.g., "Make the stars blue instead of white")
+5. Use the timeline scrubber to review specific frames
+6. Adjust the animation duration if needed
 
 ## Project Structure
 
@@ -218,6 +226,28 @@ This project is in early development. If you're interested in contributing, plea
 1. Star the repository to show your interest
 2. Open issues for feature requests or bugs
 3. Submit pull requests with improvements
+
+## Maintenance
+
+### Keeping Dependencies Updated
+
+To keep dependencies current and avoid deprecation warnings:
+
+**Frontend:**
+```bash
+cd frontend
+npm update                           # Update packages within semver ranges
+npx update-browserslist-db@latest   # Update browser compatibility data
+```
+
+**Backend:**
+```bash
+cd backend
+npm update                           # Update packages within semver ranges
+npm outdated                         # Check for available major version updates
+```
+
+Note: Major version updates may include breaking changes. Review migration guides before upgrading.
 
 ## License
 

@@ -64,8 +64,8 @@ const buildGeminiUserPrompt = (userPrompt, currentSvg = '', isUpdate = false) =>
  * @param {boolean} isUpdate - Whether this is an update
  * @returns {string} Response with SVG content
  */
-const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false) => {
-  if (!config.gemini.apiKey) {
+const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false, options = {}) => {
+  if (!config.google.apiKey) {
     throw new ServiceUnavailableError('Gemini API key is not configured');
   }
 
@@ -84,12 +84,17 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false) =
     const { client, completeRequest } = getGeminiClient();
 
     try {
+      const modelId = options.model || config.google.model;
+      const baseTemperature = typeof options.temperature === 'number'
+        ? options.temperature
+        : config.google.temperature;
+
       // Call Gemini API with proper structured output configuration
       const result = await client.models.generateContent({
-        model: config.gemini.model,
+        model: modelId,
         contents: `${systemPrompt}\n\n${userPrompt}`,
         generationConfig: {
-          temperature: isUpdate ? Math.max(0.1, config.gemini.temperature - 0.1) : config.gemini.temperature,
+          temperature: isUpdate ? Math.max(0.1, baseTemperature - 0.1) : baseTemperature,
         },
         config: {
           responseMimeType: 'application/json',
@@ -182,8 +187,8 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false) =
  * @param {string} prompt - User's animation request
  * @returns {string} Gemini response with SVG content
  */
-exports.generateAnimation = async (prompt) => {
-  return processSvgWithGemini(prompt, '', false);
+exports.generateAnimation = async (prompt, options = {}) => {
+  return processSvgWithGemini(prompt, '', false, options);
 };
 
 /**
@@ -193,8 +198,8 @@ exports.generateAnimation = async (prompt) => {
  * @param {string} currentSvg - Current SVG content (if any)
  * @returns {string} Gemini response with updated SVG content
  */
-exports.updateAnimation = async (prompt, currentSvg = '') => {
-  return processSvgWithGemini(prompt, currentSvg, true);
+exports.updateAnimation = async (prompt, currentSvg = '', options = {}) => {
+  return processSvgWithGemini(prompt, currentSvg, true, options);
 };
 
 /**
@@ -204,8 +209,8 @@ exports.updateAnimation = async (prompt, currentSvg = '') => {
  * @param {string} prompt - The prompt to send to Gemini
  * @returns {string} - Raw text response from Gemini
  */
-exports.generateRawResponse = async (prompt) => {
-  if (!config.gemini.apiKey) {
+exports.generateRawResponse = async (prompt, options = {}) => {
+  if (!config.google.apiKey) {
     throw new ServiceUnavailableError('Gemini API key is not configured');
   }
 
@@ -223,8 +228,9 @@ exports.generateRawResponse = async (prompt) => {
       const userPromptWithInstructions = prompt;
 
       // Call Gemini API with proper structured output configuration for JSON
+      const modelId = options.model || config.google.model;
       const result = await client.models.generateContent({
-        model: config.gemini.model,
+        model: modelId,
         contents: `${systemInstructions}\n\n${userPromptWithInstructions}`,
         generationConfig: {
           temperature: 0.1, // Lower temperature for more deterministic JSON responses

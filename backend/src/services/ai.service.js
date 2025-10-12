@@ -1,138 +1,168 @@
 const openAIService = require('./openai.service');
-const claudeService = require('./claude.service');
-const geminiService = require('./gemini.service');
+const anthropicService = require('./claude.service');
+const googleService = require('./gemini.service');
 const rateLimiter = require('./unified-rate-limiter.service');
 const config = require('../config');
 const { ServiceUnavailableError } = require('../utils/errors');
+const { normalizeProvider, resolveModelId, modelSupportsTemperature } = require('../utils/provider-utils');
 
-/**
- * Select the AI provider based on configuration
- * @returns {Object} The selected AI service
- */
-const getAIService = () => {
-  switch (config.aiProvider.toLowerCase()) {
-    case 'openai':
-      if (!config.openai.apiKey) {
-        throw new ServiceUnavailableError('OpenAI API key is not configured');
-      }
-      return openAIService;
-
-    case 'claude':
-      if (!config.claude.apiKey) {
-        throw new ServiceUnavailableError('Claude API key is not configured');
-      }
-      return claudeService;
-
-    case 'gemini':
-      if (!config.gemini.apiKey) {
-        throw new ServiceUnavailableError('Gemini API key is not configured');
-      }
-      return geminiService;
-
-    default:
-      throw new ServiceUnavailableError(`Unknown AI provider: ${config.aiProvider}`);
+const SERVICES = {
+  openai: {
+    name: 'OpenAI',
+    service: openAIService,
+    getConfig: () => config.openai
+  },
+  anthropic: {
+    name: 'Anthropic Claude',
+    service: anthropicService,
+    getConfig: () => config.anthropic
+  },
+  google: {
+    name: 'Google Gemini',
+    service: googleService,
+    getConfig: () => config.google
   }
 };
 
-/**
- * AI Service wrapper that handles rate limiting for all providers
- */
+const resolveProvider = (overrideProvider) => {
+  const normalizedOverride = normalizeProvider(overrideProvider);
+  return normalizedOverride || config.aiProvider || 'openai';
+};
+
+const ensureProviderConfigured = (providerKey) => {
+  const providerEntry = SERVICES[providerKey];
+
+  if (!providerEntry) {
+    throw new ServiceUnavailableError(`Unknown AI provider: ${providerKey}`);
+  }
+
+  const providerConfig = providerEntry.getConfig();
+
+  if (!providerConfig || !providerConfig.apiKey) {
+    throw new ServiceUnavailableError(`${providerEntry.name} API key is not configured`);
+  }
+
+  return {
+    providerEntry,
+    providerConfig
+  };
+};
+
+const buildRequestOptions = (providerKey, providerConfig, overrides = {}) => {
+  const model = resolveModelId(providerKey, overrides.model || providerConfig.model);
+  const hasTemperatureOverride = Object.prototype.hasOwnProperty.call(overrides, 'temperature');
+  const temperatureSource = hasTemperatureOverride ? overrides.temperature : providerConfig.temperature;
+  const supportsTemperature = modelSupportsTemperature(providerKey, model);
+  const normalizedTemperature = supportsTemperature ? temperatureSource : null;
+
+  return {
+    ...overrides,
+    provider: providerKey,
+    model,
+    temperature: normalizedTemperature
+  };
+};
+
+const executeWithRateLimiting = async (providerKey, fn, args = []) => {
+  return rateLimiter.executeRequest(fn, args, providerKey);
+};
+
 const AIService = {
   /**
-   * Generate animation with rate limiting
-   * @param {string} prompt - The animation prompt
-   * @returns {Promise<string>} The generated response
+   * Generate animation with rate limiting and provider overrides.
+   * @param {string} prompt
+   * @param {Object} [options]
+   * @param {string} [options.provider]
+   * @param {string} [options.model]
+   * @returns {Promise<string|Object>}
    */
-  generateAnimation: async (prompt) => {
-    const service = getAIService();
-    const provider = config.aiProvider.toLowerCase();
+  async generateAnimation(prompt, options = {}) {
+    const providerKey = resolveProvider(options.provider);
+    const { providerEntry, providerConfig } = ensureProviderConfigured(providerKey);
+    const requestOptions = buildRequestOptions(providerKey, providerConfig, options);
 
-    return rateLimiter.executeRequest(
-      service.generateAnimation.bind(service),
-      [prompt],
-      provider
+    return executeWithRateLimiting(
+      providerKey,
+      providerEntry.service.generateAnimation.bind(providerEntry.service),
+      [prompt, requestOptions]
     );
   },
 
   /**
-   * Update animation with rate limiting
-   * @param {string} prompt - The update prompt
-   * @param {string} currentSvg - Current SVG content
-   * @returns {Promise<string>} The updated response
+   * Update animation with rate limiting and provider overrides.
+   * @param {string} prompt
+   * @param {string} currentSvg
+   * @param {Object} [options]
+   * @returns {Promise<string|Object>}
    */
-  updateAnimation: async (prompt, currentSvg) => {
-    const service = getAIService();
-    const provider = config.aiProvider.toLowerCase();
+  async updateAnimation(prompt, currentSvg, options = {}) {
+    const providerKey = resolveProvider(options.provider);
+    const { providerEntry, providerConfig } = ensureProviderConfigured(providerKey);
+    const requestOptions = buildRequestOptions(providerKey, providerConfig, options);
 
-    return rateLimiter.executeRequest(
-      service.updateAnimation.bind(service),
-      [prompt, currentSvg],
-      provider
+    return executeWithRateLimiting(
+      providerKey,
+      providerEntry.service.updateAnimation.bind(providerEntry.service),
+      [prompt, currentSvg, requestOptions]
     );
+  },
+
+  /**
+   * Generate raw response for storyboard or JSON-only flows.
+   * @param {string} prompt
+   * @param {Object} [options]
+   * @returns {Promise<string>}
+   */
+  async generateRawResponse(prompt, options = {}) {
+    const providerKey = resolveProvider(options.provider);
+    const { providerEntry, providerConfig } = ensureProviderConfigured(providerKey);
+    const requestOptions = buildRequestOptions(providerKey, providerConfig, options);
+
+    try {
+      if (typeof providerEntry.service.generateRawResponse === 'function') {
+        const rawResponse = await providerEntry.service.generateRawResponse(prompt, requestOptions);
+
+        if (!rawResponse || typeof rawResponse !== 'string') {
+          console.error(`Error: ${providerEntry.name} returned invalid response type:`, typeof rawResponse);
+          throw new ServiceUnavailableError('AI service returned an invalid response format');
+        }
+
+        if (rawResponse.includes('<svg') || rawResponse.includes('</svg>')) {
+          console.error(`Error: ${providerEntry.name} returned SVG content when JSON was expected`);
+          throw new ServiceUnavailableError('Received SVG content instead of JSON. Please try again.');
+        }
+
+        return rawResponse;
+      }
+
+      const response = await providerEntry.service.generateAnimation(prompt, requestOptions);
+
+      if (typeof response === 'string') {
+        return response;
+      }
+
+      if (response && response.explanation) {
+        return response.explanation;
+      }
+
+      if (response && response.message) {
+        return response.message;
+      }
+
+      return JSON.stringify(response);
+    } catch (error) {
+      console.error(`Error generating raw response with ${providerEntry.name}:`, error);
+      throw error;
+    }
   },
 
   /**
    * Get rate limiter status
-   * @returns {Object} Current rate limiter status
+   * @returns {Object}
    */
-  getRateLimiterStatus: () => {
+  getRateLimiterStatus() {
     return rateLimiter.getStatus();
   }
 };
 
 module.exports = AIService;
-
-/**
- * Send a raw prompt to the AI service and receive the raw response
- * Used for more complex requests like storyboard generation
- *
- * @param {string} prompt - The prompt to send to the AI
- * @returns {string} - Raw text response from the AI
- */
-exports.generateRawResponse = async (prompt) => {
-  const service = getAIService();
-
-  try {
-    // First check if the service has a dedicated raw response method
-    if (service.generateRawResponse) {
-      const rawResponse = await service.generateRawResponse(prompt);
-
-      if (!rawResponse || typeof rawResponse !== 'string') {
-        console.error(`Error: ${config.aiProvider} returned invalid response type:`, typeof rawResponse);
-        throw new ServiceUnavailableError('AI service returned an invalid response format');
-      }
-
-      // Check for common error indicators
-      if (rawResponse.includes('<svg') || rawResponse.includes('</svg>')) {
-        console.error(`Error: ${config.aiProvider} returned SVG content when JSON was expected`);
-        throw new ServiceUnavailableError('Received SVG content instead of JSON. Please try again.');
-      }
-
-      return rawResponse;
-    }
-
-    // Fall back to using the generateAnimation method and extracting just the text
-    const response = await service.generateAnimation(prompt);
-
-    // If it's a string, return as is
-    if (typeof response === 'string') {
-      return response;
-    }
-
-    // If it's an object with an explanation property, return that
-    if (response && response.explanation) {
-      return response.explanation;
-    }
-
-    // If it has a message property, return that
-    if (response && response.message) {
-      return response.message;
-    }
-
-    // Otherwise stringify the whole object
-    return JSON.stringify(response);
-  } catch (error) {
-    console.error(`Error generating raw response with ${config.aiProvider}:`, error);
-    throw error;
-  }
-};

@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Message } from './AnimationContext';
+import { Message, useAnimation } from './AnimationContext';
 import { StoryboardResponse, StoryboardScene } from '../services/movie.api';
 import { AnimationApi, MovieStorageApi } from '../services/api';
+import type { AnimationGenerateResult } from '../services/api';
 import { exportMovieAsSvg } from '../utils/exportMovieUtils';
 import { useViewerPreferences } from './ViewerPreferencesContext';
+import type { AIProviderId } from '@/types/ai';
 
 // Define movie clip interface
 export interface MovieClip {
@@ -17,7 +19,8 @@ export interface MovieClip {
   chatHistory?: Message[];
   animationId?: string; // Reference to saved animation ID in backend storage
   createdAt?: Date;     // When the clip was created
-  provider?: 'openai' | 'claude' | 'gemini'; // Which AI provider was used to generate the clip
+  provider?: AIProviderId;
+  model?: string;
 }
 
 // Define storyboard interface
@@ -29,7 +32,8 @@ export interface Storyboard {
   createdAt: Date;
   updatedAt: Date;
   // AI provider used for generation
-  aiProvider?: 'openai' | 'claude' | 'gemini';
+  aiProvider?: AIProviderId;
+  aiModel?: string;
   // Store original scenes from the storyboard response
   originalScenes?: any[];
   // Generation status for in-progress movies
@@ -58,14 +62,16 @@ const defaultStoryboard: Storyboard = {
   description: '',
   clips: [],
   createdAt: new Date(),
-  updatedAt: new Date()
+  updatedAt: new Date(),
+  aiProvider: 'openai',
+  aiModel: ''
 };
 
 // Interface for animation data passed from parent
 export interface AnimationData {
   svgContent: string;
   chatHistory: Message[];
-  generateAnimation?: (prompt: string) => Promise<any>;
+  generateAnimation?: (prompt: string) => Promise<AnimationGenerateResult>;
   setSvgContent?: (svgContent: string) => void;
   setChatHistory?: (chatHistory: Message[]) => void;
 }
@@ -132,12 +138,16 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   const setSvgContent = animationData.setSvgContent || (() => {});
   const setChatHistory = animationData.setChatHistory || (() => {});
 
+  const {
+    aiProvider: globalProvider,
+    aiModel: globalModel
+  } = useAnimation();
+
   // Storyboard state
   const [currentStoryboard, setCurrentStoryboard] = useState<Storyboard>(defaultStoryboard);
   const [activeClipId, setActiveClipId] = useState<string | null>(null);
   const [activeClip, setActiveClip] = useState<MovieClip | null>(null);
   const [savedStoryboards, setSavedStoryboards] = useState<string[]>([]);
-  const [defaultProvider, setDefaultProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
 
   // Caching mechanism to avoid redundant API calls
   const animationListCache = useRef<{timestamp: number, animations: string[]} | null>(null);
@@ -150,22 +160,6 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   // Viewer preferences
   const { currentBackground } = useViewerPreferences();
 
-  // Fetch default provider from backend on initial load
-  useEffect(() => {
-    const fetchDefaultProvider = async () => {
-      try {
-        const response = await fetch('/api/config');
-        const data = await response.json();
-        if (data.config && data.config.aiProvider) {
-          console.log(`Setting default AI provider from backend for movie context: ${data.config.aiProvider}`);
-          setDefaultProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
-        }
-      } catch (error) {
-        console.error('Error fetching default provider:', error);
-      }
-    };
-    fetchDefaultProvider();
-  }, []);
 
   // Load saved storyboard list on mount
   useEffect(() => {
@@ -338,13 +332,15 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       description: description || '',
       clips: [],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      aiProvider: globalProvider,
+      aiModel: globalModel
     };
 
     setCurrentStoryboard(newStoryboard);
     setActiveClipId(null);
     setActiveClip(null);
-  }, []);
+  }, [globalProvider, globalModel]);
 
   // Rename current storyboard
   const renameStoryboard = useCallback((name: string) => {
@@ -491,7 +487,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
         createdAt: new Date(movie.createdAt),
         updatedAt: new Date(movie.updatedAt),
         // Preserve AI provider and original scenes for resumption
-        aiProvider: movie.aiProvider,
+        aiProvider: (movie.aiProvider as AIProviderId) || globalProvider,
+        aiModel: typeof movie.aiModel === 'string' ? movie.aiModel : globalModel,
         originalScenes: movie.originalScenes,
         // Copy generation status from server
         generationStatus: movie.generationStatus ? {
@@ -617,7 +614,9 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       const newClip: MovieClip = {
         ...clip,
         id: newClipId,
-        order
+        order,
+        provider: clip.provider ?? globalProvider,
+        model: clip.model ?? globalModel
       };
 
       return {
@@ -628,7 +627,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     });
 
     return newClipId;
-  }, []);
+  }, [globalProvider, globalModel]);
 
   // Save current animation as a clip
   const saveCurrentAnimationAsClip = useCallback((name: string) => {
@@ -651,11 +650,13 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       svgContent,
       duration: 5, // Default duration in seconds
       prompt,
-      chatHistory
+      chatHistory,
+      provider: globalProvider,
+      model: globalModel
     });
 
     return newClipId;
-  }, [addClip, svgContent, chatHistory]);
+  }, [addClip, svgContent, chatHistory, globalProvider, globalModel]);
 
   // Remove a clip
   const removeClip = useCallback((clipId: string) => {
@@ -738,6 +739,19 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
   // Create a storyboard from an LLM-generated response
   const createStoryboardFromResponse = useCallback(async (storyboardResponse: StoryboardResponse): Promise<Storyboard> => {
+    const provider = storyboardResponse.aiProvider ?? currentStoryboard.aiProvider ?? globalProvider;
+    const model = storyboardResponse.aiModel ?? currentStoryboard.aiModel ?? globalModel;
+
+    const generateFn = generateAnimation
+      ? (prompt: string) => generateAnimation(prompt)
+      : (prompt: string) => AnimationApi.generate(prompt, { provider, model });
+
+    const scenesWithProvider = storyboardResponse.scenes.map(scene => ({
+      ...scene,
+      provider: scene.provider ?? provider,
+      model: scene.model ?? model
+    }));
+
     // Create a new storyboard with the title and description from the response
     const newStoryboard: Storyboard = {
       id: uuidv4(),
@@ -745,7 +759,10 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       description: storyboardResponse.description || '',
       clips: [],
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      aiProvider: provider,
+      aiModel: model,
+      originalScenes: scenesWithProvider
     };
 
     setCurrentStoryboard(newStoryboard);
@@ -755,7 +772,6 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       try {
         // Use the generate function from animationData if available, otherwise fall back to AnimationApi
         console.log(`Generating SVG for scene ${index + 1}: ${scene.id}`);
-        const generateFn = generateAnimation || AnimationApi.generate;
         const generatedSvg = await generateFn(scene.svgPrompt);
 
         // Create a new clip with the generated SVG
@@ -779,7 +795,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
           }],
           animationId: generatedSvg.animationId,
           createdAt: new Date(),
-          provider: scene.provider
+          provider: generatedSvg.provider ?? scene.provider ?? provider,
+          model: generatedSvg.model ?? scene.model ?? model
         };
 
         // Log if an animation ID was returned from the backend
@@ -801,7 +818,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
           order: index,
           prompt: scene.svgPrompt,
           createdAt: new Date(),
-          provider: scene.provider
+          provider: scene.provider ?? provider,
+          model: scene.model ?? model
         };
       }
     });
@@ -833,7 +851,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       console.error('Error creating storyboard from response:', error);
       return newStoryboard;
     }
-  }, [generateAnimation, saveStoryboard]);
+  }, [generateAnimation, saveStoryboard, currentStoryboard, globalProvider, globalModel]);
 
   // Create an error SVG for failed clip generation
   const createErrorSvg = (description: string): string => {

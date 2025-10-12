@@ -68,6 +68,9 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
       if (activeClip.provider) {
         sessionStorage.setItem('animation_provider', activeClip.provider);
       }
+      if (activeClip.model) {
+        sessionStorage.setItem('animation_model', activeClip.model);
+      }
     } else if (activeClip.svgContent) {
       // If there's no animation ID but we have SVG content, store it directly
       sessionStorage.setItem('clip_svg_content', activeClip.svgContent);
@@ -77,6 +80,9 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
       // If the clip has a provider setting, also pass that
       if (activeClip.provider) {
         sessionStorage.setItem('animation_provider', activeClip.provider);
+      }
+      if (activeClip.model) {
+        sessionStorage.setItem('animation_model', activeClip.model);
       }
     }
 

@@ -169,8 +169,8 @@ const generateBasicSvg = (prompt, isUpdate = false) => {
  * @param {boolean} isUpdate - Whether this is an update
  * @returns {string} Response with SVG content
  */
-const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) => {
-  if (!config.claude.apiKey) {
+const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, options = {}) => {
+  if (!config.anthropic.apiKey) {
     throw new ServiceUnavailableError('Claude API key is not configured');
   }
 
@@ -182,14 +182,19 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false) =
     console.log(`[Claude Service ${clientId}] Starting request with client instance ${clientId}`);
 
     // Call Claude API directly - rate limiting is handled at the AI service level
+    const modelId = options.model || config.anthropic.model;
+    const baseTemperature = typeof options.temperature === 'number'
+      ? options.temperature
+      : config.anthropic.temperature;
+
     const response = await anthropic.messages.create({
-      model: config.claude.model,
-      max_tokens: config.claude.maxTokens,
+      model: modelId,
+      max_tokens: config.anthropic.maxTokens,
       system: systemPrompt,
       messages: [
         { role: 'user', content: userPrompt }
       ],
-      temperature: isUpdate ? Math.max(0.1, config.claude.temperature - 0.2) : config.claude.temperature
+      temperature: isUpdate ? Math.max(0.1, baseTemperature - 0.2) : baseTemperature
     });
 
     console.log(`[Claude Service ${clientId}] Request completed`);
@@ -288,8 +293,8 @@ const parseClaudeResponse = async (text) => {
  * @param {string} prompt - User's animation request
  * @returns {string} Claude response with SVG content
  */
-exports.generateAnimation = async (prompt) => {
-  return processSvgWithClaude(prompt, '', false);
+exports.generateAnimation = async (prompt, options = {}) => {
+  return processSvgWithClaude(prompt, '', false, options);
 };
 
 /**
@@ -299,6 +304,6 @@ exports.generateAnimation = async (prompt) => {
  * @param {string} currentSvg - Current SVG content (if any)
  * @returns {string} Claude response with updated SVG content
  */
-exports.updateAnimation = async (prompt, currentSvg = '') => {
-  return processSvgWithClaude(prompt, currentSvg, true);
+exports.updateAnimation = async (prompt, currentSvg = '', options = {}) => {
+  return processSvgWithClaude(prompt, currentSvg, true, options);
 };

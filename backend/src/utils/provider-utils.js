@@ -1,0 +1,125 @@
+const path = require('path');
+
+// Load the shared AI provider registry so frontend and backend stay in sync
+const providerRegistry = require(path.join(__dirname, '../../../shared/ai-providers.json'));
+
+// Map legacy or shorthand values to canonical provider IDs
+const PROVIDER_ALIASES = {
+  openai: 'openai',
+  'open-ai': 'openai',
+  gpt: 'openai',
+  claude: 'anthropic',
+  anthropic: 'anthropic',
+  'anthropic-claude': 'anthropic',
+  gemini: 'google',
+  google: 'google',
+  'google-gemini': 'google'
+};
+
+/**
+ * Convert an incoming provider string to the canonical provider ID
+ * @param {string|null|undefined} provider
+ * @returns {string|null}
+ */
+function normalizeProvider(provider) {
+  if (typeof provider !== 'string') {
+    return null;
+  }
+
+  const key = provider.trim().toLowerCase();
+  return PROVIDER_ALIASES[key] || null;
+}
+
+/**
+ * Resolve a provider to its metadata entry
+ * @param {string} provider
+ * @returns {object|null}
+ */
+function getProviderMetadata(provider) {
+  const normalized = normalizeProvider(provider);
+  if (!normalized) {
+    return null;
+  }
+
+  return providerRegistry[normalized] || null;
+}
+
+/**
+ * Return the default model ID for a provider
+ * @param {string} provider
+ * @returns {string|null}
+ */
+function getDefaultModel(provider) {
+  const metadata = getProviderMetadata(provider);
+  return metadata?.defaultModel || null;
+}
+
+/**
+ * Determine if a model supports temperature tuning.
+ * Defaults to true when not specified.
+ * @param {string} provider
+ * @param {string} modelId
+ * @returns {boolean}
+ */
+function modelSupportsTemperature(provider, modelId) {
+  const metadata = getProviderMetadata(provider);
+  if (!metadata) {
+    return true;
+  }
+
+  const model = metadata.models?.find(entry => entry.id === modelId);
+  if (!model || typeof model.supportsTemperature === 'undefined') {
+    return true;
+  }
+
+  return Boolean(model.supportsTemperature);
+}
+
+/**
+ * Resolve a model ID for a provider, falling back to defaults when needed.
+ * Unknown models are allowed so that experimental IDs can be configured,
+ * but when no model is provided we always return the recommended default.
+ *
+ * @param {string} provider
+ * @param {string|undefined|null} requestedModel
+ * @returns {string|null}
+ */
+function resolveModelId(provider, requestedModel) {
+  if (requestedModel && typeof requestedModel === 'string') {
+    return requestedModel;
+  }
+
+  return getDefaultModel(provider);
+}
+
+/**
+ * Return provider metadata safe for exposing to the frontend.
+ * @returns {Array<{id:string,displayName:string,description?:string,defaultModel:string,models:Array<{id:string,label:string,useCase?:string}>}>}
+ */
+function getPublicProviderInfo() {
+  return Object.values(providerRegistry).map(provider => ({
+    id: provider.id,
+    displayName: provider.displayName,
+    description: provider.description,
+    defaultModel: provider.defaultModel,
+    models: provider.models.map(model => ({
+      id: model.id,
+      label: model.label,
+      useCase: model.useCase,
+      supportsTemperature: typeof model.supportsTemperature === 'boolean'
+        ? model.supportsTemperature
+        : undefined
+    }))
+  }));
+}
+
+module.exports = {
+  providerRegistry,
+  PROVIDER_ALIASES,
+  normalizeProvider,
+  getProviderMetadata,
+  getDefaultModel,
+  resolveModelId,
+  modelSupportsTemperature,
+  getPublicProviderInfo
+};

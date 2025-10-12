@@ -1,0 +1,88 @@
+{
+  "openai": {
+    "id": "openai",
+    "displayName": "OpenAI",
+    "description": "Versatile GPT-4o and GPT-5 family models tuned for fast SVG-friendly JSON output.",
+    "defaultModel": "gpt-4o-mini",
+    "models": [
+      {
+        "id": "gpt-5-nano",
+        "label": "GPT-5 Nano",
+        "useCase": "Lowest cost, quick drafts and iterative updates.",
+        "supportsTemperature": false
+      },
+      {
+        "id": "gpt-5-mini",
+        "label": "GPT-5 Mini",
+        "useCase": "Balanced cost to quality for most animations.",
+        "supportsTemperature": false
+      },
+      {
+        "id": "gpt-4o-mini",
+        "label": "GPT-4o Mini",
+        "useCase": "Reliable multi-turn JSON and SVG generation."
+      },
+      {
+        "id": "gpt-5",
+        "label": "GPT-5",
+        "useCase": "Highest quality, complex choreography or scenes."
+      }
+    ]
+  },
+  "anthropic": {
+    "id": "anthropic",
+    "displayName": "Anthropic Claude",
+    "description": "Claude Sonnet and Opus tiers excel at structured SVG aware instructions.",
+    "defaultModel": "claude-3-7-sonnet-latest",
+    "models": [
+      {
+        "id": "claude-3-5-haiku-latest",
+        "label": "Claude 3.5 Haiku",
+        "useCase": "Fastest Claude tier with good SVG JSON skills."
+      },
+      {
+        "id": "claude-3-7-sonnet-latest",
+        "label": "Claude 3.7 Sonnet (Latest)",
+        "useCase": "Recommended default, balanced quality and cost."
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "label": "Claude Sonnet 4.5",
+        "useCase": "Upgraded Sonnet for detailed motion or styling."
+      },
+      {
+        "id": "claude-opus-4-1",
+        "label": "Claude Opus 4.1",
+        "useCase": "Top tier Claude for the most demanding sequences."
+      }
+    ]
+  },
+  "google": {
+    "id": "google",
+    "displayName": "Google Gemini",
+    "description": "Gemini 2.5 models optimized for speedy creative SVG prompting.",
+    "defaultModel": "gemini-2.5-flash",
+    "models": [
+      {
+        "id": "gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash Lite",
+        "useCase": "Lowest cost option for quick sketches."
+      },
+      {
+        "id": "gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash",
+        "useCase": "General purpose SVG storyboard generation."
+      },
+      {
+        "id": "gemini-2.5-flash-preview-09-2025",
+        "label": "Gemini 2.5 Flash Preview (09-2025)",
+        "useCase": "Latest Flash preview for cutting edge features."
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "label": "Gemini 2.5 Pro",
+        "useCase": "Highest quality Gemini for intricate animations."
+      }
+    ]
+  }
+}

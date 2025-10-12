@@ -15,20 +15,20 @@ const rateLimiter = new RateLimiter({
 // Create a singleton instance of the Gemini client
 const geminiClient = new GoogleGenAI({
   vertexai: false,
-  apiKey: config.gemini.apiKey
+  apiKey: config.google.apiKey
 });
 
 // Track the active requests and return the client
 const getGeminiClient = () => {
   activeRequests++;
-  console.log(`[Gemini Client] Active requests: ${activeRequests}`);
+  console.log(`[Google Gemini Client] Active requests: ${activeRequests}`);
 
   // Return an object with the client and a completion function
   return {
     client: geminiClient,
     completeRequest: () => {
       activeRequests--;
-      console.log(`[Gemini Client] Request completed. Active requests: ${activeRequests}`);
+      console.log(`[Google Gemini Client] Request completed. Active requests: ${activeRequests}`);
     }
   };
 };
@@ -37,7 +37,7 @@ const getGeminiClient = () => {
 const completeRequest = () => {
   if (activeRequests > 0) {
     activeRequests--;
-    console.log(`[Gemini Client] Request completed. Active requests: ${activeRequests}`);
+    console.log(`[Google Gemini Client] Request completed. Active requests: ${activeRequests}`);
   }
 };
 

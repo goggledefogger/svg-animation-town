@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useMovie } from '../contexts/MovieContext';
-import { MovieApi, StoryboardResponse, StoryboardScene } from '../services/movie.api';
+import { StoryboardResponse, StoryboardScene } from '../services/movie.api';
 import { AnimationApi, MovieStorageApi } from '../services/api';
 import { Storyboard, MovieClip } from '../contexts/MovieContext';
 import { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 import { useGenerationProgress } from './useGenerationProgress';
+import { useAnimation } from '../contexts/AnimationContext';
+import type { AIProviderId } from '@/types/ai';
 
 /**
  * Interface for generation progress state
@@ -62,24 +64,7 @@ export function useStoryboardGenerator(
     activeClipId
   } = useMovie();
 
-  // State for default provider fetched from server
-  const [defaultProvider, setDefaultProvider] = useState<'openai' | 'claude' | 'gemini'>('openai');
-
-  // Fetch default provider from backend on initial load
-  useEffect(() => {
-    const fetchDefaultProvider = async () => {
-      try {
-        const response = await fetch('/api/config');
-        const data = await response.json();
-        if (data.config && data.config.aiProvider) {
-          setDefaultProvider(data.config.aiProvider as 'openai' | 'claude' | 'gemini');
-        }
-      } catch (error) {
-        console.error('Error fetching default provider:', error);
-      }
-    };
-    fetchDefaultProvider();
-  }, []);
+  const { aiProvider: globalProvider, aiModel: globalModel } = useAnimation();
 
   // State for tracking generation progress and error
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -101,7 +86,7 @@ export function useStoryboardGenerator(
   }, []);
 
   // Verify final state matches backend
-  const verifyFinalState = useCallback(async (storyboardId: string) => {
+  const verifyFinalState = useCallback(async (storyboardId: string): Promise<void> => {
     if (!storyboardId) {
       console.error("Cannot verify final state: No storyboard ID provided");
       return;
@@ -122,12 +107,13 @@ export function useStoryboardGenerator(
         } else {
           // Wait a bit and try again if no clips are present
           await new Promise(resolve => setTimeout(resolve, 2000));
-          return verifyFinalState(storyboardId);
+          await verifyFinalState(storyboardId);
+          return;
         }
       } else {
         console.warn(`Failed to verify final state: Movie not found or invalid response`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error verifying final state:', error);
     }
   }, [setCurrentStoryboard]);
@@ -166,7 +152,7 @@ export function useStoryboardGenerator(
     // 2. Then close modals and select the first clip in a single batch
     verifyFinalState(storyboardId).then(() => {
       // Find the first clip to select
-      let firstClipId = null;
+      let firstClipId: string | null = null;
       if (currentStoryboard?.clips && currentStoryboard.clips.length > 0) {
         const sortedClips = [...currentStoryboard.clips].sort((a, b) => a.order - b.order);
         if (sortedClips[0]?.id) {
@@ -186,7 +172,7 @@ export function useStoryboardGenerator(
           setActiveClipId(firstClipId);
         }
       });
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.error('Error verifying final state:', error);
       // If verification fails, still close modals to prevent being stuck
       setShowGeneratingClipsModal(false);
@@ -394,7 +380,11 @@ export function useStoryboardGenerator(
   /**
    * Handle storyboard generation
    */
-  const handleGenerateStoryboard = async (prompt: string, provider: 'openai' | 'claude' | 'gemini' = defaultProvider, numScenes?: number) => {
+  const handleGenerateStoryboard = useCallback(async (
+    prompt: string,
+    selection?: { provider: AIProviderId; model: string },
+    numScenes?: number
+  ): Promise<void> => {
     try {
       // Reset any previous state
       setGenerationError(null);
@@ -411,6 +401,9 @@ export function useStoryboardGenerator(
       setShowGeneratingClipsModal(true);
       setShowStoryboardGeneratorModal(false);
 
+      const provider = selection?.provider ?? globalProvider;
+      const model = selection?.model ?? globalModel;
+
       // Initialize generation session and create storyboard
       const initResponse = await fetch('/api/movie/generate/initialize', {
         method: 'POST',
@@ -418,6 +411,7 @@ export function useStoryboardGenerator(
         body: JSON.stringify({
           prompt,
           provider,
+          model,
           numScenes,
           // If we have a current storyboard and it's in initializing state, reuse it
           existingMovieId: currentStoryboard?.generationStatus?.status === 'initializing' ? currentStoryboard.id : undefined
@@ -429,6 +423,18 @@ export function useStoryboardGenerator(
       }
 
       const { sessionId, storyboard } = await initResponse.json();
+
+      if (storyboard) {
+        storyboard.aiProvider = storyboard.aiProvider || provider;
+        storyboard.aiModel = storyboard.aiModel || model;
+        if (Array.isArray(storyboard.originalScenes)) {
+          storyboard.originalScenes = storyboard.originalScenes.map((scene: StoryboardScene) => ({
+            ...scene,
+            provider: scene.provider ?? provider,
+            model: (scene as any).model ?? model
+          }));
+        }
+      }
 
       // Set current session ID to establish SSE connection
       setCurrentSession(sessionId);
@@ -460,7 +466,19 @@ export function useStoryboardGenerator(
       setCurrentSession(null); // Clear the session on error
       isPollingRef.current = false; // Make sure polling is off
     }
-  };
+  }, [
+    currentStoryboard?.generationStatus?.status,
+    currentStoryboard?.id,
+    globalModel,
+    globalProvider,
+    setGenerationError,
+    setGenerationProgress,
+    setShowGeneratingClipsModal,
+    setShowStoryboardGeneratorModal,
+    setCurrentStoryboard,
+    setCurrentSession,
+    setShowErrorModal
+  ]);
 
   /**
    * Add a post-generation synchronization check to ensure all clips
@@ -671,7 +689,8 @@ export function useStoryboardGenerator(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               prompt: currentStoryboard.description,
-              provider: currentStoryboard.aiProvider || defaultProvider,
+              provider: currentStoryboard.aiProvider || globalProvider,
+              model: currentStoryboard.aiModel || globalModel,
               numScenes: currentStoryboard.originalScenes.length,
               existingMovieId: currentStoryboard.id // Pass the existing movie ID to reuse it
             })
@@ -707,7 +726,7 @@ export function useStoryboardGenerator(
     };
 
     checkGenerationStatus();
-  }, [currentStoryboard?.id, defaultProvider, startPolling]);
+  }, [currentStoryboard?.id, globalProvider, globalModel, startPolling]);
 
   return {
     isGenerating,
@@ -718,4 +737,3 @@ export function useStoryboardGenerator(
     syncClipData
   };
 }
-

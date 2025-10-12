@@ -3,6 +3,7 @@ const { extractSvgAndText } = require('../utils/parser');
 const { v4: uuidv4 } = require('uuid');
 const storageService = require('./storage.service');
 const config = require('../config');
+const { normalizeProvider, resolveModelId } = require('../utils/provider-utils');
 
 /**
  * Animation Service handles generating and saving animations
@@ -11,37 +12,39 @@ const AnimationService = {
   /**
    * Generate an animation from a text prompt
    * @param {string} prompt - The text prompt to generate an animation from
-   * @param {string} provider - Optional provider override
+   * @param {string|Object} providerOrOptions - Optional provider override or configuration object
    * @returns {Promise<Object>} - Object containing SVG content, animation ID, and response message
    */
-  generateAnimation: async (prompt, provider) => {
+  generateAnimation: async (prompt, providerOrOptions) => {
     if (!prompt) {
       throw new Error('Prompt is required');
     }
 
+    const options = typeof providerOrOptions === 'string'
+      ? { provider: providerOrOptions }
+      : (providerOrOptions || {});
+
+    const normalizedProvider = options.provider ? normalizeProvider(options.provider) : null;
+    if (options.provider && !normalizedProvider) {
+      console.warn(`[ANIMATION] Unknown provider override "${options.provider}". Falling back to default.`);
+    }
+    const providerKey = normalizedProvider || config.aiProvider;
+    const providerConfig = config.providers[providerKey];
+
+    if (!providerConfig) {
+      throw new Error(`Provider configuration not found for ${providerKey}`);
+    }
+
+    const resolvedModel = resolveModelId(providerKey, options.model || providerConfig.model);
+
     // Use shorter trace logs with essential information only
-    console.log(`[ANIMATION] Generating animation with ${provider || config.aiProvider}`);
+    console.log(`[ANIMATION] Generating animation with ${providerKey} (${resolvedModel})`);
 
     try {
-      // Use the existing AIService instead of trying to access aiProviders directly
-      const aiProvider = provider || config.aiProvider;
-      
-      // Use existing AIService which handles provider selection internally
-      let llmResponse;
-      
-      // Temporarily override the configured provider if specified
-      const originalProvider = config.aiProvider;
-      if (provider) {
-        config.aiProvider = provider;
-      }
-      
-      // Call the AI service to generate the animation
-      llmResponse = await AIService.generateAnimation(prompt);
-      
-      // Restore the original provider if we temporarily changed it
-      if (provider) {
-        config.aiProvider = originalProvider;
-      }
+      const llmResponse = await AIService.generateAnimation(prompt, {
+        provider: providerKey,
+        model: resolvedModel
+      });
       
       // Extract SVG and text from the response using the existing parser
       const { svg, text } = extractSvgAndText(llmResponse);
@@ -73,7 +76,8 @@ const AnimationService = {
         svg,
         prompt,
         timestamp: new Date().toISOString(),
-        provider: aiProvider,
+        provider: providerKey,
+        model: resolvedModel,
         chatHistory
       });
       
@@ -82,7 +86,9 @@ const AnimationService = {
       return {
         svg,
         animationId,
-        message: text || 'Animation created successfully'
+        message: text || 'Animation created successfully',
+        provider: providerKey,
+        model: resolvedModel
       };
     } catch (error) {
       console.error(`[ANIMATION] Error generating animation:`, error);

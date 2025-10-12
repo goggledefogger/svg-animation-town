@@ -17,7 +17,14 @@ router.get('/config', (req, res) => {
   res.json({
     success: true,
     config: {
-      aiProvider: config.aiProvider
+      aiProvider: config.aiProvider,
+      providers: config.publicProviders,
+      defaults: config.defaults,
+      currentModels: {
+        openai: config.openai.model,
+        anthropic: config.anthropic.model,
+        google: config.google.model
+      }
     }
   });
 });

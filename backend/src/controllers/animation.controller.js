@@ -1,4 +1,3 @@
-const OpenAIService = require('../services/openai.service');
 const presetService = require('../services/preset.service');
 const AIService = require('../services/ai.service');
 const storageService = require('../services/storage.service');
@@ -6,35 +5,35 @@ const { extractSvgAndText } = require('../utils/parser');
 const { asyncHandler, BadRequestError, NotFoundError, ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
 const { v4: uuidv4 } = require('uuid');
+const { normalizeProvider, resolveModelId } = require('../utils/provider-utils');
 
 /**
  * Generate a new animation based on a text prompt
  */
 exports.generateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, provider } = req.body;
+  const { prompt, provider, model } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
   }
 
   try {
-    let llmResponse;
-
-    // Override the default provider if one is specified in the request
-    if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
-      // Temporarily override the configured provider
-      const originalProvider = config.aiProvider;
-      config.aiProvider = provider;
-
-      // Call the AI service to generate the animation
-      llmResponse = await AIService.generateAnimation(prompt);
-
-      // Restore the original provider
-      config.aiProvider = originalProvider;
-    } else {
-      // Use the default provider configured in the system
-      llmResponse = await AIService.generateAnimation(prompt);
+    const normalizedProvider = provider ? normalizeProvider(provider) : null;
+    const providerKey = normalizedProvider || config.aiProvider;
+    const providerConfig = config.providers[providerKey];
+    if (!providerConfig) {
+      throw new ServiceUnavailableError(`Provider configuration not found for ${providerKey}`);
     }
+    const resolvedModel = resolveModelId(providerKey, model || providerConfig?.model);
+
+    if (provider && !normalizedProvider) {
+      console.warn(`Unknown provider override "${provider}". Falling back to ${providerKey}.`);
+    }
+
+    const llmResponse = await AIService.generateAnimation(prompt, {
+      provider: providerKey,
+      model: resolvedModel
+    });
 
     // Extract SVG and text from the response
     const { svg, text } = extractSvgAndText(llmResponse);
@@ -68,7 +67,8 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       name: animationName,
       svg,
       chatHistory,
-      provider: provider || config.aiProvider,
+      provider: providerKey,
+      model: resolvedModel,
       timestamp
     });
 
@@ -76,7 +76,8 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
     console.log(`Animation saved with ID: ${animationId}`, {
       nameLength: animationName.length,
       svgLength: svg.length,
-      provider: provider || config.aiProvider,
+      provider: providerKey,
+      model: resolvedModel,
       timestamp
     });
 
@@ -85,7 +86,11 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
       success: true,
       svg,
       message: text,
-      animationId
+      animationId,
+      metadata: {
+        provider: providerKey,
+        model: resolvedModel
+      }
     });
   } catch (error) {
     console.error('Error generating animation:', error);
@@ -97,46 +102,42 @@ exports.generateAnimation = asyncHandler(async (req, res) => {
  * Update an existing animation based on a text prompt
  */
 exports.updateAnimation = asyncHandler(async (req, res) => {
-  const { prompt, currentSvg, provider } = req.body;
+  const { prompt, currentSvg, provider, model } = req.body;
 
   if (!prompt) {
     throw new BadRequestError('Prompt is required');
   }
 
   try {
-    // Override the default provider if one is specified in the request
-    if (provider && (provider === 'openai' || provider === 'claude' || provider === 'gemini')) {
-      // Temporarily override the configured provider
-      const originalProvider = config.aiProvider;
-      config.aiProvider = provider;
-
-      // Call the AI service to update the animation
-      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
-
-      // Restore the original provider
-      config.aiProvider = originalProvider;
-
-      // Extract SVG and text from the response
-      const { svg, text } = extractSvgAndText(llmResponse);
-
-      return res.status(200).json({
-        success: true,
-        svg,
-        message: text
-      });
-    } else {
-      // Use the default provider configured in the system
-      const llmResponse = await AIService.updateAnimation(prompt, currentSvg);
-
-      // Extract SVG and text from the response
-      const { svg, text } = extractSvgAndText(llmResponse);
-
-      return res.status(200).json({
-        success: true,
-        svg,
-        message: text
-      });
+    const normalizedProvider = provider ? normalizeProvider(provider) : null;
+    const providerKey = normalizedProvider || config.aiProvider;
+    const providerConfig = config.providers[providerKey];
+    if (!providerConfig) {
+      throw new ServiceUnavailableError(`Provider configuration not found for ${providerKey}`);
     }
+    const resolvedModel = resolveModelId(providerKey, model || providerConfig?.model);
+
+    if (provider && !normalizedProvider) {
+      console.warn(`Unknown provider override "${provider}". Falling back to ${providerKey}.`);
+    }
+
+    const llmResponse = await AIService.updateAnimation(prompt, currentSvg, {
+      provider: providerKey,
+      model: resolvedModel
+    });
+
+    // Extract SVG and text from the response
+    const { svg, text } = extractSvgAndText(llmResponse);
+
+    return res.status(200).json({
+      success: true,
+      svg,
+      message: text,
+      metadata: {
+        provider: providerKey,
+        model: resolvedModel
+      }
+    });
   } catch (error) {
     console.error('Error updating animation:', error);
     throw new ServiceUnavailableError(`Failed to update animation: ${error.message}`);

@@ -2,7 +2,9 @@ const { v4: uuidv4 } = require('uuid');
 const animationService = require('../services/animation.service');
 const storageService = require('../services/storage.service');
 const storyboardService = require('../services/storyboard.service');
+const config = require('../config');
 const { ServiceUnavailableError } = require('../utils/errors');
+const { normalizeProvider, resolveModelId } = require('../utils/provider-utils');
 
 // Store active generation sessions
 const activeSessions = new Map();
@@ -15,11 +17,25 @@ const sessionProgress = new Map();
  */
 exports.initializeGeneration = async (req, res) => {
   try {
-    const { prompt, provider, numScenes, existingMovieId } = req.body;
+    const { prompt, provider, numScenes, existingMovieId, model } = req.body;
 
     // Validate request
     if (!prompt) {
       return res.status(400).json({ success: false, error: 'Prompt is required' });
+    }
+
+    const normalizedProvider = provider ? normalizeProvider(provider) : null;
+    const providerKey = normalizedProvider || config.aiProvider;
+    const providerConfig = config.providers[providerKey];
+
+    if (!providerConfig) {
+      throw new ServiceUnavailableError(`Provider configuration not found for ${providerKey}`);
+    }
+
+    const resolvedModel = resolveModelId(providerKey, model || providerConfig.model);
+
+    if (provider && !normalizedProvider) {
+      console.warn(`Unknown provider override "${provider}". Falling back to ${providerKey}.`);
     }
 
     let storyboard;
@@ -50,7 +66,7 @@ exports.initializeGeneration = async (req, res) => {
     if (!storyboard) {
       // First, generate a complete storyboard with scene descriptions
       console.log('Generating initial storyboard with scene descriptions...');
-      const storyboardResponse = await storyboardService.generateStoryboard(prompt, provider, numScenes);
+      const storyboardResponse = await storyboardService.generateStoryboard(prompt, providerKey, numScenes, resolvedModel);
 
       // Create new storyboard with the generated content
       storyboard = {
@@ -60,7 +76,8 @@ exports.initializeGeneration = async (req, res) => {
         clips: [],
         createdAt: new Date(),
         updatedAt: new Date(),
-        aiProvider: provider,
+        aiProvider: providerKey,
+        aiModel: resolvedModel,
         // Store the scene descriptions for generating clips
         originalScenes: storyboardResponse.scenes,
         // Initialize generation status
@@ -83,7 +100,8 @@ exports.initializeGeneration = async (req, res) => {
       id: sessionId,
       storyboardId: storyboard.id,
       prompt: storyboard.description,
-      provider: provider || 'openai',
+      provider: providerKey,
+      model: resolvedModel,
       numScenes: storyboard.originalScenes.length,
       progress: {
         current: 0,
@@ -264,11 +282,14 @@ exports.startGeneration = async (req, res) => {
 
         // Only log detailed animation info during generation if this is the first scene
         if (i === 0) {
-          console.log(`[SVG_GENERATION] Processing scene ${i + 1} with provider: ${session.provider}`);
+          console.log(`[SVG_GENERATION] Processing scene ${i + 1} with provider: ${session.provider}, model: ${session.model}`);
         }
 
         // Use the scene's specific prompt for generation
-        const result = await animationService.generateAnimation(scene.svgPrompt, session.provider);
+        const result = await animationService.generateAnimation(scene.svgPrompt, {
+          provider: session.provider,
+          model: session.model
+        });
 
         if (!result || !result.svg) {
           throw new Error(`Failed to generate scene ${i + 1}: No SVG content returned`);
@@ -290,7 +311,8 @@ exports.startGeneration = async (req, res) => {
           description: scene.description,
           animationId: animationId,
           createdAt: new Date(),
-          provider: session.provider,
+          provider: result.provider,
+          model: result.model,
           chatHistory: [{
             id: uuidv4(),
             sender: 'user',
@@ -509,11 +531,21 @@ exports.recoveryHandler = async (req, res) => {
         }
 
         // Create recovery session
+        const recoveryProviderKey = normalizeProvider(movie.aiProvider) || config.aiProvider;
+        const recoveryConfig = config.providers[recoveryProviderKey];
+
+        if (!recoveryConfig) {
+          throw new ServiceUnavailableError(`Provider configuration not found for ${recoveryProviderKey}`);
+        }
+
+        const recoveryModel = resolveModelId(recoveryProviderKey, movie.aiModel || recoveryConfig.model);
+
         const session = {
           id: sessionId,
           storyboardId: movie.id,
           prompt: movie.description || 'Recovered generation',
-          provider: movie.aiProvider || 'openai',
+          provider: recoveryProviderKey,
+          model: recoveryModel,
           numScenes: totalScenes,
           progress: {
             current: completedScenes,
