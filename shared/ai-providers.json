@@ -2,7 +2,7 @@
   "openai": {
     "id": "openai",
     "displayName": "OpenAI",
-    "description": "GPT-4o, GPT-4.1, and GPT-5 family models for fast SVG-friendly JSON output.",
+    "description": "GPT-4o and GPT-5 family models for fast SVG-friendly JSON output.",
     "defaultModel": "gpt-4o-mini",
     "models": [
       {
@@ -24,37 +24,10 @@
         "supportsTemperature": false
       },
       {
-        "id": "gpt-5-chat-latest",
-        "label": "GPT-5 Chat (Latest)",
-        "useCase": "Latest GPT-5 chat model for conversational SVG generation.",
-        "supportsTemperature": false
-      },
-      {
-        "id": "gpt-5-codex",
-        "label": "GPT-5 Codex",
-        "useCase": "GPT-5 optimized for code and structured SVG output.",
-        "supportsTemperature": false
-      },
-      {
         "id": "gpt-5-pro",
         "label": "GPT-5 Pro",
         "useCase": "Highest quality GPT-5 for most demanding sequences.",
         "supportsTemperature": false
-      },
-      {
-        "id": "gpt-4.1-nano",
-        "label": "GPT-4.1 Nano",
-        "useCase": "Lowest cost GPT-4.1 for simple animations."
-      },
-      {
-        "id": "gpt-4.1-mini",
-        "label": "GPT-4.1 Mini",
-        "useCase": "Balanced GPT-4.1 for everyday use."
-      },
-      {
-        "id": "gpt-4.1",
-        "label": "GPT-4.1",
-        "useCase": "Advanced GPT-4.1 for complex tasks."
       },
       {
         "id": "gpt-4o-mini",
