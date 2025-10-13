@@ -56,36 +56,54 @@
     "id": "anthropic",
     "displayName": "Anthropic Claude",
     "description": "Claude models excel at structured SVG aware instructions and reasoning.",
-    "defaultModel": "claude-3-5-sonnet-latest",
+    "defaultModel": "claude-3-7-sonnet-20250219",
     "models": [
       {
-        "id": "claude-3-5-haiku-latest",
+        "id": "claude-sonnet-4-5-20250929",
+        "label": "Claude Sonnet 4.5",
+        "useCase": "Best model for complex agents and coding with highest intelligence.",
+        "maxOutputTokens": 64000
+      },
+      {
+        "id": "claude-opus-4-1-20250805",
+        "label": "Claude Opus 4.1",
+        "useCase": "Exceptional for specialized complex tasks requiring advanced reasoning.",
+        "maxOutputTokens": 32000
+      },
+      {
+        "id": "claude-sonnet-4-20250514",
+        "label": "Claude Sonnet 4",
+        "useCase": "High-performance model with balanced intelligence.",
+        "maxOutputTokens": 64000
+      },
+      {
+        "id": "claude-opus-4-20250514",
+        "label": "Claude Opus 4",
+        "useCase": "Previous flagship model with very high intelligence.",
+        "maxOutputTokens": 32000
+      },
+      {
+        "id": "claude-3-7-sonnet-20250219",
+        "label": "Claude 3.7 Sonnet",
+        "useCase": "High-performance with toggleable extended thinking support.",
+        "maxOutputTokens": 64000
+      },
+      {
+        "id": "claude-3-5-haiku-20241022",
         "label": "Claude 3.5 Haiku",
-        "useCase": "Fastest Claude 3.5 tier with solid SVG JSON skills.",
-        "maxOutputTokens": 8192
-      },
-      {
-        "id": "claude-3-5-sonnet-latest",
-        "label": "Claude 3.5 Sonnet (Latest)",
-        "useCase": "Claude 3.5 Sonnet with balanced quality and cost.",
-        "maxOutputTokens": 8192
-      },
-      {
-        "id": "claude-3-5-sonnet-20240620",
-        "label": "Claude 3.5 Sonnet (2024-06-20)",
-        "useCase": "Pinned Claude 3.5 Sonnet release for stability.",
+        "useCase": "Fastest model with intelligence at blazing speeds.",
         "maxOutputTokens": 8192
       },
       {
         "id": "claude-3-5-sonnet-20241022",
         "label": "Claude 3.5 Sonnet (2024-10-22)",
-        "useCase": "Latest Claude 3.5 Sonnet release with improved coherence.",
-        "maxOutputTokens": 16384
+        "useCase": "Legacy 3.5 Sonnet with improved coherence.",
+        "maxOutputTokens": 8192
       },
       {
-        "id": "claude-3-opus-20240229",
-        "label": "Claude 3 Opus (2024-02-29)",
-        "useCase": "Highest quality Claude 3 model for demanding sequences.",
+        "id": "claude-3-haiku-20240307",
+        "label": "Claude 3 Haiku",
+        "useCase": "Fast and compact for near-instant responsiveness.",
         "maxOutputTokens": 4096
       }
     ]
