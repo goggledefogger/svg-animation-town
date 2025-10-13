@@ -7,6 +7,87 @@ const config = require('../config');
 const clientId = Math.random().toString(36).substring(7);
 console.log(`[OpenAI Service] Created OpenAI client instance ${clientId}`);
 
+// GPT-5 and O1 families currently require the Responses API instead of chat completions
+const RESPONSES_MODEL_PREFIXES = ['gpt-5', 'o1'];
+
+const shouldUseResponsesApi = (modelId) => {
+  if (typeof modelId !== 'string') {
+    return false;
+  }
+
+  return RESPONSES_MODEL_PREFIXES.some(prefix => modelId.startsWith(prefix));
+};
+
+const buildResponsesPayload = (modelId, systemPrompt, userPrompt, temperature, maxTokens) => {
+  const payload = {
+    model: modelId,
+    instructions: systemPrompt,
+    input: [
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: userPrompt }
+        ]
+      }
+    ],
+    text: RESPONSES_JSON_TEXT_CONFIG,
+    store: false
+  };
+
+  if (typeof temperature === 'number') {
+    payload.temperature = temperature;
+  }
+
+  if (typeof maxTokens === 'number') {
+    payload.max_output_tokens = maxTokens;
+  }
+
+  return payload;
+};
+
+const RESPONSES_JSON_TEXT_CONFIG = {
+  format: { type: 'json_object' }
+};
+
+const extractResponsesText = (response) => {
+  if (!response) {
+    return '';
+  }
+
+  if (typeof response.output_text === 'string' && response.output_text.trim()) {
+    return response.output_text;
+  }
+
+  const collectFromContentArray = (contentArray) => {
+    const parts = [];
+
+    for (const item of contentArray) {
+      if (!item) continue;
+
+      if (Array.isArray(item.content)) {
+        parts.push(collectFromContentArray(item.content));
+        continue;
+      }
+
+      if ((item.type === 'text' || item.type === 'output_text') && typeof item.text === 'string') {
+        parts.push(item.text);
+      }
+    }
+
+    return parts.join('');
+  };
+
+  if (Array.isArray(response.output)) {
+    return collectFromContentArray(response.output).trim();
+  }
+
+  if (Array.isArray(response.content)) {
+    return collectFromContentArray(response.content).trim();
+  }
+
+  return '';
+};
+
 /**
  * Build OpenAI-specific system prompt
  *
@@ -79,31 +160,52 @@ const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false, o
       requestTemperature = undefined;
     }
 
-    const requestPayload = {
-      model: modelId,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: "json_object" }
-    };
+    const useResponsesApi = shouldUseResponsesApi(modelId);
+    const maxTokens = typeof config.openai.maxTokens === 'number' ? config.openai.maxTokens : undefined;
+    let responseContent = '';
 
-    if (typeof requestTemperature === 'number') {
-      requestPayload.temperature = requestTemperature;
+    if (useResponsesApi) {
+      const responsePayload = buildResponsesPayload(modelId, systemPrompt, userPrompt, requestTemperature, maxTokens);
+      const response = await openai.responses.create(responsePayload);
+      console.log(`[OpenAI Service ${clientId}] Responses API request completed`);
+      responseContent = extractResponsesText(response);
+    } else {
+      const requestPayload = {
+        model: modelId,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: "json_object" }
+      };
+
+      if (typeof requestTemperature === 'number') {
+        requestPayload.temperature = requestTemperature;
+      }
+
+      // Call OpenAI API with structured output
+      const completion = await openai.chat.completions.create(requestPayload);
+
+      console.log(`[OpenAI Service ${clientId}] Chat completions request completed`);
+
+      if (!completion.choices || !completion.choices.length) {
+        console.warn('Empty response from OpenAI API');
+        return generateErrorSvg('Empty response from AI', isUpdate ? currentSvg : null);
+      }
+
+      responseContent = completion.choices[0].message.content;
     }
 
-    // Call OpenAI API with structured output
-    const completion = await openai.chat.completions.create(requestPayload);
-
-    console.log(`[OpenAI Service ${clientId}] Request completed`);
-
-    if (!completion.choices || !completion.choices.length) {
-      console.warn('Empty response from OpenAI API');
+    if (!responseContent) {
+      console.warn('Empty response content from OpenAI API');
       return generateErrorSvg('Empty response from AI', isUpdate ? currentSvg : null);
     }
 
-    const responseContent = completion.choices[0].message.content;
     console.log(`OpenAI ${isUpdate ? 'update' : ''} response received, length:`, responseContent.length);
+
+    if (useResponsesApi) {
+      return responseContent;
+    }
 
     // Parse the JSON response
     try {
@@ -185,30 +287,52 @@ exports.generateRawResponse = async (prompt, options = {}) => {
     const hasTemperatureOverride = Object.prototype.hasOwnProperty.call(options, 'temperature');
     const defaultRawTemperature = 0.1;
     const temperatureSource = hasTemperatureOverride ? options.temperature : defaultRawTemperature;
-    const requestPayload = {
-      model: modelId,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      response_format: { type: "json_object" } // Request JSON formatted response
-    };
+    const useResponsesApi = shouldUseResponsesApi(modelId);
+    const maxTokens = typeof config.openai.maxTokens === 'number' ? config.openai.maxTokens : undefined;
+    let responseContent = '';
 
-    if (typeof temperatureSource === 'number') {
-      requestPayload.temperature = temperatureSource;
+    if (useResponsesApi) {
+      const responsePayload = buildResponsesPayload(
+        modelId,
+        'You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.',
+        prompt,
+        temperatureSource,
+        maxTokens
+      );
+      const response = await openai.responses.create(responsePayload);
+      responseContent = extractResponsesText(response);
+    } else {
+      const requestPayload = {
+        model: modelId,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.'
+          },
+          { role: 'user', content: prompt }
+        ],
+        response_format: { type: "json_object" } // Request JSON formatted response
+      };
+
+      if (typeof temperatureSource === 'number') {
+        requestPayload.temperature = temperatureSource;
+      }
+
+      const completion = await openai.chat.completions.create(requestPayload);
+
+      if (!completion.choices || !completion.choices.length) {
+        console.error('Empty response from OpenAI API');
+        throw new ServiceUnavailableError('Received empty response from OpenAI API');
+      }
+
+      responseContent = completion.choices[0].message.content;
     }
 
-    const completion = await openai.chat.completions.create(requestPayload);
-
-    if (!completion.choices || !completion.choices.length) {
+    if (!responseContent) {
       console.error('Empty response from OpenAI API');
       throw new ServiceUnavailableError('Received empty response from OpenAI API');
     }
 
-    const responseContent = completion.choices[0].message.content;
     console.log(`OpenAI raw response received, length: ${responseContent.length}`);
 
     // Make sure we don't have surrounding markdown code blocks

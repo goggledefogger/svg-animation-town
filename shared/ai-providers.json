@@ -39,12 +39,6 @@
         "supportsTemperature": false
       },
       {
-        "id": "gpt-5-pro",
-        "label": "GPT-5 Pro",
-        "useCase": "Highest quality GPT-5 for demanding sequences.",
-        "supportsTemperature": false
-      },
-      {
         "id": "o1-mini",
         "label": "O1 Mini",
         "useCase": "Reasoning model for complex problem solving and planning.",

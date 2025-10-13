@@ -26,16 +26,17 @@ exports.extractSvgAndText = (responseText) => {
 
         // Check if it has the expected structure
         if (parsedResponse.svg && typeof parsedResponse.svg === 'string') {
-          console.log(`Successfully parsed JSON response, SVG length: ${parsedResponse.svg.length}`);
+          const sanitizedSvg = sanitizeSvgString(parsedResponse.svg);
+          console.log(`Successfully parsed JSON response, SVG length: ${sanitizedSvg.length}`);
           
           // Validate that SVG content is usable
-          if (!parsedResponse.svg.includes('<svg') || parsedResponse.svg.length < 100) {
-            console.warn(`Parsed SVG content appears invalid: ${parsedResponse.svg.substring(0, 50)}...`);
+          if (!sanitizedSvg.includes('<svg') || sanitizedSvg.length < 100) {
+            console.warn(`Parsed SVG content appears invalid: ${sanitizedSvg.substring(0, 50)}...`);
             throw new Error('Invalid SVG content in parsed JSON');
           }
           
           return {
-            svg: parsedResponse.svg,
+            svg: sanitizedSvg,
             text: parsedResponse.explanation || 'Animation created successfully!'
           };
         } else {
@@ -60,12 +61,15 @@ exports.extractSvgAndText = (responseText) => {
           for (const potentialJson of jsonMatches) {
             try {
               const parsed = JSON.parse(potentialJson);
-              if (parsed.svg && typeof parsed.svg === 'string' && parsed.svg.includes('<svg')) {
-                console.log(`Successfully extracted JSON with SVG from response text`);
-                return {
-                  svg: parsed.svg,
-                  text: parsed.explanation || 'Animation created successfully!'
-                };
+              if (parsed.svg && typeof parsed.svg === 'string') {
+                const sanitizedSvg = sanitizeSvgString(parsed.svg);
+                if (sanitizedSvg.includes('<svg')) {
+                  console.log(`Successfully extracted JSON with SVG from response text`);
+                  return {
+                    svg: sanitizedSvg,
+                    text: parsed.explanation || 'Animation created successfully!'
+                  };
+                }
               }
             } catch (e) {
               // Continue to next match
@@ -84,9 +88,9 @@ exports.extractSvgAndText = (responseText) => {
     // Extract SVG tag
     const svgMatch = responseText.match(/<svg[\s\S]*?<\/svg>/);
     if (svgMatch) {
-      svg = svgMatch[0];
+      svg = sanitizeSvgString(svgMatch[0]);
       // Get the text content by removing the SVG
-      text = responseText.replace(svg, '').trim();
+      text = responseText.replace(svgMatch[0], '').trim();
       console.log(`Extracted SVG directly from response, length: ${svg.length}`);
     } else {
       // If no direct match, check for code blocks
@@ -96,19 +100,23 @@ exports.extractSvgAndText = (responseText) => {
         const svgInBlock = content.match(/<svg[\s\S]*?<\/svg>/);
 
         if (svgInBlock) {
-          svg = svgInBlock[0];
+          const matchedSvg = sanitizeSvgString(svgInBlock[0]);
+          svg = matchedSvg;
           text = responseText.replace(codeBlockMatch[0], '').trim();
           console.log(`Extracted SVG from code block, length: ${svg.length}`);
         } else if (content.startsWith('{') && content.endsWith('}')) {
           // Try parsing code block as JSON (common in Claude responses)
           try {
             const parsed = JSON.parse(content);
-            if (parsed.svg && typeof parsed.svg === 'string' && parsed.svg.includes('<svg')) {
-              console.log(`Extracted SVG from JSON in code block, length: ${parsed.svg.length}`);
-              return {
-                svg: parsed.svg,
-                text: parsed.explanation || 'Animation created successfully!'
-              };
+            if (parsed.svg && typeof parsed.svg === 'string') {
+              const sanitizedSvg = sanitizeSvgString(parsed.svg);
+              if (sanitizedSvg.includes('<svg')) {
+                console.log(`Extracted SVG from JSON in code block, length: ${sanitizedSvg.length}`);
+                return {
+                  svg: sanitizedSvg,
+                  text: parsed.explanation || 'Animation created successfully!'
+                };
+              }
             }
           } catch (jsonBlockError) {
             console.warn(`Failed to parse JSON in code block: ${jsonBlockError.message}`);
@@ -134,7 +142,7 @@ exports.extractSvgAndText = (responseText) => {
       svg = addMissingAttributes(svg);
     }
 
-    return { svg, text };
+    return { svg: sanitizeSvgString(svg), text };
   } catch (error) {
     console.error('Error parsing LLM response:', error);
     return {
@@ -194,6 +202,16 @@ function createErrorSvg(errorMessage) {
       ${errorMessage}
     </text>
   </svg>`;
+}
+
+function sanitizeSvgString(svg) {
+  if (typeof svg !== 'string') {
+    return svg;
+  }
+
+  return svg
+    .replace(/\\\"/g, '"')
+    .replace(/\\'/g, "'");
 }
 
 /**

@@ -8,6 +8,16 @@ const OUTPUT_DIR = path.join(__dirname, '..', 'output');
 const ANIMATIONS_DIR = path.join(OUTPUT_DIR, 'animations');
 const MOVIES_DIR = path.join(OUTPUT_DIR, 'movies');
 
+const sanitizeSvgString = (svg) => {
+  if (typeof svg !== 'string') {
+    return svg;
+  }
+
+  return svg
+    .replace(/\\\"/g, '"')
+    .replace(/\\'/g, "'");
+};
+
 // Track locks for movie updates to prevent race conditions
 const movieLocks = new Map();
 
@@ -79,10 +89,12 @@ class StorageService {
       }
 
       // Create standardized animation data
+      const sanitizedSvg = sanitizeSvgString(animation.svg);
+
       const animationData = {
         id,
         name: animation.name || 'Untitled Animation',
-        svg: animation.svg,
+        svg: sanitizedSvg,
         chatHistory: animation.chatHistory || [],
         provider: animation.provider,
         model: animation.model,
@@ -98,7 +110,7 @@ class StorageService {
 
       // Write the file with error handling
       try {
-        console.log(`Saving animation ${id}, SVG length: ${animation.svg?.length || 0}`);
+        console.log(`Saving animation ${id}, SVG length: ${sanitizedSvg?.length || 0}`);
 
         // Use a more reliable write approach with fsync to ensure file is written to disk
         // First, write to a temporary file
@@ -145,6 +157,11 @@ class StorageService {
           if (!parsedData || !parsedData.svg) {
             throw new Error('Verification failed: Animation written to disk lacks SVG content');
           }
+
+          // Sanity-check saved SVG doesn't contain escaped quotes
+          if (parsedData.svg.includes('\\"')) {
+            console.warn(`[ANIMATION_STORAGE] SVG for ${id} still contains escaped quotes after write verification`);
+          }
         } catch (verifyError) {
           console.error(`Failed to verify animation ${id} was properly saved:`, verifyError);
           throw new Error(`Animation save verification failed: ${verifyError.message}`);
@@ -188,6 +205,10 @@ class StorageService {
         const data = await fs.readFile(filePath, 'utf8');
 
         const animation = JSON.parse(data);
+
+        if (animation.svg) {
+          animation.svg = sanitizeSvgString(animation.svg);
+        }
 
         // Validate that we have the essential data
         if (!animation) {
