@@ -2,66 +2,135 @@
   "openai": {
     "id": "openai",
     "displayName": "OpenAI",
-    "description": "Versatile GPT-4o and GPT-5 family models tuned for fast SVG-friendly JSON output.",
+    "description": "GPT-4o, GPT-4.1, and GPT-5 family models for fast SVG-friendly JSON output.",
     "defaultModel": "gpt-4o-mini",
     "models": [
       {
         "id": "gpt-5-nano",
         "label": "GPT-5 Nano",
-        "useCase": "Lowest cost, quick drafts and iterative updates.",
-        "supportsTemperature": false
+        "useCase": "Lowest cost GPT-5 for quick drafts and iterations."
       },
       {
         "id": "gpt-5-mini",
         "label": "GPT-5 Mini",
-        "useCase": "Balanced cost to quality for most animations.",
-        "supportsTemperature": false
-      },
-      {
-        "id": "gpt-4o-mini",
-        "label": "GPT-4o Mini",
-        "useCase": "Reliable multi-turn JSON and SVG generation."
-      },
-      {
-        "id": "gpt-4o",
-        "label": "GPT-4o",
-        "useCase": "More capable than mini, good for complex animations."
+        "useCase": "Balanced GPT-5 cost to quality for most animations."
       },
       {
         "id": "gpt-5",
         "label": "GPT-5",
-        "useCase": "Highest quality, complex choreography or scenes."
+        "useCase": "Standard GPT-5 for high quality, complex choreography."
+      },
+      {
+        "id": "gpt-5-chat-latest",
+        "label": "GPT-5 Chat (Latest)",
+        "useCase": "Latest GPT-5 chat model for conversational SVG generation."
+      },
+      {
+        "id": "gpt-5-codex",
+        "label": "GPT-5 Codex",
+        "useCase": "GPT-5 optimized for code and structured SVG output."
+      },
+      {
+        "id": "gpt-5-pro",
+        "label": "GPT-5 Pro",
+        "useCase": "Highest quality GPT-5 for most demanding sequences."
+      },
+      {
+        "id": "gpt-4.1-nano",
+        "label": "GPT-4.1 Nano",
+        "useCase": "Lowest cost GPT-4.1 for simple animations."
+      },
+      {
+        "id": "gpt-4.1-mini",
+        "label": "GPT-4.1 Mini",
+        "useCase": "Balanced GPT-4.1 for everyday use."
+      },
+      {
+        "id": "gpt-4.1",
+        "label": "GPT-4.1",
+        "useCase": "Advanced GPT-4.1 for complex tasks."
+      },
+      {
+        "id": "gpt-4o-mini",
+        "label": "GPT-4o Mini",
+        "useCase": "Recommended default, balanced for SVG animations."
+      },
+      {
+        "id": "gpt-4o",
+        "label": "GPT-4o",
+        "useCase": "More capable GPT-4o for complex animations."
+      },
+      {
+        "id": "gpt-4o-2024-05-13",
+        "label": "GPT-4o (2024-05-13)",
+        "useCase": "Specific GPT-4o version for stability."
+      },
+      {
+        "id": "o1-mini",
+        "label": "O1 Mini",
+        "useCase": "Reasoning model for complex problem solving.",
+        "supportsTemperature": false
+      },
+      {
+        "id": "o1",
+        "label": "O1",
+        "useCase": "Advanced reasoning model for most complex tasks.",
+        "supportsTemperature": false
       }
     ]
   },
   "anthropic": {
     "id": "anthropic",
     "displayName": "Anthropic Claude",
-    "description": "Claude Sonnet and Opus tiers excel at structured SVG aware instructions.",
-    "defaultModel": "claude-3-7-sonnet-latest",
+    "description": "Claude models excel at structured SVG aware instructions and reasoning.",
+    "defaultModel": "claude-sonnet-4-5",
     "models": [
       {
         "id": "claude-3-5-haiku-latest",
         "label": "Claude 3.5 Haiku",
-        "useCase": "Fastest Claude tier with good SVG JSON skills.",
+        "useCase": "Fastest Claude 3.5 tier with good SVG JSON skills.",
         "maxOutputTokens": 8192
       },
       {
+        "id": "claude-3-5-sonnet-latest",
+        "label": "Claude 3.5 Sonnet (Latest)",
+        "useCase": "Claude 3.5 Sonnet with balanced quality and cost.",
+        "maxOutputTokens": 16384
+      },
+      {
+        "id": "claude-3-5-sonnet-20241022",
+        "label": "Claude 3.5 Sonnet (2024-10-22)",
+        "useCase": "Stable version of Claude 3.5 Sonnet.",
+        "maxOutputTokens": 16384
+      },
+      {
         "id": "claude-3-7-sonnet-latest",
-        "label": "Claude 3.7 Sonnet (Latest)",
-        "useCase": "Recommended default, balanced quality and cost.",
+        "label": "Claude 3.7 Sonnet",
+        "useCase": "Enhanced Claude 3.7 for detailed storytelling and SVG.",
+        "maxOutputTokens": 16384
+      },
+      {
+        "id": "claude-sonnet-4-0",
+        "label": "Claude Sonnet 4",
+        "useCase": "Claude 4 generation Sonnet for advanced reasoning.",
         "maxOutputTokens": 16384
       },
       {
         "id": "claude-sonnet-4-5",
         "label": "Claude Sonnet 4.5",
-        "useCase": "Upgraded Sonnet for detailed motion or styling.",
+        "useCase": "Recommended default, upgraded Sonnet for complex tasks.",
+        "maxOutputTokens": 16384
+      },
+      {
+        "id": "claude-opus-4-0",
+        "label": "Claude Opus 4",
+        "useCase": "High-end Claude 4 for demanding sequences.",
         "maxOutputTokens": 16384
       },
       {
         "id": "claude-opus-4-1",
         "label": "Claude Opus 4.1",
-        "useCase": "Top tier Claude for the most demanding sequences.",
+        "useCase": "Top tier Claude for the most complex animations.",
         "maxOutputTokens": 16384
       }
     ]
@@ -69,28 +138,38 @@
   "google": {
     "id": "google",
     "displayName": "Google Gemini",
-    "description": "Gemini 2.5 models optimized for speedy creative SVG prompting.",
+    "description": "Gemini 2.5 models optimized for creative SVG prompting and fast generation.",
     "defaultModel": "gemini-2.5-flash",
     "models": [
       {
-        "id": "gemini-2.5-flash-lite",
-        "label": "Gemini 2.5 Flash Lite",
-        "useCase": "Lowest cost option for quick sketches."
+        "id": "gemini-1.5-flash",
+        "label": "Gemini 1.5 Flash",
+        "useCase": "Fast and efficient legacy model for quick SVG generation."
+      },
+      {
+        "id": "gemini-1.5-flash-8b",
+        "label": "Gemini 1.5 Flash 8B",
+        "useCase": "Lightweight legacy model for simple animations."
+      },
+      {
+        "id": "gemini-1.5-pro",
+        "label": "Gemini 1.5 Pro",
+        "useCase": "Legacy pro model for complex SVG animations."
       },
       {
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
-        "useCase": "General purpose SVG storyboard generation."
+        "useCase": "Recommended default with hybrid reasoning and 1M context window."
       },
       {
         "id": "gemini-2.5-flash-preview-09-2025",
-        "label": "Gemini 2.5 Flash Preview (09-2025)",
-        "useCase": "Latest Flash preview for cutting edge features."
+        "label": "Gemini 2.5 Flash Preview",
+        "useCase": "Latest preview for large scale processing and agentic use cases."
       },
       {
         "id": "gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
-        "useCase": "Highest quality Gemini for intricate animations."
+        "useCase": "State-of-the-art model for coding and complex reasoning tasks."
       }
     ]
   }

@@ -15,34 +15,9 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
     availableProviders
   } = useAnimation();
 
+  // Use providers from context (loaded from backend's ai-providers.json)
   const providerList = useMemo((): AIProviderInfo[] => {
-    if (availableProviders.length > 0) {
-      return availableProviders;
-    }
-
-    return [
-      {
-        id: 'openai',
-        displayName: 'OpenAI',
-        defaultModel: 'gpt-4o-mini',
-        models: [
-          { id: 'gpt-4o-mini', label: 'GPT-4o Mini', useCase: 'Balanced default for SVG animations' },
-          { id: 'gpt-4o', label: 'GPT-4o', useCase: 'More capable than mini, good for complex animations' }
-        ]
-      },
-      {
-        id: 'anthropic',
-        displayName: 'Anthropic Claude',
-        defaultModel: 'claude-3-7-sonnet-latest',
-        models: [{ id: 'claude-3-7-sonnet-latest', label: 'Claude 3.7 Sonnet', useCase: 'Detailed storytelling and SVG updates' }]
-      },
-      {
-        id: 'google',
-        displayName: 'Google Gemini',
-        defaultModel: 'gemini-2.5-flash',
-        models: [{ id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', useCase: 'Fast storyboard and animation drafting' }]
-      }
-    ];
+    return availableProviders;
   }, [availableProviders]);
 
   const currentProvider =
@@ -58,6 +33,22 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
   const handleModelChange = (value: string) => {
     setAIModel(value);
   };
+
+  // If no providers are loaded yet, show a loading state
+  if (!providerList || providerList.length === 0) {
+    return (
+      <div className={`flex flex-col sm:flex-row gap-2 ${className || ''}`}>
+        <div className="flex flex-col text-xs text-gray-300">
+          <label htmlFor="ai-provider" className="mb-1 uppercase tracking-wide">
+            Provider
+          </label>
+          <div className="bg-gray-700 border border-gray-600 text-gray-400 text-sm rounded-lg px-2 py-1">
+            Loading...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-col sm:flex-row gap-2 ${className || ''}`}>
