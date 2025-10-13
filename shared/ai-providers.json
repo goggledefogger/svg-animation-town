@@ -8,32 +8,38 @@
       {
         "id": "gpt-5-nano",
         "label": "GPT-5 Nano",
-        "useCase": "Lowest cost GPT-5 for quick drafts and iterations."
+        "useCase": "Lowest cost GPT-5 for quick drafts and iterations.",
+        "supportsTemperature": false
       },
       {
         "id": "gpt-5-mini",
         "label": "GPT-5 Mini",
-        "useCase": "Balanced GPT-5 cost to quality for most animations."
+        "useCase": "Balanced GPT-5 cost to quality for most animations.",
+        "supportsTemperature": false
       },
       {
         "id": "gpt-5",
         "label": "GPT-5",
-        "useCase": "Standard GPT-5 for high quality, complex choreography."
+        "useCase": "Standard GPT-5 for high quality, complex choreography.",
+        "supportsTemperature": false
       },
       {
         "id": "gpt-5-chat-latest",
         "label": "GPT-5 Chat (Latest)",
-        "useCase": "Latest GPT-5 chat model for conversational SVG generation."
+        "useCase": "Latest GPT-5 chat model for conversational SVG generation.",
+        "supportsTemperature": false
       },
       {
         "id": "gpt-5-codex",
         "label": "GPT-5 Codex",
-        "useCase": "GPT-5 optimized for code and structured SVG output."
+        "useCase": "GPT-5 optimized for code and structured SVG output.",
+        "supportsTemperature": false
       },
       {
         "id": "gpt-5-pro",
         "label": "GPT-5 Pro",
-        "useCase": "Highest quality GPT-5 for most demanding sequences."
+        "useCase": "Highest quality GPT-5 for most demanding sequences.",
+        "supportsTemperature": false
       },
       {
         "id": "gpt-4.1-nano",
