@@ -2,13 +2,28 @@
   "openai": {
     "id": "openai",
     "displayName": "OpenAI",
-    "description": "GPT-4o and GPT-5 family models for fast SVG-friendly JSON output.",
+    "description": "GPT-4o family models tuned for fast SVG-friendly JSON output.",
     "defaultModel": "gpt-4o-mini",
     "models": [
       {
+        "id": "gpt-4o-mini",
+        "label": "GPT-4o Mini",
+        "useCase": "Recommended default, balanced for SVG animations."
+      },
+      {
+        "id": "gpt-4o",
+        "label": "GPT-4o",
+        "useCase": "More capable GPT-4o for complex animations."
+      },
+      {
+        "id": "gpt-4o-2024-05-13",
+        "label": "GPT-4o (2024-05-13)",
+        "useCase": "Specific GPT-4o version for stability."
+      },
+      {
         "id": "gpt-5-nano",
         "label": "GPT-5 Nano",
-        "useCase": "Lowest cost GPT-5 for quick drafts and iterations.",
+        "useCase": "Lowest cost GPT-5 option for fast drafts.",
         "supportsTemperature": false
       },
       {
@@ -26,34 +41,19 @@
       {
         "id": "gpt-5-pro",
         "label": "GPT-5 Pro",
-        "useCase": "Highest quality GPT-5 for most demanding sequences.",
+        "useCase": "Highest quality GPT-5 for demanding sequences.",
         "supportsTemperature": false
-      },
-      {
-        "id": "gpt-4o-mini",
-        "label": "GPT-4o Mini",
-        "useCase": "Recommended default, balanced for SVG animations."
-      },
-      {
-        "id": "gpt-4o",
-        "label": "GPT-4o",
-        "useCase": "More capable GPT-4o for complex animations."
-      },
-      {
-        "id": "gpt-4o-2024-05-13",
-        "label": "GPT-4o (2024-05-13)",
-        "useCase": "Specific GPT-4o version for stability."
       },
       {
         "id": "o1-mini",
         "label": "O1 Mini",
-        "useCase": "Reasoning model for complex problem solving.",
+        "useCase": "Reasoning model for complex problem solving and planning.",
         "supportsTemperature": false
       },
       {
         "id": "o1",
         "label": "O1",
-        "useCase": "Advanced reasoning model for most complex tasks.",
+        "useCase": "Advanced reasoning model for the toughest prompts.",
         "supportsTemperature": false
       }
     ]
@@ -62,68 +62,50 @@
     "id": "anthropic",
     "displayName": "Anthropic Claude",
     "description": "Claude models excel at structured SVG aware instructions and reasoning.",
-    "defaultModel": "claude-sonnet-4-5",
+    "defaultModel": "claude-3-5-sonnet-latest",
     "models": [
       {
         "id": "claude-3-5-haiku-latest",
         "label": "Claude 3.5 Haiku",
-        "useCase": "Fastest Claude 3.5 tier with good SVG JSON skills.",
+        "useCase": "Fastest Claude 3.5 tier with solid SVG JSON skills.",
         "maxOutputTokens": 8192
       },
       {
         "id": "claude-3-5-sonnet-latest",
         "label": "Claude 3.5 Sonnet (Latest)",
         "useCase": "Claude 3.5 Sonnet with balanced quality and cost.",
-        "maxOutputTokens": 16384
+        "maxOutputTokens": 8192
+      },
+      {
+        "id": "claude-3-5-sonnet-20240620",
+        "label": "Claude 3.5 Sonnet (2024-06-20)",
+        "useCase": "Pinned Claude 3.5 Sonnet release for stability.",
+        "maxOutputTokens": 8192
       },
       {
         "id": "claude-3-5-sonnet-20241022",
         "label": "Claude 3.5 Sonnet (2024-10-22)",
-        "useCase": "Stable version of Claude 3.5 Sonnet.",
+        "useCase": "Latest Claude 3.5 Sonnet release with improved coherence.",
         "maxOutputTokens": 16384
       },
       {
-        "id": "claude-3-7-sonnet-latest",
-        "label": "Claude 3.7 Sonnet",
-        "useCase": "Enhanced Claude 3.7 for detailed storytelling and SVG.",
-        "maxOutputTokens": 16384
-      },
-      {
-        "id": "claude-sonnet-4-0",
-        "label": "Claude Sonnet 4",
-        "useCase": "Claude 4 generation Sonnet for advanced reasoning.",
-        "maxOutputTokens": 16384
-      },
-      {
-        "id": "claude-sonnet-4-5",
-        "label": "Claude Sonnet 4.5",
-        "useCase": "Recommended default, upgraded Sonnet for complex tasks.",
-        "maxOutputTokens": 16384
-      },
-      {
-        "id": "claude-opus-4-0",
-        "label": "Claude Opus 4",
-        "useCase": "High-end Claude 4 for demanding sequences.",
-        "maxOutputTokens": 16384
-      },
-      {
-        "id": "claude-opus-4-1",
-        "label": "Claude Opus 4.1",
-        "useCase": "Top tier Claude for the most complex animations.",
-        "maxOutputTokens": 16384
+        "id": "claude-3-opus-20240229",
+        "label": "Claude 3 Opus (2024-02-29)",
+        "useCase": "Highest quality Claude 3 model for demanding sequences.",
+        "maxOutputTokens": 4096
       }
     ]
   },
   "google": {
     "id": "google",
     "displayName": "Google Gemini",
-    "description": "Gemini 2.5 models optimized for creative SVG prompting and fast generation.",
+    "description": "Gemini 1.5 and 2.5 models optimized for creative SVG prompting and fast generation.",
     "defaultModel": "gemini-2.5-flash",
     "models": [
       {
         "id": "gemini-1.5-flash",
         "label": "Gemini 1.5 Flash",
-        "useCase": "Fast and efficient legacy model for quick SVG generation."
+        "useCase": "Fast and efficient model for quick SVG generation."
       },
       {
         "id": "gemini-1.5-flash-8b",
