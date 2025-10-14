@@ -194,10 +194,9 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
 
     console.log(`[Claude Service] Using model ${modelId} with max_tokens: ${maxTokens}`);
 
-    // Use streaming for models with high max_tokens to avoid timeout issues
-    // Cap max_tokens at 16384 for SVG generation to avoid triggering streaming requirements
-    // unless the model specifically needs higher limits
-    const effectiveMaxTokens = Math.min(maxTokens, 16384);
+    // Cap max_tokens at 8192 for SVG generation to avoid triggering streaming requirements
+    // This is plenty for SVG animations and avoids the 10-minute timeout trigger
+    const effectiveMaxTokens = Math.min(maxTokens, 8192);
     console.log(`[Claude Service] Effective max_tokens: ${effectiveMaxTokens} (capped from ${maxTokens})`);
 
     const response = await anthropic.messages.create({
