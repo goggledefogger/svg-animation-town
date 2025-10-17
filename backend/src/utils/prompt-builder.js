@@ -35,6 +35,10 @@ To achieve this, you can use one of these simple approaches:
    - Create ONE main container group: <g transform="translate(400, 300)">
    - Position all content inside this group using (0,0) as the center point
    - Example: <g transform="translate(400, 300)"><circle cx="0" cy="0" r="50"/></g>
+   - This outer centering group must stay static. Do NOT animate its transform attribute or override it with CSS animations.
+   - If you need to rotate, scale, or move elements, create a nested group inside the centering group (e.g. <g transform="translate(400, 300)"><g class="scene">...</g></g>) and animate the inner group.
+   - When using CSS transforms on the inner group, include the translation in the same transform string or use transform-origin: center center and transform-box: fill-box so the visual center remains anchored.
+   - Never rely on an animation (CSS or SMIL) to move the entire scene to (400,300); the base SVG must already be centered before animations run.
 
 Do NOT create multiple groups with different transforms like this:
 - INCORRECT: <g transform="translate(200, 300)"></g> (off-center)
@@ -62,9 +66,11 @@ Example SVG template:
   <!-- One container group, centered -->
   <g transform="translate(400, 300)">
     <!-- Everything positioned relative to (0,0) -->
-    <circle class="animated" cx="0" cy="0" r="50"/> <!-- Center -->
-    <circle cx="-50" cy="0" r="20"/> <!-- Left -->
-    <circle cx="50" cy="0" r="20"/> <!-- Right -->
+    <g class="scene">
+      <circle class="animated" cx="0" cy="0" r="50"/> <!-- Center -->
+      <circle cx="-50" cy="0" r="20"/> <!-- Left -->
+      <circle cx="50" cy="0" r="20"/> <!-- Right -->
+    </g>
   </g>
   
   <!-- Example SMIL animation with proper duration -->
