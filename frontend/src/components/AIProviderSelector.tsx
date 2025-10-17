@@ -51,7 +51,7 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
   }
 
   return (
-    <div className={`flex flex-col sm:flex-row gap-2 ${className || ''}`}>
+    <div className={`flex flex-col sm:flex-row gap-1 sm:gap-2 ${className || ''}`}>
       <div className="flex flex-col text-xs text-gray-300">
         <label htmlFor="ai-provider" className="mb-1 uppercase tracking-wide">
           Provider
@@ -60,7 +60,7 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
           id="ai-provider"
           value={currentProvider?.id}
           onChange={(e) => handleProviderChange(e.target.value)}
-          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 px-2 py-1"
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 px-2 py-1 min-w-0 w-full max-w-[180px]"
           aria-label="Select AI Provider"
         >
           {providerList.map((provider: AIProviderInfo) => (
@@ -70,7 +70,7 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
           ))}
         </select>
       </div>
-      <div className="flex flex-col text-xs text-gray-300 min-w-[160px]">
+      <div className="flex flex-col text-xs text-gray-300 min-w-0 flex-shrink-0">
         <label htmlFor="ai-model" className="mb-1 uppercase tracking-wide">
           Model
         </label>
@@ -78,7 +78,7 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
           id="ai-model"
           value={models.find((model: AIModelInfo) => model.id === aiModel)?.id || currentProvider?.defaultModel}
           onChange={(e) => handleModelChange(e.target.value)}
-          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 px-2 py-1"
+          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 px-2 py-1 min-w-0 w-full max-w-[200px]"
           aria-label="Select AI Model"
           disabled={!models.length}
         >

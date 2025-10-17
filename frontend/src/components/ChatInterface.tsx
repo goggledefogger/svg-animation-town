@@ -386,48 +386,55 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onClose, pendingClipName 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gotham-black">
-        <div className="flex items-center">
-          <h2 className="text-lg font-semibold text-white">Animation Chat</h2>
-          <AIProviderSelector className="ml-4" />
-        </div>
-        <div className="flex items-center">
-          {/* Add save button - only show when editing from movie or has pending clip name */}
-          {svgContent && (isEditingFromMovie || pendingClipName) && (
-            <button
-              onClick={handleSaveToMovieEditor}
-              className="p-1.5 mr-2 rounded-md text-white bg-green-600 hover:bg-green-500"
-              title={pendingClipName ? `Save as "${pendingClipName}" to Movie Editor` : "Save to Movie Editor"}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-              </svg>
-            </button>
-          )}
-          {/* Regular save button for standalone animations */}
-          {svgContent && !isEditingFromMovie && !pendingClipName && (
-            <button
-              onClick={() => setShowSaveModal(true)}
-              className="p-1.5 mr-2 rounded-md text-white bg-green-600 hover:bg-green-500"
-              title="Save Animation"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-              </svg>
-            </button>
-          )}
-          {/* Mobile close button */}
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="md:hidden p-1.5 rounded-md text-white hover:bg-gray-700"
-              aria-label="Close Chat"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+      <div className="px-4 py-3 border-b border-gray-700 bg-gotham-black">
+        <div className="flex flex-col gap-3">
+          {/* Top row: Title and Save button */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Animation Chat</h2>
+            <div className="flex items-center gap-2">
+              {/* Add save button - only show when editing from movie or has pending clip name */}
+              {svgContent && (isEditingFromMovie || pendingClipName) && (
+                <button
+                  onClick={handleSaveToMovieEditor}
+                  className="p-1.5 rounded-md text-white bg-green-600 hover:bg-green-500"
+                  title={pendingClipName ? `Save as "${pendingClipName}" to Movie Editor` : "Save to Movie Editor"}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                  </svg>
+                </button>
+              )}
+              {/* Regular save button for standalone animations */}
+              {svgContent && !isEditingFromMovie && !pendingClipName && (
+                <button
+                  onClick={() => setShowSaveModal(true)}
+                  className="p-1.5 rounded-md text-white bg-green-600 hover:bg-green-500"
+                  title="Save Animation"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                </button>
+              )}
+              {/* Mobile close button */}
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="md:hidden p-1.5 rounded-md text-white hover:bg-gray-700"
+                  aria-label="Close Chat"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom row: AI Provider Selector */}
+          <div className="flex justify-center">
+            <AIProviderSelector className="" />
+          </div>
         </div>
       </div>
 
