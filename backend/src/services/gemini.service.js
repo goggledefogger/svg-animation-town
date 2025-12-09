@@ -17,6 +17,18 @@ const svgRateLimiter = new RateLimiter({
   maxWaitTime: 30 * 1000 // 30 seconds max wait time
 });
 
+// Known broken/disabled model IDs with a preferred fallback that actually works
+const BROKEN_GEMINI_MODEL_MAP = {
+  'gemini-2.5-pro-exp-03-25': 'gemini-2.5-flash' // API returns it, but v1beta generateContent 404s
+};
+
+// Derive a non-experimental candidate if the requested model is an -exp variant
+const deriveNonExperimentalModel = (modelId) => {
+  if (!modelId || !modelId.includes('-exp-')) return null;
+  // Drop the -exp-* suffix (e.g., gemini-2.5-pro-exp-03-25 -> gemini-2.5-pro)
+  return modelId.replace(/-exp-[^-]+$/, '').replace(/-exp$/, '');
+};
+
 // Add a unique identifier for this client instance
 const clientId = Math.random().toString(36).substring(7);
 console.log(`[Gemini Service] Created client instance ${clientId}`);
@@ -84,7 +96,19 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false, o
     const { client, completeRequest } = getGeminiClient();
 
     try {
-      const modelId = options.model || config.google.model;
+      const requestedModelId = options.model || config.google.model;
+      let modelId = requestedModelId;
+
+      if (BROKEN_GEMINI_MODEL_MAP[requestedModelId]) {
+        modelId = BROKEN_GEMINI_MODEL_MAP[requestedModelId];
+        console.warn(`[Gemini Service] Requested model ${requestedModelId} is known-broken; using preferred fallback ${modelId}`);
+      } else {
+        const nonExp = deriveNonExperimentalModel(requestedModelId);
+        if (nonExp && nonExp !== requestedModelId) {
+          console.warn(`[Gemini Service] Requested model ${requestedModelId} looks experimental; trying non-experimental ${nonExp}`);
+          modelId = nonExp;
+        }
+      }
 
       // Handle temperature: respect null (model doesn't support it), otherwise use override or config default
       let baseTemperature;
@@ -102,29 +126,93 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false, o
         generationConfig.temperature = isUpdate ? Math.max(0.1, baseTemperature - 0.1) : baseTemperature;
       }
 
-      // Call Gemini API with proper structured output configuration
-      const result = await client.models.generateContent({
-        model: modelId,
-        contents: `${systemPrompt}\n\n${userPrompt}`,
-        generationConfig: generationConfig,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              explanation: {
-                type: Type.STRING,
-                description: "A brief explanation of the animation or the changes made"
+      // Helper to attempt generation with a specific model (used for graceful fallback)
+      const attemptGenerate = async (modelToUse) => {
+        const result = await client.models.generateContent({
+          model: modelToUse,
+          contents: `${systemPrompt}\n\n${userPrompt}`,
+          generationConfig: generationConfig,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                explanation: {
+                  type: Type.STRING,
+                  description: "A brief explanation of the animation or the changes made"
+                },
+                svg: {
+                  type: Type.STRING,
+                  description: "The complete SVG code with animations"
+                }
               },
-              svg: {
-                type: Type.STRING,
-                description: "The complete SVG code with animations"
-              }
+              required: ['explanation', 'svg'],
             },
-            required: ['explanation', 'svg'],
-          },
+          }
+        });
+
+        return { result, usedModel: modelToUse };
+      };
+
+      // Call Gemini API with proper structured output configuration
+      let generationResult;
+      try {
+        generationResult = await attemptGenerate(modelId);
+      } catch (err) {
+        const message = err?.message || '';
+
+        // Try to detect a 404/missing model across various error shapes
+        const parseMessageHasNotFound = () => {
+          if (!message) return false;
+          if (message.includes('not found') ||
+              message.includes('NOT_FOUND') ||
+              message.includes('is not supported for generateContent') ||
+              message.includes('is not found for API version')) {
+            return true;
+          }
+          try {
+            const parsed = JSON.parse(message);
+            return parsed?.error?.code === 404 || parsed?.error?.status === 'NOT_FOUND';
+          } catch (e) {
+            return false;
+          }
+        };
+
+        const status404 =
+          err?.status === 404 ||
+          err?.code === 404 ||
+          err?.response?.status === 404 ||
+          err?.response?.data?.error?.code === 404 ||
+          err?.error?.code === 404;
+
+        const isMissingModel = status404 || parseMessageHasNotFound();
+
+        // Gracefully retry with the configured default model if the requested one is unavailable
+        if (isMissingModel && modelId && modelId !== config.google.model) {
+          let secondarySucceeded = false;
+          // If we stripped -exp- earlier, also try the non-experimental form before default
+          const secondary = deriveNonExperimentalModel(modelId);
+          if (secondary && secondary !== modelId && secondary !== config.google.model) {
+            console.warn(`[Gemini Service] Model ${modelId} unavailable; retrying with ${secondary} before default`);
+            try {
+              generationResult = await attemptGenerate(secondary);
+              console.warn(`[Gemini Service] Succeeded with ${secondary} fallback`);
+              secondarySucceeded = true;
+            } catch (secondaryErr) {
+              console.warn(`[Gemini Service] Secondary fallback ${secondary} failed, will try default`, secondaryErr?.message || secondaryErr);
+            }
+          }
+
+          if (!secondarySucceeded) {
+            console.warn(`[Gemini Service] Model ${modelId} unavailable; retrying with default ${config.google.model}`);
+            generationResult = await attemptGenerate(config.google.model);
+          }
+        } else {
+          throw err;
         }
-      });
+      }
+
+      const result = generationResult.result;
 
       console.log(`[Gemini Service ${clientId}] Request completed`);
 

@@ -280,6 +280,14 @@ function isGoogleModelSuitable(model) {
     return false;
   }
 
+  // Skip known-broken experimental SKUs that 404 for generateContent
+  const brokenIds = new Set([
+    'gemini-2.5-pro-exp-03-25'
+  ]);
+  if (brokenIds.has(id)) {
+    return false;
+  }
+
   // Exclude embedding models explicitly (even if they somehow pass above checks)
   if (id.includes('embedding') ||
       id.includes('embed-') ||
