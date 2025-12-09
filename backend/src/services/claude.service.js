@@ -184,9 +184,16 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
 
     // Call Claude API directly - rate limiting is handled at the AI service level
     const modelId = options.model || config.anthropic.model;
-    const baseTemperature = typeof options.temperature === 'number'
-      ? options.temperature
-      : config.anthropic.temperature;
+
+    // Handle temperature: respect null (model doesn't support it), otherwise use override or config default
+    let baseTemperature;
+    if (Object.prototype.hasOwnProperty.call(options, 'temperature')) {
+      baseTemperature = (options.temperature === null || options.temperature === undefined)
+        ? undefined
+        : options.temperature;
+    } else {
+      baseTemperature = config.anthropic.temperature;
+    }
 
     // Get model-specific max tokens, fallback to config default
     const modelMaxTokens = getMaxOutputTokens('anthropic', modelId);
@@ -199,15 +206,21 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
     const effectiveMaxTokens = Math.min(maxTokens, 8192);
     console.log(`[Claude Service] Effective max_tokens: ${effectiveMaxTokens} (capped from ${maxTokens})`);
 
-    const response = await anthropic.messages.create({
+    const requestPayload = {
       model: modelId,
       max_tokens: effectiveMaxTokens,
       system: systemPrompt,
       messages: [
         { role: 'user', content: userPrompt }
-      ],
-      temperature: isUpdate ? Math.max(0.1, baseTemperature - 0.2) : baseTemperature
-    });
+      ]
+    };
+
+    // Only add temperature if it's a valid number (Claude models all support temperature, but be safe)
+    if (typeof baseTemperature === 'number') {
+      requestPayload.temperature = isUpdate ? Math.max(0.1, baseTemperature - 0.2) : baseTemperature;
+    }
+
+    const response = await anthropic.messages.create(requestPayload);
 
     console.log(`[Claude Service ${clientId}] Request completed`);
 

@@ -148,16 +148,26 @@ const processSvgWithOpenAI = async (prompt, currentSvg = '', isUpdate = false, o
 
     const modelId = options.model || config.openai.model;
 
+    // Check if temperature is explicitly set (including null to disable it)
     const hasTemperatureOverride = Object.prototype.hasOwnProperty.call(options, 'temperature');
-    const temperatureSource = hasTemperatureOverride ? options.temperature : config.openai.temperature;
     let requestTemperature;
 
-    if (typeof temperatureSource === 'number') {
-      requestTemperature = isUpdate
-        ? Math.max(0.1, temperatureSource - 0.1)
-        : temperatureSource;
+    if (hasTemperatureOverride) {
+      // If explicitly set to null, don't use temperature (model doesn't support it)
+      if (options.temperature === null || options.temperature === undefined) {
+        requestTemperature = undefined;
+      } else if (typeof options.temperature === 'number') {
+        requestTemperature = isUpdate
+          ? Math.max(0.1, options.temperature - 0.1)
+          : options.temperature;
+      }
     } else {
-      requestTemperature = undefined;
+      // No override, use config default
+      if (typeof config.openai.temperature === 'number') {
+        requestTemperature = isUpdate
+          ? Math.max(0.1, config.openai.temperature - 0.1)
+          : config.openai.temperature;
+      }
     }
 
     const useResponsesApi = shouldUseResponsesApi(modelId);
@@ -284,9 +294,22 @@ exports.generateRawResponse = async (prompt, options = {}) => {
     // Call OpenAI API requesting a JSON response but without structured output
     const modelId = options.model || config.openai.model;
 
+    // Check if temperature is explicitly set (including null to disable it)
     const hasTemperatureOverride = Object.prototype.hasOwnProperty.call(options, 'temperature');
-    const defaultRawTemperature = 0.1;
-    const temperatureSource = hasTemperatureOverride ? options.temperature : defaultRawTemperature;
+    let requestTemperature;
+
+    if (hasTemperatureOverride) {
+      // If explicitly set to null, don't use temperature (model doesn't support it)
+      if (options.temperature === null || options.temperature === undefined) {
+        requestTemperature = undefined;
+      } else if (typeof options.temperature === 'number') {
+        requestTemperature = options.temperature;
+      }
+    } else {
+      // No override, use low default for JSON generation
+      requestTemperature = 0.1;
+    }
+
     const useResponsesApi = shouldUseResponsesApi(modelId);
     const maxTokens = typeof config.openai.maxTokens === 'number' ? config.openai.maxTokens : undefined;
     let responseContent = '';
@@ -296,7 +319,7 @@ exports.generateRawResponse = async (prompt, options = {}) => {
         modelId,
         'You are a JSON generation assistant. Your responses should ONLY contain valid JSON with no surrounding text, no markdown formatting (like ```json), and no explanations. Just the raw JSON object.',
         prompt,
-        temperatureSource,
+        requestTemperature,
         maxTokens
       );
       const response = await openai.responses.create(responsePayload);
@@ -314,8 +337,8 @@ exports.generateRawResponse = async (prompt, options = {}) => {
         response_format: { type: "json_object" } // Request JSON formatted response
       };
 
-      if (typeof temperatureSource === 'number') {
-        requestPayload.temperature = temperatureSource;
+      if (typeof requestTemperature === 'number') {
+        requestPayload.temperature = requestTemperature;
       }
 
       const completion = await openai.chat.completions.create(requestPayload);

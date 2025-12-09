@@ -85,17 +85,28 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false, o
 
     try {
       const modelId = options.model || config.google.model;
-      const baseTemperature = typeof options.temperature === 'number'
-        ? options.temperature
-        : config.google.temperature;
+
+      // Handle temperature: respect null (model doesn't support it), otherwise use override or config default
+      let baseTemperature;
+      if (Object.prototype.hasOwnProperty.call(options, 'temperature')) {
+        baseTemperature = (options.temperature === null || options.temperature === undefined)
+          ? undefined
+          : options.temperature;
+      } else {
+        baseTemperature = config.google.temperature;
+      }
+
+      // Build generation config - only include temperature if it's a valid number
+      const generationConfig = {};
+      if (typeof baseTemperature === 'number') {
+        generationConfig.temperature = isUpdate ? Math.max(0.1, baseTemperature - 0.1) : baseTemperature;
+      }
 
       // Call Gemini API with proper structured output configuration
       const result = await client.models.generateContent({
         model: modelId,
         contents: `${systemPrompt}\n\n${userPrompt}`,
-        generationConfig: {
-          temperature: isUpdate ? Math.max(0.1, baseTemperature - 0.1) : baseTemperature,
-        },
+        generationConfig: generationConfig,
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -229,12 +240,26 @@ exports.generateRawResponse = async (prompt, options = {}) => {
 
       // Call Gemini API with proper structured output configuration for JSON
       const modelId = options.model || config.google.model;
+
+      // Handle temperature: respect null (model doesn't support it), otherwise use low default for JSON
+      let requestTemperature;
+      if (Object.prototype.hasOwnProperty.call(options, 'temperature')) {
+        requestTemperature = (options.temperature === null || options.temperature === undefined)
+          ? undefined
+          : options.temperature;
+      } else {
+        requestTemperature = 0.1; // Lower temperature for more deterministic JSON responses
+      }
+
+      const generationConfig = {};
+      if (typeof requestTemperature === 'number') {
+        generationConfig.temperature = requestTemperature;
+      }
+
       const result = await client.models.generateContent({
         model: modelId,
         contents: `${systemInstructions}\n\n${userPromptWithInstructions}`,
-        generationConfig: {
-          temperature: 0.1, // Lower temperature for more deterministic JSON responses
-        },
+        generationConfig: generationConfig,
         config: {
           responseMimeType: 'application/json'
         }
