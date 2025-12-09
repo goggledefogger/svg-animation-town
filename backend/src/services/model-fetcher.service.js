@@ -1,7 +1,7 @@
 const openai = require('./shared-openai-client');
 const anthropic = require('./shared-claude-client');
 const config = require('../config');
-const { getProviderMetadata } = require('../utils/provider-utils');
+const { getProviderMetadata, modelSupportsTemperature } = require('../utils/provider-utils');
 
 /**
  * Model Fetcher Service
@@ -56,81 +56,40 @@ function isOpenAIModelSuitable(model) {
   const id = model.id.toLowerCase();
 
   // First, exclude obvious non-chat models
-  if (id.includes('embedding') ||
-      id.includes('embed-') ||
-      id.includes('whisper') ||
-      id.includes('tts') ||
-      id.includes('dall-e') ||
-      id.includes('moderation') ||
-      id.includes('fine-tune') ||
-      id.includes('ft:') || // Fine-tuned models (format: ft:gpt-4o-2024-08-06:org:model)
-      id.includes(':ft') || // Fine-tuned models (alternative format)
-      id.startsWith('ft-') || // Fine-tuned models (alternative format)
-      id.includes('-audio-') || // Audio-specific models (not general chat)
-      id.includes('-realtime-') || // Realtime-specific models (not general chat)
-      id.includes('-transcribe') || // Transcription models (not general chat)
-      id.includes('-search-') || // Search-specific models (not general chat)
-      id.includes('-diarize')) { // Diarization models (not general chat)
+  const blockedSubstrings = [
+    'embedding',
+    'embed-',
+    'whisper',
+    'tts',
+    'dall-e',
+    'moderation',
+    'fine-tune',
+    'ft:',
+    ':ft',
+    'ft-',
+    '-audio-',
+    '-realtime-',
+    '-transcribe',
+    '-search-',
+    '-diarize'
+  ];
+
+  if (blockedSubstrings.some(token => id.includes(token))) {
     return false;
   }
 
-  // Only include models matching known chat/completion model patterns
-  // This is conservative - we only include models we're confident about
+  // Allow known chat/completion families
+  const allowedPrefixes = [
+    'chatgpt-',
+    'gpt-4o',
+    'gpt-4.1',
+    'gpt-4',
+    'gpt-3.5',
+    'gpt-5',
+    'o1'
+  ];
 
-  // GPT-4 family (including all variants like gpt-4o, gpt-4-turbo, etc.)
-  if (id.startsWith('gpt-4')) {
-    return true;
-  }
-
-  // GPT-5 family
-  if (id.startsWith('gpt-5')) {
-    return true;
-  }
-
-  // O1 reasoning models (o1, o1-mini, o1-preview, etc.)
-  if (id.startsWith('o1')) {
-    return true;
-  }
-
-  // GPT-3.5 for backwards compatibility
-  if (id.startsWith('gpt-3.5')) {
-    return true;
-  }
-
-  // Default: exclude unknown models
-  // We don't include other GPT variants unless they match above patterns
-  // This prevents including experimental or specialized models
-  return false;
-}
-
-/**
- * Extract the canonical base name from an OpenAI model ID
- * Handles patterns like:
- * - gpt-4o-2024-05-13 -> gpt-4o
- * - gpt-4o-mini-2024-07-18 -> gpt-4o-mini (keep -mini, it's part of the model name)
- * - gpt-4o-preview -> gpt-4o
- * - gpt-4-0613 -> gpt-4 (handles 4-digit MMDD dates)
- * - gpt-4-1106-preview -> gpt-4
- * - gpt-3.5-turbo-instruct-0914 -> gpt-3.5-turbo-instruct (keep -instruct, it's a variant)
- * - o1-2024-09-12 -> o1
- */
-function getOpenAIModelBaseName(id) {
-  // Remove full date patterns: -YYYY-MM-DD at the end
-  let base = id.replace(/-\d{4}-\d{2}-\d{2}$/, ''); // -2024-05-13
-
-  // Remove short date patterns: -MMDD (4 digits) at the end, but only if preceded by model name
-  // This handles: gpt-4-0613, gpt-4-1106, gpt-3.5-turbo-instruct-0914
-  base = base.replace(/-\d{4}$/, ''); // -0613, -1106, -0914
-
-  // Remove common suffixes that indicate previews/betas (but keep model variants like -mini, -instruct)
-  base = base.replace(/-preview$/, '');
-  base = base.replace(/-beta$/, '');
-  base = base.replace(/-alpha$/, '');
-
-  // Note: We keep -mini, -instruct, -turbo, -audio, -realtime as they're part of the model name
-  // e.g., gpt-4o-mini is different from gpt-4o
-
-  return base;
+  return allowedPrefixes.some(prefix => id.startsWith(prefix));
 }
 
 /**
@@ -143,7 +102,7 @@ function getOpenAIModelBaseName(id) {
  * This ensures we don't strip model IDs but filter out redundant dated versions
  */
 function deduplicateOpenAIModels(models) {
-  // Remove exact duplicates by ID first
+  // Remove exact duplicates by ID
   const seenIds = new Set();
   const uniqueById = models.filter(model => {
     if (seenIds.has(model.id)) return false;
@@ -151,65 +110,54 @@ function deduplicateOpenAIModels(models) {
     return true;
   });
 
-  // Build a set of all model IDs for quick lookup
-  const allModelIds = new Set(uniqueById.map(m => m.id));
-
-  // Filter out dated versions when base model exists
-  // A dated version matches pattern: baseId-YYYY-MM-DD or baseId-YYYYMMDD
-  const filtered = uniqueById.filter(model => {
-    const id = model.id;
-
-    // Check if this is a dated version (ends with -YYYY-MM-DD or -YYYYMMDD)
-    const dateMatch = id.match(/^(.+?)(-\d{4}-\d{2}-\d{2}|-\d{8})$/);
-    if (dateMatch) {
-      const baseId = dateMatch[1];
-      // If base model exists, filter out this dated version
-      if (allModelIds.has(baseId)) {
-        return false; // Filter out dated version
-      }
+  // Filter out dated variants (id ending in -YYYY-MM-DD or -YYYYMMDD) when a base ID exists
+  const allIds = new Set(uniqueById.map(m => m.id));
+  const withoutDated = uniqueById.filter(model => {
+    const match = model.id.match(/^(.+?)(-\d{4}-\d{2}-\d{2}|-\d{8})$/);
+    if (match && allIds.has(match[1])) {
+      return false;
     }
-    return true; // Keep this model
+    return true;
   });
 
-  // Then deduplicate by label - if multiple models have the same label, keep only one
-  const labelMap = new Map();
-  filtered.forEach(model => {
+  // Deduplicate by label, preferring entries with metadata, then shorter IDs, then newest
+  const byLabel = new Map();
+  withoutDated.forEach(model => {
     const label = model.label || model.id;
-    const existing = labelMap.get(label);
+    const existing = byLabel.get(label);
 
     if (!existing) {
-      labelMap.set(label, model);
-    } else {
-      // Decide which one to keep - prefer:
-      // 1. Exact metadata match (has useCase or other metadata)
-      // 2. Shorter ID (base model like "gpt-5" vs "gpt-5-chat-latest")
-      // 3. Newest by created timestamp
-      const aHasMeta = !!(model.useCase || model.maxOutputTokens !== undefined);
-      const bHasMeta = !!(existing.useCase || existing.maxOutputTokens !== undefined);
+      byLabel.set(label, model);
+      return;
+    }
 
-      if (aHasMeta && !bHasMeta) {
-        labelMap.set(label, model);
-      } else if (!aHasMeta && bHasMeta) {
-        // Keep existing
-      } else {
-        // Both have meta or both don't - prefer shorter ID, then newest
-        if (model.id.length < existing.id.length) {
-          labelMap.set(label, model);
-        } else if (model.id.length > existing.id.length) {
-          // Keep existing
-        } else {
-          // Same length - prefer newest by created timestamp
-          const createdA = model.created || 0;
-          const createdB = existing.created || 0;
-          if (createdA > createdB) {
-            labelMap.set(label, model);
-          }
-        }
+    const modelHasMeta = !!(model.useCase || model.maxOutputTokens !== undefined);
+    const existingHasMeta = !!(existing.useCase || existing.maxOutputTokens !== undefined);
+
+    if (modelHasMeta && !existingHasMeta) {
+      byLabel.set(label, model);
+      return;
+    }
+
+    if (!modelHasMeta && existingHasMeta) {
+      return;
+    }
+
+    if (model.id.length < existing.id.length) {
+      byLabel.set(label, model);
+      return;
+    }
+
+    if (model.id.length === existing.id.length) {
+      const createdA = model.created || 0;
+      const createdB = existing.created || 0;
+      if (createdA > createdB) {
+        byLabel.set(label, model);
       }
     }
   });
 
-  return Array.from(labelMap.values());
+  return Array.from(byLabel.values());
 }
 
 /**
@@ -375,26 +323,39 @@ async function fetchGoogleModels() {
       return null;
     }
 
-    // Google Gemini requires REST API call directly
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${config.google.apiKey}`,
-      {
+    // Google Gemini requires REST API call directly (paged)
+    let pageToken = '';
+    let page = 0;
+    const allModels = [];
+
+    do {
+      page += 1;
+      const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
+      url.searchParams.set('key', config.google.apiKey);
+      url.searchParams.set('pageSize', '100');
+      if (pageToken) {
+        url.searchParams.set('pageToken', pageToken);
+      }
+
+      const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
         }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`Google API returned ${response.status}: ${response.statusText} - ${errorText}`);
       }
-    );
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(`Google API returned ${response.status}: ${response.statusText} - ${errorText}`);
-    }
+      const data = await response.json();
+      const models = data.models || [];
+      allModels.push(...models);
+      pageToken = data.nextPageToken;
+    } while (pageToken);
 
-    const data = await response.json();
-    const models = data.models || [];
-
-    const filtered = models
+    const filtered = allModels
       .map(model => {
         // Extract model ID from name (format: "models/gemini-2.5-flash")
         const modelId = model.name?.replace(/^models\//, '') || model.name;
@@ -410,7 +371,7 @@ async function fetchGoogleModels() {
       })
       .filter(isGoogleModelSuitable);
 
-    console.log(`[Model Fetcher] Google: ${filtered.length} suitable models out of ${models.length} total`);
+    console.log(`[Model Fetcher] Google: ${filtered.length} suitable models out of ${allModels.length} total (pages: ${page})`);
     return filtered;
   } catch (error) {
     console.error('[Model Fetcher] Error fetching Google models:', error.message);
@@ -452,12 +413,20 @@ function getModelReleaseDate(model) {
  * Models without dates (date = 0) are placed at the end
  */
 function sortModelsByDate(models) {
-  return models.sort((a, b) => {
-    const dateA = getModelReleaseDate(a);
-    const dateB = getModelReleaseDate(b);
-    // Simple descending sort - 0 values (no date) will sort to end
-    return dateB - dateA;
-  });
+  const modelsWithDates = models.map(model => ({
+    model,
+    date: getModelReleaseDate(model)
+  }));
+
+  // If none of the models have dates, preserve original ordering
+  const hasDates = modelsWithDates.some(entry => entry.date > 0);
+  if (!hasDates) {
+    return models;
+  }
+
+  return modelsWithDates
+    .sort((a, b) => b.date - a.date)
+    .map(entry => entry.model);
 }
 
 /**
@@ -497,19 +466,10 @@ function mergeWithMetadata(provider, apiModels) {
     // Only exact match - no prefix matching
     const meta = metadataMap.get(apiModel.id);
 
-    // Determine if model supports temperature
-    // Use metadata if available, otherwise infer from model ID
-    let supportsTemperature = meta?.supportsTemperature;
-    if (typeof supportsTemperature === 'undefined') {
-      // Auto-detect models that don't support temperature
-      const id = apiModel.id.toLowerCase();
-      if (id.startsWith('gpt-5') || id.startsWith('o1')) {
-        supportsTemperature = false;
-      } else {
-        // Default to true for unknown models (most models support temperature)
-        supportsTemperature = true;
-      }
-    }
+    // Determine if model supports temperature using shared logic for consistency
+    const supportsTemperature = typeof meta?.supportsTemperature === 'boolean'
+      ? meta.supportsTemperature
+      : modelSupportsTemperature(provider, apiModel.id);
 
     return {
       id: apiModel.id,
