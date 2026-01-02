@@ -6,7 +6,8 @@
 
 set -e # Exit immediately if a command exits with a non-zero status
 
-APP_DIR="$(dirname "$0")"
+# Resolve absolute path to the script directory
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$APP_DIR/backend"
 FRONTEND_DIR="$APP_DIR/frontend"
 
