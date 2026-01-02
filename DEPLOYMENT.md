@@ -22,14 +22,14 @@ This guide describes how to deploy the Gotham Animation Studio to a Linux server
     # Backend
     cd backend
     npm install
-    
+
     # Frontend
     cd ../frontend
     npm install
     ```
 
 3.  **Environment Configuration**
-    
+
     Create `.env` files for both backend and frontend.
 
     **backend/.env**:
@@ -68,18 +68,32 @@ We use systemd to keep the services running in the background.
 
 Deploy from your local machine without manually SSH-ing into the server each time.
 
-1.  **Run the Remote Deploy Script**
-    Pass your server's SSH address as an argument:
+1.  **Configure `.env.deploy`**
+    Create a `.env.deploy` file in the root directory to store your deployment settings.
+
+    **For Standard SSH:**
     ```bash
-    ./remote-deploy.sh dannybauman@your-server-ip
+    DEPLOY_TARGET=user@your-server-ip
     ```
-    
-    *Tip: Create a `.env.deploy` file with `DEPLOY_TARGET=user@host` to skip typing the address.*
+
+    **For Google Cloud (gcloud):**
+    ```bash
+    GCLOUD_INSTANCE=your-instance-name
+    GCLOUD_PROJECT=your-project-id
+    GCLOUD_ZONE=your-zone
+    GCLOUD_USER=your-ssh-user
+    ```
+
+2.  **Run the Remote Deploy Script**
+    ```bash
+    ./remote-deploy.sh
+    ```
+    *If you didn't create `.env.deploy`, you can pass the target manually: `./remote-deploy.sh user@host`*
 
     This script automatically:
     1.  Pushes your local changes to GitHub.
-    2.  Connects to the server.
-    3.  Runs the deployment process (pull, install, restart).
+    2.  Connects to the server (via SSH or gcloud).
+    3.  Runs the deployment process (`./deploy.sh`).
 
 ### Option B: Manual Deployment (On Server)
 
@@ -93,3 +107,8 @@ If you are already on the server:
     ```bash
     ./deploy.sh
     ```
+
+## Technical Notes
+
+- **Dependencies**: The frontend service runs `npm start` (Vite), which requires `vite` to be installed. Ensure `npm install` is run **without** `--omit=dev` on the server so that dev dependencies needed for the dev-server are available.
+- **Nginx Config**: If you encounter a 404 when accessing your server URL, ensure the default Nginx site (`/etc/nginx/sites-enabled/default`) is removed or that your app's Nginx configuration includes `default_server` in the `listen` directive to correctly route traffic.
