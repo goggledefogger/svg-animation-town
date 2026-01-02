@@ -8,7 +8,7 @@ This guide describes how to deploy the Gotham Animation Studio to a Linux server
 - **Git**: To fetch the repository.
 - **PM2 or Systemd**: This guide uses **systemd** for process management.
 
-## Initial Setup
+## Initial Setup (On Server)
 
 1.  **Clone the Repository**
     ```bash
@@ -49,48 +49,47 @@ This guide describes how to deploy the Gotham Animation Studio to a Linux server
 
 We use systemd to keep the services running in the background.
 
-1.  **Edit Service Files** (Optional)
-    Check `deployment/svg-backend.service` and `deployment/svg-frontend.service`. 
-    **Ensure the paths match your server setup.**
-    - `User`: Your username (e.g., `dannybauman`)
-    - `WorkingDirectory`: Full path to the repo folders.
-    - `ExecStart`: Path to NVM script.
-
-2.  **Copy to System Directory**
+1.  **Copy Service Files**
     ```bash
     sudo cp deployment/svg-backend.service /etc/systemd/system/
     sudo cp deployment/svg-frontend.service /etc/systemd/system/
     ```
 
-3.  **Reload and Start**
+2.  **Reload and Start**
     ```bash
     sudo systemctl daemon-reload
     sudo systemctl enable svg-backend svg-frontend
     sudo systemctl start svg-backend svg-frontend
     ```
 
-4.  **Check Status**
+## Deployment Methods
+
+### Option A: Remote Deployment (Recommended)
+
+Deploy from your local machine without manually SSH-ing into the server each time.
+
+1.  **Run the Remote Deploy Script**
+    Pass your server's SSH address as an argument:
     ```bash
-    sudo systemctl status svg-backend
-    sudo systemctl status svg-frontend
+    ./remote-deploy.sh dannybauman@your-server-ip
     ```
+    
+    *Tip: Create a `.env.deploy` file with `DEPLOY_TARGET=user@host` to skip typing the address.*
 
-## Automated Updates
+    This script automatically:
+    1.  Pushes your local changes to GitHub.
+    2.  Connects to the server.
+    3.  Runs the deployment process (pull, install, restart).
 
-To update the application to the latest version on `main`:
+### Option B: Manual Deployment (On Server)
 
-1.  SSH into your server.
-2.  Navigate to the repository:
+If you are already on the server:
+
+1.  Navigate to the repository:
     ```bash
     cd ~/svg-animation-town
     ```
-3.  Run the deployment script:
+2.  Run the local deploy script:
     ```bash
     ./deploy.sh
     ```
-
-This script will:
-- Stash local changes
-- Pull the latest code
-- Update dependencies
-- Restart the systemd services
