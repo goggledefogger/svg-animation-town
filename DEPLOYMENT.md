@@ -110,5 +110,17 @@ If you are already on the server:
 
 ## Technical Notes
 
-- **Dependencies**: The frontend service runs `npm start` (Vite), which requires `vite` to be installed. Ensure `npm install` is run **without** `--omit=dev` on the server so that dev dependencies needed for the dev-server are available.
+- **Dependencies**: The frontend service runs `npm start` (Vite), which requires `vite` to be installed. The `deploy.sh` script is configured to run `npm install --include=dev` to ensure it's available.
 - **Nginx Config**: If you encounter a 404 when accessing your server URL, ensure the default Nginx site (`/etc/nginx/sites-enabled/default`) is removed or that your app's Nginx configuration includes `default_server` in the `listen` directive to correctly route traffic.
+- **Memory Management**: On low-memory instances like Google Cloud `e2-micro`, `npm install` can occasionally hang or fail. If this happens, try stopping the services (`sudo systemctl stop svg-frontend svg-backend`) before running the deployment script.
+
+## Troubleshooting
+
+### 404 Not Found at Root
+If the homepage returns a 404 but the services are running:
+1. Check if Vite started correctly: `sudo journalctl -u svg-frontend -f`
+2. Ensure dependencies are fully installed: `cd frontend && npm install --include=dev`
+3. Verify Nginx is pointing to the correct port (default 3000 for frontend).
+
+### 500 Internal Server Error on /api/config
+This usually indicates a backend crash or a syntax error in the configuration files. Check logs with `sudo tail -f /var/log/svg-backend.log`.

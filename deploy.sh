@@ -58,11 +58,9 @@ log "Backend dependencies updated."
 # 3. Update Frontend
 log "Updating frontend dependencies..."
 cd "$FRONTEND_DIR"
-# Assuming 'npm start' in the service runs 'vite --host', we might just need dependencies.
-# If a build step is needed for prod, add it here. BUT the service file runs 'npm start' which is usually dev server.
-# If prod should build, we'd do 'npm run build' and serve dist.
-# Given service file: "ExecStart=... npm start", sticking to install.
-npm install
+# CRITICAL: We use 'npm start' (Vite dev server) in production, which requires devDependencies.
+# Explicitly including dev dependencies to ensure 'vite' is available regardless of NODE_ENV.
+npm install --include=dev
 log "Frontend dependencies updated."
 
 # 4. Restart Services
