@@ -52,7 +52,7 @@ log "Codebase updated to latest main."
 log "Updating backend dependencies..."
 cd "$BACKEND_DIR"
 # Only install if package.json/lock changed or node_modules missing, but for safety usually just install (fast with cache)
-npm install --omit=dev
+npm install
 log "Backend dependencies updated."
 
 # 3. Update Frontend
@@ -62,7 +62,7 @@ cd "$FRONTEND_DIR"
 # If a build step is needed for prod, add it here. BUT the service file runs 'npm start' which is usually dev server.
 # If prod should build, we'd do 'npm run build' and serve dist.
 # Given service file: "ExecStart=... npm start", sticking to install.
-npm install --omit=dev
+npm install
 log "Frontend dependencies updated."
 
 # 4. Restart Services
