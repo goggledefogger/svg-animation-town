@@ -102,6 +102,7 @@ export async function fetchApi<T>(
 export interface AnimationRequestOptions {
   provider?: AIProviderId;
   model?: string;
+  id?: string;
 }
 
 export interface AnimationGenerateResult {
@@ -501,7 +502,7 @@ export const AnimationStorageApi = {
   ): Promise<{ id: string }> => {
     console.log(`Saving animation with name: ${name}`);
 
-    const { provider, model } = providerOptions;
+    const { provider, model, id } = providerOptions;
 
     try {
       const data = await fetchApi<any>(
@@ -513,7 +514,8 @@ export const AnimationStorageApi = {
             svg: svgContent,
             chatHistory,
             provider,
-            model
+            model,
+            id
           }),
         }
       );

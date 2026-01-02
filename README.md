@@ -12,6 +12,24 @@ Born from a simple bat signal SVG, this project demonstrates how natural languag
 
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/9c748ea8-34b9-4ef6-9b1b-f136f8804724" />
 
+## 🏗️ Architecture
+
+### Frontend
+- **Framework**: React with Vite
+- **State Management**:
+  - `MovieContext`: Handles storyboard logic.
+  - `AnimationContext`: **Refactored State Machine** using `useReducer` for robust animation lifecycle management (Generation -> Auto-Save -> Manual Updates).
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React
+
+### Backend
+- **Server**: Express.js
+- **AI Integration**:
+  - `openai.service.js`: Interfaces with OpenAI (and DeepSeek/Qwen via Responses API).
+  - `gemini.service.js`: Interfaces with Google Gemini.
+  - `claude.service.js`: Interfaces with Anthropic Claude.
+- **Storage**: Local filesystem storage for animations and movies (`/output` directory).
+
 ## Architecture Overview
 
 Gotham Animation Studio follows a clean separation of concerns between the frontend and backend:
