@@ -1,0 +1,14 @@
+[Unit]
+Description=SVG Backend API Server
+After=network.target
+
+[Service]
+User=dannybauman
+WorkingDirectory=/home/dannybauman/svg-animation-town/backend/
+ExecStart=/bin/bash -c 'source $HOME/.nvm/nvm.sh && nvm use stable && npm start'
+Restart=on-failure
+StandardOutput=append:/var/log/svg-backend.log
+StandardError=append:/var/log/svg-backend.log
+
+[Install]
+WantedBy=multi-user.target

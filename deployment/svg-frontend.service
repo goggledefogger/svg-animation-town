@@ -1,0 +1,14 @@
+[Unit]
+Description=SVG Frontend Web Server
+After=network.target
+
+[Service]
+User=dannybauman
+WorkingDirectory=/home/dannybauman/svg-animation-town/frontend/
+ExecStart=/bin/bash -c 'source $HOME/.nvm/nvm.sh && nvm use stable && npm start'
+Restart=on-failure
+StandardOutput=append:/var/log/svg-frontend.log
+StandardError=append:/var/log/svg-frontend.log
+
+[Install]
+WantedBy=multi-user.target

@@ -247,6 +247,10 @@ Note: Major version updates may include breaking changes. Review migration guide
 
 [MIT License](LICENSE.md) - Feel free to use, modify and distribute as needed.
 
+## Deployment
+
+For instructions on deploying to a production server, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ---
 
 *"The night is darkest just before the dawn. And I promise you, the dawn is coming." - Harvey Dent*
