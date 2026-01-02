@@ -81,6 +81,19 @@ const AIService = {
     const { providerEntry, providerConfig } = ensureProviderConfigured(providerKey);
     const requestOptions = buildRequestOptions(providerKey, providerConfig, options);
 
+    console.log(`[AIService] Generating animation for provider: ${providerKey}`);
+    console.log(`[AIService] Provider entry:`, {
+      name: providerEntry.name,
+      hasService: !!providerEntry.service,
+      serviceKeys: providerEntry.service ? Object.keys(providerEntry.service) : []
+    });
+
+    if (!providerEntry.service || typeof providerEntry.service.generateAnimation !== 'function') {
+      console.error(`[AIService] Error: generateAnimation is not a function for provider ${providerKey}`);
+      console.error(`[AIService] Service object:`, providerEntry.service);
+      throw new ServiceUnavailableError(`AI service ${providerKey} is not properly initialized`);
+    }
+
     return executeWithRateLimiting(
       providerKey,
       providerEntry.service.generateAnimation.bind(providerEntry.service),
@@ -99,6 +112,19 @@ const AIService = {
     const providerKey = resolveProvider(options.provider);
     const { providerEntry, providerConfig } = ensureProviderConfigured(providerKey);
     const requestOptions = buildRequestOptions(providerKey, providerConfig, options);
+
+    console.log(`[AIService] Updating animation for provider: ${providerKey}`);
+    console.log(`[AIService] Provider entry:`, {
+      name: providerEntry.name,
+      hasService: !!providerEntry.service,
+      serviceKeys: providerEntry.service ? Object.keys(providerEntry.service) : []
+    });
+
+    if (!providerEntry.service || typeof providerEntry.service.updateAnimation !== 'function') {
+      console.error(`[AIService] Error: updateAnimation is not a function for provider ${providerKey}`);
+      console.error(`[AIService] Service object:`, providerEntry.service);
+      throw new ServiceUnavailableError(`AI service ${providerKey} is not properly initialized`);
+    }
 
     return executeWithRateLimiting(
       providerKey,

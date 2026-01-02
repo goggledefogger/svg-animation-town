@@ -65,10 +65,10 @@ function getDefaultModel(provider) {
 function modelSupportsTemperature(provider, modelId) {
   const metadata = getProviderMetadata(provider);
   if (!metadata) {
-    // For OpenAI, auto-detect GPT-5 and O1 models that don't support temperature
+    // For OpenAI, auto-detect O1 models that don't support temperature
     if (provider === 'openai') {
       const id = modelId.toLowerCase();
-      if (id.startsWith('gpt-5') || id.startsWith('o1')) {
+      if (id.startsWith('o1')) {
         return false;
       }
     }
@@ -79,7 +79,7 @@ function modelSupportsTemperature(provider, modelId) {
   let model = metadata.models?.find(entry => entry.id === modelId);
 
   // If no exact match, try to find a model whose ID is a prefix of the requested model
-  // This handles versioned models like "gpt-5-2025-08-07" matching "gpt-5"
+  // This handles versioned models like "gpt-4o-2024-08-06" matching "gpt-4o"
   if (!model) {
     model = metadata.models?.find(entry => {
       const baseId = entry.id.replace('-latest', '');
@@ -88,10 +88,10 @@ function modelSupportsTemperature(provider, modelId) {
   }
 
   if (!model) {
-    // Model not in registry - for OpenAI, auto-detect GPT-5 and O1
+    // Model not in registry - for OpenAI, auto-detect O1
     if (provider === 'openai') {
       const id = modelId.toLowerCase();
-      if (id.startsWith('gpt-5') || id.startsWith('o1')) {
+      if (id.startsWith('o1')) {
         return false;
       }
     }

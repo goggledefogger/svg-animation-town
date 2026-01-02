@@ -2,7 +2,7 @@
   "openai": {
     "id": "openai",
     "displayName": "OpenAI",
-    "description": "GPT-4o family models tuned for fast SVG-friendly JSON output.",
+    "description": "GPT-4o and o3 family models tuned for fast SVG-friendly JSON output.",
     "defaultModel": "gpt-4o-mini",
     "models": [
       {
@@ -16,133 +16,93 @@
         "useCase": "More capable GPT-4o for complex animations."
       },
       {
-        "id": "gpt-4o-2024-05-13",
-        "label": "GPT-4o (2024-05-13)",
-        "useCase": "Specific GPT-4o version for stability."
-      },
-      {
-        "id": "gpt-5-nano",
-        "label": "GPT-5 Nano",
-        "useCase": "Lowest cost GPT-5 option for fast drafts.",
-        "supportsTemperature": false
-      },
-      {
-        "id": "gpt-5-mini",
-        "label": "GPT-5 Mini",
-        "useCase": "Balanced GPT-5 cost to quality for most animations.",
-        "supportsTemperature": false
-      },
-      {
-        "id": "gpt-5",
-        "label": "GPT-5",
-        "useCase": "Standard GPT-5 for high quality, complex choreography.",
-        "supportsTemperature": false
+        "id": "o3-mini",
+        "label": "O3 Mini",
+        "useCase": "Latest high-intelligence, low-latency reasoning model.",
+        "supportsTemperature": false,
+        "supportsThinking": true
       },
       {
         "id": "o1-mini",
         "label": "O1 Mini",
-        "useCase": "Reasoning model for complex problem solving and planning.",
-        "supportsTemperature": false
+        "useCase": "Previous generation reasoning model for STEM tasks.",
+        "supportsTemperature": false,
+        "supportsThinking": true
       },
       {
         "id": "o1",
         "label": "O1",
-        "useCase": "Advanced reasoning model for the toughest prompts.",
-        "supportsTemperature": false
+        "useCase": "Advanced reasoning model for complex problem solving.",
+        "supportsTemperature": false,
+        "supportsThinking": true
       }
     ]
   },
   "anthropic": {
     "id": "anthropic",
     "displayName": "Anthropic Claude",
-    "description": "Claude models excel at structured SVG aware instructions and reasoning.",
-    "defaultModel": "claude-3-7-sonnet-20250219",
+    "description": "Claude 4.x family models excel at structured SVG aware instructions and reasoning.",
+    "defaultModel": "claude-sonnet-4-5-20250929",
     "models": [
       {
         "id": "claude-sonnet-4-5-20250929",
-        "label": "Claude Sonnet 4.5",
-        "useCase": "Best model for complex agents and coding with highest intelligence.",
-        "maxOutputTokens": 64000
+        "label": "Claude 4.5 Sonnet",
+        "useCase": "State-of-the-art model with highest intelligence and SVG awareness.",
+        "supportsThinking": true
       },
       {
-        "id": "claude-opus-4-1-20250805",
-        "label": "Claude Opus 4.1",
-        "useCase": "Exceptional for specialized complex tasks requiring advanced reasoning.",
-        "maxOutputTokens": 32000
-      },
-      {
-        "id": "claude-sonnet-4-20250514",
-        "label": "Claude Sonnet 4",
-        "useCase": "High-performance model with balanced intelligence.",
-        "maxOutputTokens": 64000
-      },
-      {
-        "id": "claude-opus-4-20250514",
-        "label": "Claude Opus 4",
-        "useCase": "Previous flagship model with very high intelligence.",
-        "maxOutputTokens": 32000
+        "id": "claude-haiku-4-5-20251001",
+        "label": "Claude 4.5 Haiku",
+        "useCase": "Blazing fast model with near-sonnet intelligence.",
+        "supportsThinking": true
       },
       {
         "id": "claude-3-7-sonnet-20250219",
         "label": "Claude 3.7 Sonnet",
-        "useCase": "High-performance with toggleable extended thinking support.",
-        "maxOutputTokens": 64000
-      },
-      {
-        "id": "claude-3-5-haiku-20241022",
-        "label": "Claude 3.5 Haiku",
-        "useCase": "Fastest model with intelligence at blazing speeds.",
-        "maxOutputTokens": 8192
+        "useCase": "High-performance model with extended thinking support.",
+        "supportsThinking": true
       },
       {
         "id": "claude-3-5-sonnet-20241022",
-        "label": "Claude 3.5 Sonnet (2024-10-22)",
-        "useCase": "Legacy 3.5 Sonnet with improved coherence.",
-        "maxOutputTokens": 8192
-      },
-      {
-        "id": "claude-3-haiku-20240307",
-        "label": "Claude 3 Haiku",
-        "useCase": "Fast and compact for near-instant responsiveness.",
-        "maxOutputTokens": 4096
+        "label": "Claude 3.5 Sonnet",
+        "useCase": "Legacy 3.5 Sonnet with improved coherence."
       }
     ]
   },
   "google": {
     "id": "google",
     "displayName": "Google Gemini",
-    "description": "Gemini 1.5 and 2.5 models optimized for creative SVG prompting and fast generation.",
+    "description": "Gemini 2.5 and 3.0 models optimized for creative SVG prompting and fast generation.",
     "defaultModel": "gemini-2.5-flash",
     "models": [
       {
-        "id": "gemini-1.5-flash",
-        "label": "Gemini 1.5 Flash",
-        "useCase": "Fast and efficient model for quick SVG generation."
-      },
-      {
-        "id": "gemini-1.5-flash-8b",
-        "label": "Gemini 1.5 Flash 8B",
-        "useCase": "Lightweight legacy model for simple animations."
-      },
-      {
-        "id": "gemini-1.5-pro",
-        "label": "Gemini 1.5 Pro",
-        "useCase": "Legacy pro model for complex SVG animations."
-      },
-      {
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
-        "useCase": "Recommended default with hybrid reasoning and 1M context window."
-      },
-      {
-        "id": "gemini-2.5-flash-preview-09-2025",
-        "label": "Gemini 2.5 Flash Preview",
-        "useCase": "Latest preview for large scale processing and agentic use cases."
+        "useCase": "Recommended default with hybrid reasoning and 1M context window.",
+        "supportsThinking": true
       },
       {
         "id": "gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
-        "useCase": "State-of-the-art model for coding and complex reasoning tasks."
+        "useCase": "Advanced reasoning model for complex multimodal tasks.",
+        "supportsThinking": true
+      },
+      {
+        "id": "gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash-Lite",
+        "useCase": "Optimized for cost-efficiency and high throughput.",
+        "supportsThinking": true
+      },
+      {
+        "id": "gemini-3-pro-preview",
+        "label": "Gemini 3 Pro (Preview)",
+        "useCase": "Next-generation model emphasizing enhanced reasoning.",
+        "supportsThinking": true
+      },
+      {
+        "id": "gemini-2.0-flash",
+        "label": "Gemini 2.0 Flash",
+        "useCase": "Legacy 2.0 model with superior speed."
       }
     ]
   }

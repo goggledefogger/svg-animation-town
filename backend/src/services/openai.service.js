@@ -8,7 +8,7 @@ const clientId = Math.random().toString(36).substring(7);
 console.log(`[OpenAI Service] Created OpenAI client instance ${clientId}`);
 
 // GPT-5 and O1 families currently require the Responses API instead of chat completions
-const RESPONSES_MODEL_PREFIXES = ['gpt-5', 'o1'];
+const RESPONSES_MODEL_PREFIXES = ['o1', 'o3'];
 
 const shouldUseResponsesApi = (modelId) => {
   if (typeof modelId !== 'string') {
@@ -31,8 +31,14 @@ const buildResponsesPayload = (modelId, systemPrompt, userPrompt, temperature, m
       }
     ],
     text: RESPONSES_JSON_TEXT_CONFIG,
-    store: false
+    store: false,
+    // Enable high reasoning effort for better SVG generation quality
+    reasoning: {
+      effort: 'high'
+    }
   };
+
+  console.log(`[OpenAI Service] Using Responses API with reasoning.effort: high`);
 
   if (typeof temperature === 'number') {
     payload.temperature = temperature;

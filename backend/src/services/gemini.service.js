@@ -19,13 +19,22 @@ const svgRateLimiter = new RateLimiter({
 
 // Known broken/disabled model IDs with a preferred fallback that actually works
 const BROKEN_GEMINI_MODEL_MAP = {
-  'gemini-2.5-pro-exp-03-25': 'gemini-2.5-flash' // API returns it, but v1beta generateContent 404s
+  'gemini-2.0-pro-exp-0102': 'gemini-2.5-pro'
 };
 
 // Derive a non-experimental candidate if the requested model is an -exp variant
 const deriveNonExperimentalModel = (modelId) => {
   if (!modelId || !modelId.includes('-exp-')) return null;
-  // Drop the -exp-* suffix (e.g., gemini-2.5-pro-exp-03-25 -> gemini-2.5-pro)
+  // Handle 3.0+ models
+  if (modelId.startsWith('gemini-3.')) {
+    return 'gemini-3-pro-preview';
+  }
+  // Handle 2.5 models
+  if (modelId.startsWith('gemini-2.5-')) {
+    const base = modelId.split('-exp-')[0];
+    return base; // e.g. gemini-2.5-pro-exp-0325 -> gemini-2.5-pro
+  }
+  // Drop the -exp-* suffix
   return modelId.replace(/-exp-[^-]+$/, '').replace(/-exp$/, '');
 };
 
@@ -128,27 +137,44 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false, o
 
       // Helper to attempt generation with a specific model (used for graceful fallback)
       const attemptGenerate = async (modelToUse) => {
+        // Determine thinking config based on model version
+        let thinkingConfig = undefined;
+        if (modelToUse.includes('gemini-3')) {
+          thinkingConfig = { thinkingLevel: 'high' };
+          console.log(`[Gemini Service] Using thinkingLevel: high for ${modelToUse}`);
+        } else if (modelToUse.includes('gemini-2.5')) {
+          thinkingConfig = { thinkingBudget: -1 }; // Dynamic thinking
+          console.log(`[Gemini Service] Using dynamic thinkingBudget for ${modelToUse}`);
+        }
+
+        const requestConfig = {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              explanation: {
+                type: Type.STRING,
+                description: "A brief explanation of the animation or the changes made"
+              },
+              svg: {
+                type: Type.STRING,
+                description: "The complete SVG code with animations"
+              }
+            },
+            required: ['explanation', 'svg'],
+          },
+        };
+
+        // Add thinking config if supported by the model
+        if (thinkingConfig) {
+          requestConfig.thinkingConfig = thinkingConfig;
+        }
+
         const result = await client.models.generateContent({
           model: modelToUse,
           contents: `${systemPrompt}\n\n${userPrompt}`,
           generationConfig: generationConfig,
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                explanation: {
-                  type: Type.STRING,
-                  description: "A brief explanation of the animation or the changes made"
-                },
-                svg: {
-                  type: Type.STRING,
-                  description: "The complete SVG code with animations"
-                }
-              },
-              required: ['explanation', 'svg'],
-            },
-          }
+          config: requestConfig
         });
 
         return { result, usedModel: modelToUse };

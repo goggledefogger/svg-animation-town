@@ -106,18 +106,10 @@ The AI assistant becomes your creative partner - understanding context, making i
 
    # Google Gemini configuration (optional)
    GOOGLE_API_KEY=your_gemini_api_key_here
-   GOOGLE_MODEL=gemini-2.5-flash
+   GOOGLE_MODEL=gemini-2.0-flash
 
    # Default AI Provider (openai, anthropic, google)
    AI_PROVIDER=openai
-
-   # Rate Limiter Configuration
-   ANTHROPIC_RATE_LIMIT_TOKENS_PER_MINUTE=8000
-   ANTHROPIC_RATE_LIMIT_TOKENS_PER_REQUEST=1600
-   ANTHROPIC_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=2
-   GOOGLE_RATE_LIMIT_TOKENS_PER_MINUTE=10000
-   GOOGLE_RATE_LIMIT_TOKENS_PER_REQUEST=2000
-   GOOGLE_RATE_LIMIT_MAX_CONCURRENT_REQUESTS=10
    ```
 4. Start the backend server: `npm run dev`
 
@@ -140,7 +132,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 5. Open your browser to `http://localhost:3000`
 
 ## Basic Usage
-1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-5 family, Anthropic Claude 4.x, or Google Gemini 2.5 tiers)
+1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-4o family, Anthropic Claude 3.x, or Google Gemini 1.5/2.0 tiers)
 2. Type your animation request in the chat interface (e.g., "Create a night sky with stars that twinkle randomly")
 3. Review the AI's implementation in the preview window
 4. Make additional requests to refine or expand your animation (e.g., "Make the stars blue instead of white")

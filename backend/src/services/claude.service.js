@@ -215,6 +215,21 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
       ]
     };
 
+    // Enable Extended Thinking for compatible models (Claude 3.7+ and 4.x)
+    const isThinkingModel = modelId.includes('claude-3-7') ||
+                            modelId.includes('claude-sonnet-4') ||
+                            modelId.includes('claude-haiku-4') ||
+                            modelId.includes('claude-opus-4');
+    if (isThinkingModel) {
+      // Use a conservative budget for SVG generation
+      const thinkingBudget = 4096;
+      requestPayload.thinking = {
+        type: 'enabled',
+        budget_tokens: thinkingBudget
+      };
+      console.log(`[Claude Service] Extended Thinking enabled with budget: ${thinkingBudget} tokens`);
+    }
+
     // Only add temperature if it's a valid number (Claude models all support temperature, but be safe)
     if (typeof baseTemperature === 'number') {
       requestPayload.temperature = isUpdate ? Math.max(0.1, baseTemperature - 0.2) : baseTemperature;
