@@ -29,6 +29,7 @@ git push origin main
 # 2. Trigger remote deploy
 echo "Triggering remote deployment..."
 # -t forces pseudo-terminal allocation for potential sudo password prompts
-ssh -t $SERVER "cd ~/svg-animation-town && ./deploy.sh"
+# -o StrictHostKeyChecking=no avoids interactive yes/no prompt for new hosts
+ssh -o StrictHostKeyChecking=no -t $SERVER "cd ~/svg-animation-town && ./deploy.sh"
 
 echo "Remote deployment command finished."
