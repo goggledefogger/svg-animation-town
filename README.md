@@ -69,7 +69,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 ### Conversational Animation Interface
 - Create, modify and animate SVG elements through natural language
 - Ask for specific animations, effects, or timing adjustments
-- Get intelligent responses from OpenAI gpt-4o-mini
+- Get intelligent responses from OpenAI (GPT-4o, GPT-5), Anthropic (Claude 3.7/4.5), and Google (Gemini 2.5/3.0)
 
 ### SVG Animation Capabilities
 - Create and manage basic shapes (rectangles, circles, paths, lines)
@@ -132,7 +132,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 5. Open your browser to `http://localhost:3000`
 
 ## Basic Usage
-1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-4o family, Anthropic Claude 3.x, or Google Gemini 1.5/2.0 tiers)
+1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-4o/GPT-5 family, Anthropic Claude 3.7/4.5, or Google Gemini 2.5/3.0 tiers)
 2. Type your animation request in the chat interface (e.g., "Create a night sky with stars that twinkle randomly")
 3. Review the AI's implementation in the preview window
 4. Make additional requests to refine or expand your animation (e.g., "Make the stars blue instead of white")

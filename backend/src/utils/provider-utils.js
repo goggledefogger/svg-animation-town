@@ -68,7 +68,7 @@ function modelSupportsTemperature(provider, modelId) {
     // For OpenAI, auto-detect O1 models that don't support temperature
     if (provider === 'openai') {
       const id = modelId.toLowerCase();
-      if (id.startsWith('o1')) {
+      if (id.startsWith('o1') || id.startsWith('gpt-5') || id.startsWith('o3')) {
         return false;
       }
     }
@@ -91,7 +91,7 @@ function modelSupportsTemperature(provider, modelId) {
     // Model not in registry - for OpenAI, auto-detect O1
     if (provider === 'openai') {
       const id = modelId.toLowerCase();
-      if (id.startsWith('o1')) {
+      if (id.startsWith('o1') || id.startsWith('gpt-5') || id.startsWith('o3')) {
         return false;
       }
     }
@@ -179,6 +179,30 @@ function getPublicProviderInfo() {
   }));
 }
 
+/**
+ * Determine if a model supports thinking/reasoning features.
+ * @param {string} provider
+ * @param {string} modelId
+ * @returns {boolean}
+ */
+function modelSupportsThinking(provider, modelId) {
+  const metadata = getProviderMetadata(provider);
+  if (!metadata) return false;
+
+  // Try exact match first
+  let model = metadata.models?.find(entry => entry.id === modelId);
+
+  // If no exact match, try prefix match
+  if (!model) {
+    model = metadata.models?.find(entry => {
+      const baseId = entry.id.replace('-latest', '');
+      return modelId.startsWith(baseId);
+    });
+  }
+
+  return !!(model && model.supportsThinking);
+}
+
 module.exports = {
   providerRegistry,
   PROVIDER_ALIASES,
@@ -187,6 +211,7 @@ module.exports = {
   getDefaultModel,
   resolveModelId,
   modelSupportsTemperature,
+  modelSupportsThinking,
   getMaxOutputTokens,
   getPublicProviderInfo
 };

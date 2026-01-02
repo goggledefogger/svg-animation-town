@@ -9,6 +9,7 @@ const {
 const { ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
 const { RateLimiter } = require('../utils/rate-limiter');
+const { modelSupportsThinking } = require('../utils/provider-utils');
 
 // Create a rate limiter specifically for Gemini SVG generation
 const svgRateLimiter = new RateLimiter({
@@ -137,14 +138,17 @@ const processSvgWithGemini = async (prompt, currentSvg = '', isUpdate = false, o
 
       // Helper to attempt generation with a specific model (used for graceful fallback)
       const attemptGenerate = async (modelToUse) => {
-        // Determine thinking config based on model version
+        // Determine thinking config based on model using shared metadata
         let thinkingConfig = undefined;
-        if (modelToUse.includes('gemini-3')) {
-          thinkingConfig = { thinkingLevel: 'high' };
-          console.log(`[Gemini Service] Using thinkingLevel: high for ${modelToUse}`);
-        } else if (modelToUse.includes('gemini-2.5')) {
-          thinkingConfig = { thinkingBudget: -1 }; // Dynamic thinking
-          console.log(`[Gemini Service] Using dynamic thinkingBudget for ${modelToUse}`);
+        if (modelSupportsThinking('google', modelToUse)) {
+          if (modelToUse.includes('gemini-3')) {
+            thinkingConfig = { thinkingLevel: 'high' };
+            console.log(`[Gemini Service] Using thinkingLevel: high for ${modelToUse}`);
+          } else {
+            // Default to dynamic budget for 2.x reasoning models
+            thinkingConfig = { thinkingBudget: -1 };
+            console.log(`[Gemini Service] Using dynamic thinkingBudget for ${modelToUse}`);
+          }
         }
 
         const requestConfig = {

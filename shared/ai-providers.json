@@ -35,6 +35,27 @@
         "useCase": "Advanced reasoning model for complex problem solving.",
         "supportsTemperature": false,
         "supportsThinking": true
+      },
+      {
+        "id": "gpt-5-pro",
+        "label": "GPT-5 Pro",
+        "useCase": "Next-generation professional reasoning model.",
+        "supportsTemperature": false,
+        "supportsThinking": true
+      },
+      {
+        "id": "gpt-5.2-pro",
+        "label": "GPT-5.2 Pro",
+        "useCase": "Latest frontier model with peak intelligence.",
+        "supportsTemperature": false,
+        "supportsThinking": true
+      },
+      {
+        "id": "gpt-5-mini",
+        "label": "GPT-5 Mini",
+        "useCase": "Efficient next-generation model for general tasks.",
+        "supportsTemperature": false,
+        "supportsThinking": true
       }
     ]
   },

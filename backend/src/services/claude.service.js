@@ -9,7 +9,7 @@ const {
 const { ServiceUnavailableError } = require('../utils/errors');
 const config = require('../config');
 const rateLimiter = require('./unified-rate-limiter.service');
-const { getMaxOutputTokens } = require('../utils/provider-utils');
+const { getMaxOutputTokens, modelSupportsThinking } = require('../utils/provider-utils');
 
 // Add a unique identifier for this client instance
 const clientId = Math.random().toString(36).substring(7);
@@ -215,11 +215,8 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
       ]
     };
 
-    // Enable Extended Thinking for compatible models (Claude 3.7+ and 4.x)
-    const isThinkingModel = modelId.includes('claude-3-7') ||
-                            modelId.includes('claude-sonnet-4') ||
-                            modelId.includes('claude-haiku-4') ||
-                            modelId.includes('claude-opus-4');
+    // Enable Extended Thinking for compatible models
+    const isThinkingModel = modelSupportsThinking('anthropic', modelId);
     if (isThinkingModel) {
       // Use a conservative budget for SVG generation
       const thinkingBudget = 4096;
@@ -230,9 +227,15 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
       console.log(`[Claude Service] Extended Thinking enabled with budget: ${thinkingBudget} tokens`);
     }
 
-    // Only add temperature if it's a valid number (Claude models all support temperature, but be safe)
+    // Only add temperature if it's a valid number
     if (typeof baseTemperature === 'number') {
-      requestPayload.temperature = isUpdate ? Math.max(0.1, baseTemperature - 0.2) : baseTemperature;
+      // CRITICAL: Anthropic requires temperature to be exactly 1.0 when thinking is enabled
+      if (isThinkingModel) {
+        requestPayload.temperature = 1.0;
+        console.log('[Claude Service] Temperature forced to 1.0 because thinking is enabled');
+      } else {
+        requestPayload.temperature = isUpdate ? Math.max(0.1, baseTemperature - 0.2) : baseTemperature;
+      }
     }
 
     const response = await anthropic.messages.create(requestPayload);
