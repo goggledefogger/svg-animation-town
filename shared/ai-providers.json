@@ -51,7 +51,7 @@
         "supportsThinking": true
       },
       {
-        "id": "claude-haiku-4-5-20251001",
+        "id": "claude-haiku-4-5-20251015",
         "label": "Claude 4.5 Haiku",
         "useCase": "Blazing fast model with near-sonnet intelligence.",
         "supportsThinking": true
@@ -97,6 +97,12 @@
         "id": "gemini-3-pro-preview",
         "label": "Gemini 3 Pro (Preview)",
         "useCase": "Next-generation model emphasizing enhanced reasoning.",
+        "supportsThinking": true
+      },
+      {
+        "id": "gemini-3-flash",
+        "label": "Gemini 3 Flash",
+        "useCase": "Next-generation high-speed model.",
         "supportsThinking": true
       },
       {
