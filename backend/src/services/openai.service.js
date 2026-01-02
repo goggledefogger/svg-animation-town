@@ -64,6 +64,10 @@ const extractResponsesText = (response) => {
     return response.output_text;
   }
 
+  if (typeof response.text === 'string' && response.text.trim()) {
+    return response.text;
+  }
+
   const collectFromContentArray = (contentArray) => {
     const parts = [];
 

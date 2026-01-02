@@ -28,13 +28,13 @@ exports.extractSvgAndText = (responseText) => {
         if (parsedResponse.svg && typeof parsedResponse.svg === 'string') {
           const sanitizedSvg = sanitizeSvgString(parsedResponse.svg);
           console.log(`Successfully parsed JSON response, SVG length: ${sanitizedSvg.length}`);
-          
+
           // Validate that SVG content is usable
           if (!sanitizedSvg.includes('<svg') || sanitizedSvg.length < 100) {
             console.warn(`Parsed SVG content appears invalid: ${sanitizedSvg.substring(0, 50)}...`);
             throw new Error('Invalid SVG content in parsed JSON');
           }
-          
+
           return {
             svg: sanitizedSvg,
             text: parsedResponse.explanation || 'Animation created successfully!'
@@ -47,16 +47,16 @@ exports.extractSvgAndText = (responseText) => {
     } catch (jsonError) {
       // Not a valid JSON or doesn't have the expected structure
       console.warn(`JSON parsing failed: ${jsonError.message}`);
-      
+
       // Claude-specific: Try to extract JSON from a larger response text
       // This handles cases where Claude wraps JSON in other text
       try {
         const jsonRegex = /\{(?:[^{}]|(\{(?:[^{}]|(\{(?:[^{}]|(\{[^{}]*\}))*\}))*\}))*\}/g;
         const jsonMatches = responseText.match(jsonRegex);
-        
+
         if (jsonMatches && jsonMatches.length > 0) {
           console.log(`Found ${jsonMatches.length} potential JSON objects in response`);
-          
+
           // Try each JSON match until one parses successfully and contains SVG
           for (const potentialJson of jsonMatches) {
             try {
