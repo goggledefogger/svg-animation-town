@@ -111,7 +111,7 @@ interface MovieContextType {
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
   currentPlaybackPosition: number;
-  setCurrentPlaybackPosition: (position: number) => void;
+  setCurrentPlaybackPosition: React.Dispatch<React.SetStateAction<number>>;
 
   // Export
   exportStoryboard: (format: 'json' | 'svg') => void;
@@ -135,8 +135,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
   // Destructure additional functions needed from the parent component
   // The parent is expected to pass setSvgContent and setChatHistory functions
-  const setSvgContent = animationData.setSvgContent || (() => {});
-  const setChatHistory = animationData.setChatHistory || (() => {});
+  const setSvgContent = animationData.setSvgContent || (() => { });
+  const setChatHistory = animationData.setChatHistory || (() => { });
 
   const {
     aiProvider: globalProvider,
@@ -150,7 +150,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   const [savedStoryboards, setSavedStoryboards] = useState<string[]>([]);
 
   // Caching mechanism to avoid redundant API calls
-  const animationListCache = useRef<{timestamp: number, animations: string[]} | null>(null);
+  const animationListCache = useRef<{ timestamp: number, animations: string[] } | null>(null);
   const notFoundMovieIds = useRef<Set<string>>(new Set());
 
   // Playback state

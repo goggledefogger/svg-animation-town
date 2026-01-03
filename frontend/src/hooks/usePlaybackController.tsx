@@ -19,6 +19,7 @@ export function usePlaybackController() {
 
     const activeClip = getActiveClip();
     if (!activeClip) return;
+    const clipDuration = activeClip.duration || 5;
 
     let lastTimestamp: number | null = null;
     let animationFrameId: number;
@@ -33,18 +34,11 @@ export function usePlaybackController() {
       const elapsed = (timestamp - lastTimestamp) / 1000; // convert to seconds
       lastTimestamp = timestamp;
 
-      // Get current position from state
-      const newPosition = currentPlaybackPosition + elapsed;
-      const clipDuration = activeClip.duration || 5;
-
-      // If we've reached the end of the clip, loop back to start
-      if (newPosition >= clipDuration) {
-        // Loop back to the beginning
-        setCurrentPlaybackPosition(0);
-      } else {
-        // Update position
-        setCurrentPlaybackPosition(newPosition);
-      }
+      // Update position using functional update to avoid dependency on currentPlaybackPosition
+      setCurrentPlaybackPosition((prev: number) => {
+        const next = prev + elapsed;
+        return next >= clipDuration ? 0 : next;
+      });
 
       // Continue the animation loop
       animationFrameId = requestAnimationFrame(updatePlayback);
@@ -57,7 +51,7 @@ export function usePlaybackController() {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isPlaying, activeClipId, getActiveClip, currentPlaybackPosition, setCurrentPlaybackPosition]);
+  }, [isPlaying, activeClipId, getActiveClip, setCurrentPlaybackPosition]);
 
   return {
     // No additional methods needed as playback is handled by the effect

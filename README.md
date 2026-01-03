@@ -17,8 +17,8 @@ Born from a simple bat signal SVG, this project demonstrates how natural languag
 ### Frontend
 - **Framework**: React with Vite
 - **State Management**:
-  - `MovieContext`: Handles storyboard logic.
-  - `AnimationContext`: **Refactored State Machine** using `useReducer` for robust animation lifecycle management (Generation -> Auto-Save -> Manual Updates).
+  - `MovieContext`: Handles storyboard logic with integrated **Auto-Save** for clip properties.
+  - `AnimationContext`: **Refactored State Machine** using `useReducer` and **Memoized Setters** (`useCallback`) for stable, high-performance animation lifecycle management.
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React
 
@@ -87,6 +87,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 ### Conversational Animation Interface
 - Create, modify and animate SVG elements through natural language
 - Ask for specific animations, effects, or timing adjustments
+- **Debounced Auto-Save**: Clip properties (prompt, duration, name) are automatically persisted with a 1000ms debounce.
 - Get intelligent responses from OpenAI (GPT-4o, GPT-5), Anthropic (Claude 3.7/4.5), and Google (Gemini 2.5/3.0)
 
 ### SVG Animation Capabilities

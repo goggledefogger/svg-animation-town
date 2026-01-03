@@ -4,7 +4,7 @@ import { AIProviderId, AIProviderInfo } from '@/types/ai';
 // --- Actions ---
 
 export type AnimationAction =
-  | { type: 'SET_SVG'; payload: { content: string; source?: string } }
+  | { type: 'SET_SVG'; payload: { content: string | ((prev: string) => string); source?: string } }
   | { type: 'SET_PLAYING'; payload: boolean }
   | { type: 'SET_PLAYBACK_SPEED'; payload: number | 'groovy' }
   | { type: 'SET_REVERSE'; payload: boolean }
@@ -59,9 +59,12 @@ export const initialState: AnimationState = {
 export function animationReducer(state: AnimationState, action: AnimationAction): AnimationState {
   switch (action.type) {
     case 'SET_SVG':
+      const content = typeof action.payload.content === 'function'
+        ? action.payload.content(state.data.svg)
+        : action.payload.content;
       return {
         ...state,
-        data: { ...state.data, svg: action.payload.content },
+        data: { ...state.data, svg: content },
         meta: { ...state.meta, isDirty: true }, // Manual edit marks as dirty
       };
 
@@ -85,16 +88,16 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       };
 
     case 'SET_CHAT_HISTORY':
-        const newHistory = typeof action.payload === 'function'
-            ? action.payload(state.data.chatHistory)
-            : action.payload;
-        return { ...state, data: { ...state.data, chatHistory: newHistory } };
+      const newHistory = typeof action.payload === 'function'
+        ? action.payload(state.data.chatHistory)
+        : action.payload;
+      return { ...state, data: { ...state.data, chatHistory: newHistory } };
 
     case 'SET_AVAILABLE_PROVIDERS':
-        return { ...state, meta: { ...state.meta, availableProviders: action.payload } };
+      return { ...state, meta: { ...state.meta, availableProviders: action.payload } };
 
     case 'SET_DEFAULT_MODELS':
-        return { ...state, meta: { ...state.meta, defaultModels: action.payload } };
+      return { ...state, meta: { ...state.meta, defaultModels: action.payload } };
 
     // --- Loading ---
     case 'LOAD_START':
@@ -126,7 +129,7 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       };
 
     case 'LOAD_FAILURE':
-        return { ...state, status: 'ERROR', error: action.payload };
+      return { ...state, status: 'ERROR', error: action.payload };
 
     // --- Generation ---
     case 'GENERATE_START':
@@ -169,15 +172,15 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
 
     // --- Reset ---
     case 'RESET_ANIMATION':
-        return {
-            ...state,
-            status: 'IDLE',
-            data: { ...state.data, svg: '', id: undefined, name: undefined }, // Keep history? Legacy calls resetAnimations() which keeps config but clears content
-            meta: { ...state.meta, isDirty: false }
-        };
+      return {
+        ...state,
+        status: 'IDLE',
+        data: { ...state.data, svg: '', id: undefined, name: undefined }, // Keep history? Legacy calls resetAnimations() which keeps config but clears content
+        meta: { ...state.meta, isDirty: false }
+      };
 
     case 'RESET_EVERYTHING':
-        return { ...initialState, meta: { ...initialState.meta, availableProviders: state.meta.availableProviders, defaultModels: state.meta.defaultModels } }; // Keep loaded config
+      return { ...initialState, meta: { ...initialState.meta, availableProviders: state.meta.availableProviders, defaultModels: state.meta.defaultModels } }; // Keep loaded config
 
     default:
       return state;
