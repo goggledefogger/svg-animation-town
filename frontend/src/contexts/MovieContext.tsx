@@ -187,142 +187,89 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   };
 
   /**
-   * Get saved storyboards from the server
+   * Get saved storyboards from the server (primary) or localStorage (fallback)
+   * Server is the source of truth - localStorage is only used when offline
    */
   const getSavedStoryboards = useCallback(async () => {
     try {
-      // Try to fetch from server first
-      let updatedSavedStoryboards: Record<string, Storyboard> = {};
+      // Try server first (primary source of truth)
+      console.log('Fetching storyboards from server...');
+      const serverStoryboards = await MovieStorageApi.listMovies();
 
+      console.log(`Received ${serverStoryboards.length} storyboards from server`);
+
+      // Update localStorage cache for offline use
       try {
-        console.log('Fetching storyboards from server...');
-        const serverStoryboards = await MovieStorageApi.listMovies();
-
-        console.log(`Received ${serverStoryboards.length} storyboards from server`);
-
-        // Convert to record format
-        updatedSavedStoryboards = serverStoryboards.reduce((acc, storyboard) => {
-          acc[storyboard.id] = storyboard;
-          return acc;
-        }, {} as Record<string, Storyboard>);
-
-        // Check for force refresh flag and clear it if present
-        const forceRefresh = sessionStorage.getItem('force_server_refresh') === 'true';
-        if (forceRefresh) {
-          sessionStorage.removeItem('force_server_refresh');
-          console.log('Forced server refresh requested - using server data only for movies');
-          const serverIds = serverStoryboards.map(sb => sb.id);
-          setSavedStoryboards(serverIds);
-          return serverIds;
-        }
-      } catch (error) {
-        console.error('Error fetching storyboards from server:', error);
-        // Will fall back to localStorage
+        const cache: Record<string, Storyboard> = {};
+        serverStoryboards.forEach(sb => { cache[sb.id] = sb; });
+        localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(cache));
+      } catch (cacheError) {
+        console.warn('Failed to update localStorage cache:', cacheError);
       }
 
-      // Also try to get from localStorage as fallback or to merge with server data
+      const serverIds = serverStoryboards.map(sb => sb.id);
+      setSavedStoryboards(serverIds);
+      return serverIds;
+
+    } catch (serverError) {
+      console.error('Server fetch failed, falling back to localStorage:', serverError);
+
+      // Fallback to localStorage when server is unavailable
       try {
         const localIds = getSavedStoryboardsFromStorage();
-
-        // Get local storyboards data
-        const localStoryboards = JSON.parse(localStorage.getItem(STORYBOARD_STORAGE_KEY) || '{}');
-
-        // Merge local and server storyboards
-        const mergedStoryboards = { ...updatedSavedStoryboards };
-
-        // Add local storyboards that aren't in the server data
-        localIds.forEach(id => {
-          if (!mergedStoryboards[id] && localStoryboards[id]) {
-            mergedStoryboards[id] = localStoryboards[id];
-          }
-        });
-
-        // Update saved storyboards list with merged IDs
-        const mergedIds = Object.keys(mergedStoryboards);
-        setSavedStoryboards(mergedIds);
-
-        return mergedIds;
+        setSavedStoryboards(localIds);
+        return localIds;
       } catch (localError) {
-        console.error('Error getting storyboards from local storage:', localError);
+        console.error('localStorage fallback also failed:', localError);
+        return [];
       }
-
-      // If we get here, there was an error with both server and local storage
-      // Return an empty array to maintain the return type
-      return [];
-    } catch (error) {
-      console.error('Error getting saved storyboards:', error);
-      return [];
     }
   }, []);
 
-  // Save storyboard to server, with local cache as fallback
-  const saveStoryboard = useCallback(() => {
-    return new Promise<boolean>(async (resolve) => {
-      try {
-        // Update storyboard with current date
-        const updatedStoryboard = {
-          ...currentStoryboard,
-          updatedAt: new Date()
-        };
+  // Save storyboard to server (primary) with localStorage cache
+  const saveStoryboard = useCallback(async (): Promise<boolean> => {
+    try {
+      const updatedStoryboard = {
+        ...currentStoryboard,
+        updatedAt: new Date()
+      };
 
-        // Try to save to server first - no longer need the try/catch here
-        // since we're using setTimeout with its own error handling
-        setTimeout(async () => {
-          try {
-            const result = await MovieStorageApi.saveMovie(updatedStoryboard);
-            console.log('Storyboard saved to server with ID:', result.id);
+      // Save to server (primary source of truth)
+      const result = await MovieStorageApi.saveMovie(updatedStoryboard);
+      console.log('Storyboard saved to server with ID:', result.id);
 
-            // Update the storyboard with the server ID if needed
-            if (updatedStoryboard.id !== result.id) {
-              setCurrentStoryboard(prev => ({
-                ...prev,
-                id: result.id
-              }));
-            }
-          } catch (serverError) {
-            console.error('Error saving storyboard to server:', serverError);
-          }
-        }, 0);
+      // Update state with server-assigned ID if different
+      const finalStoryboard = {
+        ...updatedStoryboard,
+        id: result.id
+      };
 
-        // Also update local cache
-        try {
-          // Get existing storyboards
-          const storyboardsString = localStorage.getItem(STORYBOARD_STORAGE_KEY);
-          const storyboards: Record<string, Storyboard> = storyboardsString
-            ? JSON.parse(storyboardsString)
-            : {};
-
-          // Save updated storyboard
-          storyboards[updatedStoryboard.id] = updatedStoryboard;
-          localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(storyboards));
-
-          // Update saved storyboards list with IDs from local cache
-          const localIds = Object.keys(storyboards);
-          setSavedStoryboards(prevIds => [...new Set([...prevIds, ...localIds])]);
-        } catch (localError) {
-          console.error('Error saving storyboard to local cache:', localError);
-        }
-
-        // Also update current storyboard state
+      if (updatedStoryboard.id !== result.id) {
+        setCurrentStoryboard(finalStoryboard);
+      } else {
         setCurrentStoryboard(updatedStoryboard);
-
-        console.log('Storyboard saved with', updatedStoryboard.clips.length, 'clips');
-
-        // Refresh the storyboard list to ensure we have the latest from both server and local
-        // Use setTimeout to move this outside the render cycle
-        setTimeout(() => {
-          getSavedStoryboards().catch(err => {
-            console.error('Error refreshing storyboard list after save:', err);
-          });
-        }, 0);
-
-        resolve(true);
-      } catch (error) {
-        console.error('Error saving storyboard:', error);
-        resolve(false);
       }
-    });
-  }, [currentStoryboard, getSavedStoryboards]);
+
+      // Update localStorage cache for offline fallback
+      try {
+        const cache = JSON.parse(localStorage.getItem(STORYBOARD_STORAGE_KEY) || '{}');
+        cache[finalStoryboard.id] = finalStoryboard;
+        localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(cache));
+      } catch (cacheError) {
+        console.warn('Failed to update localStorage cache:', cacheError);
+      }
+
+      // Update saved storyboards list
+      setSavedStoryboards(prev => [...new Set([...prev, finalStoryboard.id])]);
+
+      console.log('Storyboard saved with', updatedStoryboard.clips.length, 'clips');
+      return true;
+
+    } catch (error) {
+      console.error('Error saving storyboard:', error);
+      return false;
+    }
+  }, [currentStoryboard]);
 
   // Create a new storyboard
   const createNewStoryboard = useCallback((name?: string, description?: string) => {
