@@ -42,7 +42,8 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     return (
       name !== clip.name ||
       duration !== (clip.duration || 5) ||
-      order !== clip.order
+      order !== clip.order ||
+      prompt !== (clip.prompt || '')
     );
   })();
 
