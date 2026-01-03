@@ -85,8 +85,9 @@ export function useStoryboardGenerator(
     }
   }, []);
 
-  // Verify final state matches backend
-  const verifyFinalState = useCallback(async (storyboardId: string): Promise<void> => {
+  // Verify final state matches backend (with retry limit to prevent infinite recursion)
+  const MAX_VERIFY_RETRIES = 5;
+  const verifyFinalState = useCallback(async (storyboardId: string, retryCount = 0): Promise<void> => {
     if (!storyboardId) {
       console.error("Cannot verify final state: No storyboard ID provided");
       return;
@@ -104,11 +105,14 @@ export function useStoryboardGenerator(
             }
             return prev;
           });
-        } else {
-          // Wait a bit and try again if no clips are present
+        } else if (retryCount < MAX_VERIFY_RETRIES) {
+          // Wait a bit and try again if no clips are present (with retry limit)
+          console.log(`[verifyFinalState] No clips yet, retry ${retryCount + 1}/${MAX_VERIFY_RETRIES}`);
           await new Promise(resolve => setTimeout(resolve, 2000));
-          await verifyFinalState(storyboardId);
+          await verifyFinalState(storyboardId, retryCount + 1);
           return;
+        } else {
+          console.warn(`[verifyFinalState] Max retries reached, giving up`);
         }
       } else {
         console.warn(`Failed to verify final state: Movie not found or invalid response`);
@@ -254,8 +258,8 @@ export function useStoryboardGenerator(
 
   // Add effect to check for in-progress generation when currentStoryboard changes
   useEffect(() => {
-    // Skip this effect completely if we're actively generating or have an SSE connection
-    if (isGenerating || currentSession) {
+    // Skip this effect completely if we have an active SSE connection
+    if (currentSession) {
       return;
     }
 
@@ -273,9 +277,8 @@ export function useStoryboardGenerator(
     clearConditionalPolling();
 
     // Set isGenerating to ensure we show progress UI
-    if (!isGenerating) {
-      setIsGenerating(true);
-    }
+    // Note: We always call this since the condition above ensures generation is in progress
+    setIsGenerating(true);
 
     // But we still want to show the modal
     setShowGeneratingClipsModal(true);
@@ -344,18 +347,21 @@ export function useStoryboardGenerator(
         // Continue polling until one of the above conditions is met
 
         // Update our storyboard with any changes from the server (like new clips)
-        if (response.movie.clips?.length !== currentStoryboard.clips?.length) {
-          setCurrentStoryboard(response.movie);
-
-          // Update progress display
-          if (response.movie.generationStatus) {
-            setGenerationProgress(prev => ({
-              ...prev,
-              current: response.movie.generationStatus?.completedScenes || 0,
-              total: response.movie.generationStatus?.totalScenes || 0
-            }));
+        // Use functional update to avoid stale closure - compare with latest state
+        setCurrentStoryboard(prev => {
+          if (response.movie.clips?.length !== prev.clips?.length) {
+            // Update progress display when clips change
+            if (response.movie.generationStatus) {
+              setGenerationProgress(prevProgress => ({
+                ...prevProgress,
+                current: response.movie.generationStatus?.completedScenes || 0,
+                total: response.movie.generationStatus?.totalScenes || 0
+              }));
+            }
+            return response.movie;
           }
-        }
+          return prev;
+        });
       } catch (error) {
         console.error("Error in conditional polling:", error);
       }
@@ -371,8 +377,6 @@ export function useStoryboardGenerator(
     setShowGeneratingClipsModal,
     setIsGenerating,
     setGenerationProgress,
-    activeClipId,
-    setActiveClipId,
     setCurrentStoryboard,
     clearConditionalPolling
   ]);
@@ -565,7 +569,7 @@ export function useStoryboardGenerator(
 
         // Case 3: Both exist but animationId is different or missing in server
         if (memoryClip && serverClip &&
-            (!serverClip.animationId || serverClip.animationId !== memoryClip.animationId)) {
+          (!serverClip.animationId || serverClip.animationId !== memoryClip.animationId)) {
 
           // Find server clip to update
           const serverClipIndex = updatedServerClips.findIndex(c => c.id === serverClip.id);
