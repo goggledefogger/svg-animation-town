@@ -321,9 +321,8 @@ const MovieEditorPage: React.FC = () => {
   // Add a function to handle clip updates
   const handleClipUpdate = useCallback(() => {
     // This will be called when the clip is updated
-    // We can use it to trigger refreshes or show notifications
-    modalManager.showToastNotification("Clip updated successfully", "success");
-  }, [modalManager]);
+    // Refreshes or state updates can go here
+  }, []);
 
   return (
     <>
@@ -426,8 +425,8 @@ const MovieEditorPage: React.FC = () => {
           }
           confirmText="Please wait..."
           cancelText="Cancel"
-          onConfirm={() => {}} // No action on confirm
-          onCancel={() => {}} // No action on cancel - force user to wait
+          onConfirm={() => { }} // No action on confirm
+          onCancel={() => { }} // No action on cancel - force user to wait
           confirmDisabled={true}
           showSpinner={true}
         />
@@ -477,6 +476,7 @@ const MovieEditorPage: React.FC = () => {
           }
           confirmText="Save"
           cancelText="Cancel"
+          confirmDisabled={!storyboardOps.storyboardName.trim()}
           onConfirm={async () => {
             const success = await storyboardOps.handleSaveWithName();
             if (success) {
@@ -508,6 +508,7 @@ const MovieEditorPage: React.FC = () => {
           }
           confirmText="Rename"
           cancelText="Cancel"
+          confirmDisabled={!storyboardOps.storyboardName.trim() || storyboardOps.storyboardName === currentStoryboard.name}
           onConfirm={async () => {
             const success = await storyboardOps.handleRename();
             if (success) {

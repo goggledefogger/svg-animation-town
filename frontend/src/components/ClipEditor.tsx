@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useMovie } from '../contexts/MovieContext';
 import { useNavigate } from 'react-router-dom';
 import { addDurationGuidance } from '../utils/animationUtils';
@@ -17,6 +17,8 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
   const [order, setOrder] = useState(0);
   const [prompt, setPrompt] = useState('');
 
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   // Load clip data when active clip changes
   useEffect(() => {
     if (activeClipId) {
@@ -26,13 +28,27 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
         setDuration(clip.duration || 5);
         setOrder(clip.order);
         setPrompt(clip.prompt || '');
+        setSaveStatus('idle'); // Reset status on clip switch
       }
     }
   }, [activeClipId, getActiveClip]);
 
-  // Save changes to the active clip
-  const handleSave = () => {
-    if (!activeClipId) return;
+  // Check if form is dirty
+  const isDirty = (() => {
+    if (!activeClipId) return false;
+    const clip = getActiveClip();
+    if (!clip) return false;
+
+    return (
+      name !== clip.name ||
+      duration !== (clip.duration || 5) ||
+      order !== clip.order
+    );
+  })();
+
+  // Save changes to the active clip (now private for auto-save)
+  const performSave = useCallback(() => {
+    if (!activeClipId || !isDirty) return;
 
     updateClip(activeClipId, {
       name,
@@ -42,7 +58,20 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     });
 
     onClipUpdate();
-  };
+  }, [activeClipId, isDirty, name, duration, order, prompt, updateClip, onClipUpdate]);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (!isDirty) return;
+
+    setSaveStatus('saving');
+    const timer = setTimeout(() => {
+      performSave();
+      setSaveStatus('saved');
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isDirty, performSave]);
 
   // Navigate to animation editor with stored prompt
   const navigateToAnimationEditor = () => {
@@ -54,7 +83,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
     // Store prompt and clip ID for animation editor to use
     // Use our utility to add duration guidance if needed
     const enhancedPrompt = addDurationGuidance(activeClip.prompt || 'Create an animation', activeClip.duration || 5);
-    
+
     sessionStorage.setItem('pending_prompt', enhancedPrompt);
     localStorage.setItem('editing_clip_id', activeClip.id);
 
@@ -164,20 +193,33 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
           <button
             onClick={navigateToAnimationEditor}
             disabled={!prompt}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white p-2 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
           >
             Edit in Animation Editor
           </button>
         </div>
       </div>
 
-      <div className="pt-2">
-        <button
-          onClick={handleSave}
-          className="w-full bg-green-600 hover:bg-green-500 text-white p-2 rounded focus:outline-none focus:ring-2 focus:ring-green-400"
-        >
-          Save Changes
-        </button>
+      <div className="pt-2 flex items-center justify-between">
+        <div className="text-xs transition-opacity duration-300">
+          {saveStatus === 'saving' && (
+            <span className="text-bat-yellow flex items-center">
+              <svg className="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Saving changes...
+            </span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="text-green-400 flex items-center">
+              <svg className="h-3 w-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Changes saved
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

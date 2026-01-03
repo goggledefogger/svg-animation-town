@@ -123,10 +123,10 @@ const StoryboardGeneratorModal: React.FC<StoryboardGeneratorModalProps> = ({
             </button>
             <button
               type="submit"
-              className="rounded-md bg-bat-yellow px-4 py-2 text-sm font-semibold text-black hover:bg-[#ffd42a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-bat-yellow disabled:opacity-70"
-              disabled={isLoading}
+              className="rounded-md bg-bat-yellow px-4 py-2 text-sm font-semibold text-black hover:bg-[#ffd42a] transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-bat-yellow disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={isLoading || !prompt.trim()}
             >
-              {isLoading ? 'Generating...' : 'Generate'}
+              {isLoading ? 'Generating...' : 'Generate Storyboard'}
             </button>
           </div>
         </form>
