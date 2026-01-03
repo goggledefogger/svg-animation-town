@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { addDurationGuidance } from '../utils/animationUtils';
 
 interface ClipEditorProps {
-  onClipUpdate: () => void;
+  onClipUpdate?: () => void;
 }
 
-const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate }) => {
+const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => {
   const { activeClipId, getActiveClip, updateClip } = useMovie();
   const navigate = useNavigate();
 

@@ -318,12 +318,6 @@ const MovieEditorPage: React.FC = () => {
     }
   };
 
-  // Add a function to handle clip updates
-  const handleClipUpdate = useCallback(() => {
-    // This will be called when the clip is updated
-    // Refreshes or state updates can go here
-  }, []);
-
   return (
     <>
       <div className="flex flex-col h-screen overflow-hidden bg-gotham-black text-white">
@@ -383,7 +377,7 @@ const MovieEditorPage: React.FC = () => {
           {activeClipId && (
             <div className="hidden md:block md:w-72 border-l border-gray-700 bg-gray-800 p-4 overflow-y-auto order-3">
               <h3 className="text-lg font-medium text-white mb-4">Clip Properties</h3>
-              <ClipEditor onClipUpdate={handleClipUpdate} />
+              <ClipEditor />
             </div>
           )}
         </div>
@@ -590,7 +584,6 @@ const MovieEditorPage: React.FC = () => {
             {/* Content */}
             <div className="flex-1 overflow-auto p-4">
               <ClipEditor onClipUpdate={() => {
-                handleClipUpdate();
                 modalManager.setShowMobileClipEditor(false);
               }} />
             </div>
