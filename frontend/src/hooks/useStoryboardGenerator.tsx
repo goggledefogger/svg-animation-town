@@ -6,6 +6,7 @@ import { AnimationApi, MovieStorageApi } from '../services/api';
 import { Storyboard, MovieClip } from '../contexts/MovieContext';
 import { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 import { useGenerationProgress } from './useGenerationProgress';
+import { useMoviePolling } from './useMoviePolling';
 import { useAnimation } from '../contexts/AnimationContext';
 import type { AIProviderId } from '@/types/ai';
 
@@ -70,20 +71,10 @@ export function useStoryboardGenerator(
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [currentSession, setCurrentSession] = useState<string | null>(null);
 
-  // Use a ref to track if we're already polling an in-progress movie
-  const isPollingRef = useRef<boolean>(false);
-  // Track the polling interval ID for conditional polling
-  const conditionalPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Use the extracted polling hook instead of manual refs
+  const { stopPolling, startPolling: hookStartPolling, startConditionalPolling: hookStartConditionalPolling } = useMoviePolling();
 
   const lastErrorRef = useRef<string | null>(null);
-
-  // Clear conditional polling interval
-  const clearConditionalPolling = useCallback(() => {
-    if (conditionalPollingIntervalRef.current) {
-      clearInterval(conditionalPollingIntervalRef.current);
-      conditionalPollingIntervalRef.current = null;
-    }
-  }, []);
 
   // Verify final state matches backend (with retry limit to prevent infinite recursion)
   const MAX_VERIFY_RETRIES = 5;
@@ -131,8 +122,7 @@ export function useStoryboardGenerator(
     }
 
     // Stop polling if we were doing that
-    isPollingRef.current = false;
-    clearConditionalPolling();
+    stopPolling();
 
     // Update the storyboard state immediately to prevent infinite SSE reconnections
     setCurrentStoryboard(prev => {
@@ -182,7 +172,7 @@ export function useStoryboardGenerator(
       setShowGeneratingClipsModal(false);
       setShowStoryboardGeneratorModal(false);
     });
-  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard, setActiveClipId, clearConditionalPolling]);
+  }, [setShowGeneratingClipsModal, setShowStoryboardGeneratorModal, verifyFinalState, setCurrentStoryboard, currentStoryboard, setActiveClipId, stopPolling]);
 
   // Handle new clip updates
   const handleNewClip = useCallback((clip: MovieClip) => {
@@ -229,7 +219,7 @@ export function useStoryboardGenerator(
     setShowGeneratingClipsModal(false);
 
     // Stop polling if we were doing that
-    isPollingRef.current = false;
+    stopPolling();
   }, [setGenerationError, setShowErrorModal, setShowGeneratingClipsModal]);
 
   // Handle session cleanup
@@ -273,8 +263,8 @@ export function useStoryboardGenerator(
       return;
     }
 
-    // Clear any existing conditional polling
-    clearConditionalPolling();
+    // Clear any existing polling
+    stopPolling();
 
     // Set isGenerating to ensure we show progress UI
     // Note: We always call this since the condition above ensures generation is in progress
@@ -302,74 +292,39 @@ export function useStoryboardGenerator(
     // Create a stable storyboard ID reference to use in the interval
     const storyboardId = currentStoryboard.id;
 
-    // Start conditional polling interval
-    conditionalPollingIntervalRef.current = setInterval(async () => {
-      try {
-        // Get latest movie data from server
-        const response = await MovieStorageApi.getMovie(storyboardId);
-
-        if (!response?.success || !response.movie) {
-          console.warn("Failed to refresh movie data from server");
-          return;
-        }
-
-        // Check if generation has completed
-        if (response.movie.generationStatus && !response.movie.generationStatus.inProgress) {
-          // Update our storyboard with the server state
-          setCurrentStoryboard(response.movie);
-
-          // Update UI state
-          setIsGenerating(false);
-          setShowGeneratingClipsModal(false);
-
-          // Clear the polling interval
-          clearConditionalPolling();
-          return;
-        }
-
-        // Check if an activeSessionId is now available
-        if (response.movie.generationStatus?.activeSessionId) {
-          // Set the session ID to connect to SSE
-          setCurrentSession(response.movie.generationStatus.activeSessionId);
-
-          // Update our storyboard with the server state
-          setCurrentStoryboard(response.movie);
-
-          // Make sure UI state is correct
-          setIsGenerating(true);
-
-          // Clear the polling interval since SSE will take over
-          clearConditionalPolling();
-          return;
-        }
-
-        // If we get here, the movie is still in progress but no activeSessionId yet
-        // Continue polling until one of the above conditions is met
-
-        // Update our storyboard with any changes from the server (like new clips)
-        // Use functional update to avoid stale closure - compare with latest state
+    // Start conditional polling using the hook
+    hookStartConditionalPolling(
+      storyboardId,
+      6000, // Poll every 6 seconds
+      // onSessionAvailable - SSE session became available
+      (sessionId) => {
+        setCurrentSession(sessionId);
+        setIsGenerating(true);
+      },
+      // onUpdate - progress update
+      (movie, progress) => {
         setCurrentStoryboard(prev => {
-          if (response.movie.clips?.length !== prev.clips?.length) {
-            // Update progress display when clips change
-            if (response.movie.generationStatus) {
-              setGenerationProgress(prevProgress => ({
-                ...prevProgress,
-                current: response.movie.generationStatus?.completedScenes || 0,
-                total: response.movie.generationStatus?.totalScenes || 0
-              }));
-            }
-            return response.movie;
+          if (movie.clips?.length !== prev.clips?.length) {
+            setGenerationProgress(prevProgress => ({
+              ...prevProgress,
+              current: progress.completedScenes,
+              total: progress.totalScenes
+            }));
+            return movie;
           }
           return prev;
         });
-      } catch (error) {
-        console.error("Error in conditional polling:", error);
+      },
+      // onComplete - generation finished
+      () => {
+        setIsGenerating(false);
+        setShowGeneratingClipsModal(false);
       }
-    }, 6000); // Poll every 6 seconds
+    );
 
     // Clean up interval when component unmounts or when the currentStoryboard changes
     return () => {
-      clearConditionalPolling();
+      stopPolling();
     };
   }, [
     currentStoryboard?.id,
@@ -378,7 +333,8 @@ export function useStoryboardGenerator(
     setIsGenerating,
     setGenerationProgress,
     setCurrentStoryboard,
-    clearConditionalPolling
+    stopPolling,
+    hookStartConditionalPolling
   ]);
 
   /**
@@ -392,7 +348,7 @@ export function useStoryboardGenerator(
     try {
       // Reset any previous state
       setGenerationError(null);
-      isPollingRef.current = false;
+      stopPolling();
 
       // Set initial progress state to 0/0 before showing the modal
       setGenerationProgress({
@@ -468,7 +424,7 @@ export function useStoryboardGenerator(
       setShowErrorModal(true);
       setShowGeneratingClipsModal(false);
       setCurrentSession(null); // Clear the session on error
-      isPollingRef.current = false; // Make sure polling is off
+      stopPolling(); // Make sure polling is off
     }
   }, [
     currentStoryboard?.generationStatus?.status,
@@ -593,46 +549,6 @@ export function useStoryboardGenerator(
     }
   }, []);
 
-  // Add polling functionality
-  const startPolling = useCallback(() => {
-    if (isPollingRef.current) return;
-    isPollingRef.current = true;
-
-    const pollInterval = setInterval(async () => {
-      if (!currentStoryboard?.id) {
-        clearInterval(pollInterval);
-        isPollingRef.current = false;
-        return;
-      }
-
-      try {
-        const response = await MovieStorageApi.getMovie(currentStoryboard.id);
-        if (response?.movie?.generationStatus) {
-          const { completedScenes, totalScenes, inProgress } = response.movie.generationStatus;
-
-          setGenerationProgress({
-            current: completedScenes || 0,
-            total: totalScenes || 0,
-            status: inProgress ? 'in_progress' : 'completed'
-          });
-
-          if (!inProgress) {
-            clearInterval(pollInterval);
-            isPollingRef.current = false;
-            setIsGenerating(false);
-          }
-        }
-      } catch (error) {
-        console.error('Error polling movie status:', error);
-      }
-    }, 5000); // Poll every 5 seconds
-
-    return () => {
-      clearInterval(pollInterval);
-      isPollingRef.current = false;
-    };
-  }, [currentStoryboard?.id]);
-
   // Check storyboard generation status and resume if needed
   useEffect(() => {
     if (!currentStoryboard?.id) return;
@@ -726,11 +642,34 @@ export function useStoryboardGenerator(
       }
 
       // If we get here, we're in progress but have no active session
-      startPolling();
+      // Start polling using the hook with proper callbacks
+      if (currentStoryboard?.id) {
+        hookStartPolling(
+          currentStoryboard.id,
+          5000, // Poll every 5 seconds
+          {
+            onUpdate: (movie) => {
+              if (movie.generationStatus) {
+                setGenerationProgress({
+                  current: movie.generationStatus.completedScenes || 0,
+                  total: movie.generationStatus.totalScenes || 0,
+                  status: movie.generationStatus.inProgress ? 'in_progress' : 'completed'
+                });
+              }
+            },
+            onComplete: () => {
+              setIsGenerating(false);
+            },
+            onError: (err) => {
+              console.error('Error polling movie status:', err);
+            }
+          }
+        );
+      }
     };
 
     checkGenerationStatus();
-  }, [currentStoryboard?.id, globalProvider, globalModel, startPolling]);
+  }, [currentStoryboard?.id, globalProvider, globalModel, hookStartPolling, setIsGenerating, setGenerationProgress, setGenerationError, setCurrentSession]);
 
   return {
     isGenerating,
