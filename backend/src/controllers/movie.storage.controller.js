@@ -21,6 +21,14 @@ const movieStorageController = {
 
       const movieId = await storageService.saveMovie(storyboard);
 
+      // Debug log for playback speed persistence
+      if (storyboard.clips && storyboard.clips.length > 0) {
+        const clipsWithSpeed = storyboard.clips.filter(c => c.playbackSpeed && c.playbackSpeed !== 1);
+        if (clipsWithSpeed.length > 0) {
+           console.log(`[MOVIE_CONTROLLER] Saving ${clipsWithSpeed.length} clips with custom playback speed. Sample: ${clipsWithSpeed[0].playbackSpeed}x`);
+        }
+      }
+
       // Fetch the saved movie to return it in the response
       const savedMovie = await storageService.getMovie(movieId);
 

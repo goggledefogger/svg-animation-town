@@ -407,7 +407,9 @@ class StorageService {
             animationId: clip.animationId,
             // Store provider info to help with resumption
             provider: clip.provider,
-            model: clip.model
+            model: clip.model,
+            // Persist playback speed
+            playbackSpeed: clip.playbackSpeed
           };
 
           return optimizedClip;
