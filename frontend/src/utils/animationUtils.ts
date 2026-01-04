@@ -254,6 +254,9 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
     initialSetup = false
   } = options;
 
+  // Log speed application for debugging (limited frequency?)
+  // console.log(`[AnimationControl] Speed: ${playbackSpeed}, PlayState: ${playState}, Reset: ${shouldReset}`);
+
   try {
     // 1. Reset animations if requested (resets to time 0)
     if (shouldReset) {

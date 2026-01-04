@@ -338,6 +338,7 @@ export function useAnimationLogic(): AnimationContextType {
                 // Since it modifies DOM directly and doesn't change React state, passing it here strictly is fine.
             }, 800);
         } else if (svgRef) {
+            console.log(`[AnimationContext] Applying global control. Speed: ${state.playback.speed}`);
             controlAnimations(svgRef, {
                 playState: state.playback.isPlaying ? 'running' : 'paused',
                 shouldReset: false,

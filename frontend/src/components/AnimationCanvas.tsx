@@ -47,8 +47,13 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     setSvgRef,
     playing,
     svgRef: contextSvgRef,
-    playbackSpeed
+    playbackSpeed: contextPlaybackSpeed
   } = useAnimation();
+
+  // Enforce 1x playback speed when not in animation editor mode,
+  // unless we want to support global speed controls for the movie player later.
+  // This prevents "grooving" or fast-forward settings from the editor leaking into the movie experience.
+  const playbackSpeed = isAnimationEditor ? contextPlaybackSpeed : 1;
 
   // Get movie context if this is used in a movie editor
   const {
@@ -393,7 +398,13 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       // Force a small delay to ensure the SVG is fully loaded in the DOM
       // This helps ensure animations can be properly paused/resumed
       setTimeout(() => {
-        setSvgRef(svgElement);
+        // Only share the ref with the global animation context if we are in the Animation Editor
+        // OR if we strictly need it for global controls to work.
+        // For Movie Player/Editor, we want to isolate playback control to this component
+        // to prevent global speed settings (like 2x speed) from leaking in.
+        if (isAnimationEditor) {
+          setSvgRef(svgElement);
+        }
       }, 50);
     }
 
@@ -443,6 +454,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       playbackSpeed, // Use current playback speed
       initialSetup: shouldPerformReset // This should match shouldReset
     });
+
+    console.log(`[AnimationCanvas] Applied local control. Speed: ${playbackSpeed}, isEditor: ${isAnimationEditor}`);
 
     if (window._isPlaybackStateChanging) {
       // console.log('[AnimationCanvas] Preserving animation state during playback change - no reset');
