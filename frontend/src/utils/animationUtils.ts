@@ -411,59 +411,57 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
       });
     }
 
-    // 3.2 Handle elements with inline style animation
-    const elementsWithInlineStyle = element.querySelectorAll('[style*="animation"]');
-    elementsWithInlineStyle.forEach(el => {
+    // 3.2 Handle elements with inline style animation or computed animation
+    const elementsWithAnimation = element.querySelectorAll('*');
+    elementsWithAnimation.forEach(el => {
       if (el instanceof SVGElement) {
-        // Set playback state
-        el.style.animationPlayState = playState;
+        const style = el.style;
+        const computed = window.getComputedStyle(el);
+        const hasAnimation = (style.animationName && style.animationName !== 'none') ||
+                            (computed.animationName && computed.animationName !== 'none');
 
-        // Set speed and direction if relevant
-        if (playbackSpeed !== 'groovy') {
-          // Set animation direction
-          el.style.animationDirection = isReverse ? 'reverse' : 'normal';
+        if (hasAnimation) {
+          // Set playback state
+          el.style.animationPlayState = playState;
 
-          // Apply speed changes regardless of reset state
-          const currentDuration = window.getComputedStyle(el).animationDuration;
-          if (currentDuration && currentDuration !== '0s') {
-            const durationInS = parseFloat(currentDuration);
-            const newDuration = durationInS / speedValue;
-            el.style.animationDuration = `${newDuration}s`;
+          // Set speed and direction if relevant
+          if (playbackSpeed !== 'groovy') {
+            // Set animation direction
+            el.style.animationDirection = isReverse ? 'reverse' : 'normal';
+
+            // Store original duration if not already stored
+            if (!el.getAttribute('data-original-dur')) {
+              const currentDur = style.animationDuration || computed.animationDuration;
+              // Only store if we have a valid duration
+              if (currentDur && currentDur !== '0s') {
+                el.setAttribute('data-original-dur', currentDur);
+              }
+            }
+
+            // Get original duration
+            const originalDurRaw = el.getAttribute('data-original-dur');
+
+            if (originalDurRaw) {
+              const durationInS = parseFloat(originalDurRaw);
+              if (!isNaN(durationInS)) {
+                // Check if we are actually changing it to avoid spam
+                const currentComputed = window.getComputedStyle(el).animationDuration;
+                const newDuration = durationInS / speedValue;
+                const newDurationStr = `${newDuration}s`;
+
+                if (currentComputed !== newDurationStr) {
+                   console.log(`[AnimationControl] Updating duration. Original: ${durationInS}s, Speed: ${speedValue}x, New: ${newDurationStr}`);
+                   el.style.animationDuration = newDurationStr;
+                }
+              }
+            }
           }
         }
       }
     });
 
-    // 3.3 Handle all other elements with animations in stylesheet
-    try {
-      const allElements = element.querySelectorAll('*');
-      allElements.forEach(el => {
-        if (el instanceof SVGElement) {
-          // Check for animations via computed style
-          const computedStyle = window.getComputedStyle(el);
-          if (computedStyle.animationName && computedStyle.animationName !== 'none') {
-            // Set playback state
-            el.style.animationPlayState = playState;
+    // 3.3 (Removed) - Handled by consolidated block above
 
-            // Set speed and direction if relevant
-            if (playbackSpeed !== 'groovy') {
-              // Set animation direction
-              el.style.animationDirection = isReverse ? 'reverse' : 'normal';
-
-              // Apply speed changes regardless of reset state
-              const currentDuration = computedStyle.animationDuration;
-              if (currentDuration && currentDuration !== '0s') {
-                const durationInS = parseFloat(currentDuration);
-                const newDuration = durationInS / speedValue;
-                el.style.animationDuration = `${newDuration}s`;
-              }
-            }
-          }
-        }
-      });
-    } catch (e) {
-      console.error('[Animation] Error handling stylesheet animations:', e);
-    }
   } catch (e) {
     console.error('[Animation] Error controlling animations:', e);
   }
