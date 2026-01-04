@@ -298,9 +298,12 @@ function processClipSvg(clip: MovieClip, clipId: string): string {
     prefixIds(svgElement, clipId);
 
     // Apply global speed calibration to match the player (0.4x baseline)
-    // We invert the calibration (1 / 0.4 = 2.5) because we are modifying DURATION, not speed.
-    // Lower speed = Higher duration.
-    const calibrator = 1 / BASE_SPEED_CALIBRATION;
+    // AND apply per-clip playback speed.
+    // Formula: Target Duration = Original Duration * (1 / (Baseline * ClipSpeed))
+    // Example: 1x clip = 1 / (0.4 * 1) = 2.5x slower (correct)
+    // Example: 2x clip = 1 / (0.4 * 2) = 1.25x slower than original (faster than 1x)
+    const clipSpeed = clip.playbackSpeed || 1.0;
+    const calibrator = 1 / (BASE_SPEED_CALIBRATION * clipSpeed);
 
     // 1. Scale SMIL durations
     const smilElements = svgElement.querySelectorAll('animate, animateTransform, animateMotion');

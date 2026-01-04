@@ -19,6 +19,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const [duration, setDuration] = useState(initialClip?.duration || 5);
   const [order, setOrder] = useState(initialClip?.order || 0);
   const [prompt, setPrompt] = useState(initialClip?.prompt || '');
+  const [playbackSpeed, setPlaybackSpeed] = useState(initialClip?.playbackSpeed || 1.0);
 
   // Save status state
   const [showSaved, setShowSaved] = useState(false);
@@ -29,6 +30,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
     duration: initialClip?.duration || 5,
     order: initialClip?.order || 0,
     prompt: initialClip?.prompt || '',
+    playbackSpeed: initialClip?.playbackSpeed || 1.0,
   });
 
   // Timer refs
@@ -36,8 +38,8 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep refs to current values for unmount flush
-  const currentValuesRef = useRef({ name, duration, order, prompt });
-  currentValuesRef.current = { name, duration, order, prompt };
+  const currentValuesRef = useRef({ name, duration, order, prompt, playbackSpeed });
+  currentValuesRef.current = { name, duration, order, prompt, playbackSpeed };
 
   // Keep refs to functions for unmount flush
   const updateClipRef = useRef(updateClip);
@@ -51,14 +53,15 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const syncToContext = useCallback(() => {
     if (!activeClipId) return;
 
-    const current = { name, duration, order, prompt };
+    const current = { name, duration, order, prompt, playbackSpeed };
     const last = lastSyncedRef.current;
 
     // Check if actually changed
     if (current.name === last.name &&
         current.duration === last.duration &&
         current.order === last.order &&
-        current.prompt === last.prompt) {
+        current.prompt === last.prompt &&
+        current.playbackSpeed === last.playbackSpeed) {
       return;
     }
 
@@ -71,7 +74,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
     setShowSaved(true);
     if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     savedTimerRef.current = setTimeout(() => setShowSaved(false), 1500);
-  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]);
+  }, [activeClipId, name, duration, order, prompt, playbackSpeed, updateClip, onClipUpdate]);
 
   // Debounced sync - trigger on value changes
   useEffect(() => {
@@ -90,7 +93,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [activeClipId, name, duration, order, prompt]); // Note: syncToContext NOT in deps
+  }, [activeClipId, name, duration, order, prompt, playbackSpeed]); // Note: syncToContext NOT in deps
 
   // Flush on unmount using refs (not stale closure)
   useEffect(() => {
@@ -107,7 +110,8 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
           if (current.name !== last.name ||
               current.duration !== last.duration ||
               current.order !== last.order ||
-              current.prompt !== last.prompt) {
+              current.prompt !== last.prompt ||
+              current.playbackSpeed !== last.playbackSpeed) {
             updateClipRef.current(clipId, current);
             onClipUpdateRef.current();
           }
@@ -197,6 +201,30 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
         <p className="text-xs text-gray-400 mt-1">
           Animation timing will automatically adjust to match this duration when possible.
         </p>
+      </div>
+
+      <div>
+        <label htmlFor="clip-speed" className="block text-sm font-medium text-gray-300 mb-1">
+          Playback Speed (Multiplier)
+        </label>
+        <div className="flex items-center space-x-2">
+          <input
+            id="clip-speed"
+            type="number"
+            min="0.1"
+            max="5.0"
+            step="0.1"
+            className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
+            value={playbackSpeed}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              setPlaybackSpeed(isNaN(val) ? 1.0 : val);
+            }}
+          />
+          <span className="text-gray-400 text-sm whitespace-nowrap w-8">
+            {playbackSpeed}x
+          </span>
+        </div>
       </div>
 
       <div>
