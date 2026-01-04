@@ -87,7 +87,7 @@ export const exportMovieAsSvg = (
         text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.8);
       }
       .overlay-background {
-        fill: rgba(0, 0, 0, 0.6);
+        fill: rgba(0, 0, 0, 0.4);
         rx: 8;
         ry: 8;
       }
@@ -160,7 +160,7 @@ export const exportMovieAsSvg = (
     // Add Clip Caption (Subtitle) - Bottom Centered
     if (options.includePrompts && clip.prompt) {
       const promptText = clip.prompt.replace(/"/g, '&quot;');
-      const lines = formatPromptIntoLines(promptText, 80);
+      const lines = formatPromptIntoLines(promptText, 80, 3);
 
       svgContent += `  <!-- Subtitle for clip ${index + 1} -->\n`;
       svgContent += `  <g id="subtitle-${clipId}" opacity="0">\n`;
@@ -189,33 +189,58 @@ export const exportMovieAsSvg = (
     cumulativeTime += duration;
   });
 
-  // Render Movie Prompt Overlay (Top-Left) - visible for entire duration
+  // Render Movie Prompt Overlay (Top-Left) - visible for entire duration with cycling text
   if (options.includeMoviePrompt && storyboard.description) {
     const promptText = storyboard.description.replace(/"/g, '&quot;');
-    const lines = formatPromptIntoLines(promptText, 70); // 70 chars max per line for overlay
+    const allLines = formatPromptIntoLines(promptText, 70); // 70 chars max per line, unlimited lines
 
-    svgContent += `  <!-- Movie Prompt Overlay -->\n`;
-    svgContent += `  <g id="movie-prompt-overlay" opacity="1">\n`; // Default opacity 1
+    // Pagination settings
+    const linesPerPage = 3;
+    const pageDuration = 5; // seconds per page
+    const totalPages = Math.ceil(allLines.length / linesPerPage);
 
-    // Layout calculation for top-left overlay
-    const lineHeight = 18;
-    const padding = 12;
-    const bgHeight = (padding * 2) + (lineHeight * (lines.length - 1)) + 6;
+    svgContent += `  <!-- Movie Prompt Overlay (Paged: ${totalPages} pages, ${pageDuration}s each) -->\n`;
 
-    const rectX = 20;
-    const rectY = 20;
-    const textX = 32; // x + padding
-    const firstTextY = 20 + padding + 5;
-    const boxWidth = 500;
+    // Render each page group
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+      const pageId = `movie-prompt-page-${pageIndex}`;
+      const pageLines = allLines.slice(pageIndex * linesPerPage, (pageIndex + 1) * linesPerPage);
 
-    svgContent += `    <rect class="overlay-background" x="${rectX}" y="${rectY}" width="${boxWidth}" height="${bgHeight}" />\n`;
+      // Calculate start times for this page (cycling)
+      const beginTimes: string[] = [];
+      for (let t = 0; t < totalDuration; t += pageDuration) {
+        // Current cycle index
+        const cycleIndex = Math.floor(t / pageDuration) % totalPages;
+        if (cycleIndex === pageIndex) {
+          beginTimes.push(`main-timeline.begin+${t}s`);
+        }
+      }
+      const beginAttribute = beginTimes.join(';');
 
-    lines.forEach((line, lineIndex) => {
-      const yPosition = firstTextY + (lineIndex * lineHeight);
-      svgContent += `    <text class="overlay-text" x="${textX}" y="${yPosition}">${line}</text>\n`;
-    });
+      svgContent += `  <g id="${pageId}" display="none">\n`;
+      // Visibility animation
+      svgContent += `    <set attributeName="display" to="inline" begin="${beginAttribute}" dur="${pageDuration}s" />\n`;
 
-    svgContent += `  </g>\n\n`;
+      // Layout calculation for this page
+      const lineHeight = 18;
+      const padding = 12;
+      const bgHeight = (padding * 2) + (lineHeight * (pageLines.length - 1)) + 6;
+
+      const rectX = 20;
+      const rectY = 20;
+      const textX = 32; // x + padding
+      const firstTextY = 20 + padding + 5;
+      const boxWidth = 500;
+
+      svgContent += `    <rect class="overlay-background" x="${rectX}" y="${rectY}" width="${boxWidth}" height="${bgHeight}" />\n`;
+
+      pageLines.forEach((line, lineIndex) => {
+        const yPosition = firstTextY + (lineIndex * lineHeight);
+        svgContent += `    <text class="overlay-text" x="${textX}" y="${yPosition}">${line}</text>\n`;
+      });
+
+      svgContent += `  </g>\n`;
+    }
   }
 
   // Add a replay button
@@ -388,10 +413,10 @@ function prefixIds(element: Element, prefix: string): void {
 /**
  * Format a prompt text into multiple lines for better presentation
  * @param text The prompt text to format
- * @param maxLength Maximum length per line
+ * @param maxLines Optional maximum number of lines (defaults to unlimited)
  * @returns Array of text lines
  */
-function formatPromptIntoLines(text: string, maxLength: number): string[] {
+function formatPromptIntoLines(text: string, maxLength: number, maxLines?: number): string[] {
   if (!text) return [];
   if (text.length <= maxLength) return [text];
 
@@ -414,14 +439,14 @@ function formatPromptIntoLines(text: string, maxLength: number): string[] {
     lines.push(currentLine);
   }
 
-  // Limit to max 3 lines to prevent excessive vertical space
-  if (lines.length > 3) {
-    lines.splice(3);
-    const lastLine = lines[2];
+  // Limit to max lines if specified
+  if (maxLines && lines.length > maxLines) {
+    lines.splice(maxLines);
+    const lastLine = lines[maxLines - 1];
     if (lastLine.length > maxLength - 3) {
-      lines[2] = lastLine.substring(0, maxLength - 3) + '...';
+      lines[maxLines - 1] = lastLine.substring(0, maxLength - 3) + '...';
     } else {
-      lines[2] = lastLine + '...';
+      lines[maxLines - 1] = lastLine + '...';
     }
   }
 
