@@ -7,6 +7,7 @@ import ExportModal from './ExportModal';
 import AnimationList, { AnimationItem } from './AnimationList';
 import './Header.css'; // Import custom CSS for shimmer effect
 import { AnimationStorageApi } from '../services/api';
+import ShareModal from './ShareModal';
 
 interface HeaderProps {
   onExport?: () => void;
@@ -16,6 +17,7 @@ interface HeaderProps {
   onRename?: () => void;
   storyboardName?: string;
   onReset?: () => void;
+  movieId?: string;
 }
 
 // Icon component for reusability
@@ -256,7 +258,8 @@ const Header: React.FC<HeaderProps> = ({
   onGenerate,
   onRename,
   storyboardName,
-  onReset
+  onReset,
+  movieId
 }) => {
   const { resetEverything, saveAnimation, loadAnimation, deleteAnimation, exportAnimation, svgContent, chatHistory } = useAnimation();
   const { exportStoryboard, activeClip } = useMovie();
@@ -265,6 +268,7 @@ const Header: React.FC<HeaderProps> = ({
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showMovieExportModal, setShowMovieExportModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
   const [showNavDropdown, setShowNavDropdown] = useState(false);
   const [showAnimationList, setShowAnimationList] = useState(false);
@@ -562,6 +566,22 @@ const Header: React.FC<HeaderProps> = ({
             text="Save"
           />
 
+          {/* Share Button (Only in Movie Editor) */}
+          {isMovieEditorPage && movieId && (
+            <ActionButton
+              onClick={() => setShowShareModal(true)}
+              ariaLabel="Share"
+              title="Share Movie Link"
+              text="Share"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              }
+              disabled={false}
+            />
+          )}
+
           {/* Export Button - Yellow button */}
           {isMovieEditorPage ? (
             <ExportDropdown
@@ -735,6 +755,16 @@ const Header: React.FC<HeaderProps> = ({
           setAnimationName('');
         }}
       />
+
+      {/* Share Modal */}
+      {showShareModal && isMovieEditorPage && movieId && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          movieId={movieId}
+          movieName={storyboardName || 'My Movie'}
+        />
+      )}
 
       {/* Movie Export Modal */}
       {isMovieEditorPage && showMovieExportModal && (

@@ -292,6 +292,7 @@ const MovieEditorPage: React.FC = () => {
           onRename={handleShowRenameModal}
           storyboardName={currentStoryboard.name}
           onReset={resetApplication}
+          movieId={currentStoryboard.id}
         />
 
         {/* Main content area with flex layout */}

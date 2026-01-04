@@ -8,6 +8,7 @@ import { MovieProvider, useMovie } from './contexts/MovieContext';
 import AnimationControls from './components/AnimationControls';
 import MovieEditorPage from './pages/MovieEditorPage';
 import { ViewerPreferencesProvider } from './contexts/ViewerPreferencesContext';
+import WatchMoviePage from './pages/WatchMoviePage';
 
 // Connector component that gets data from AnimationContext and passes it to MovieProvider
 // This pattern properly addresses the context dependency without creating circular references
@@ -159,6 +160,12 @@ function App() {
                 <MovieContextConnector>
                   <MovieEditorPage />
                 </MovieContextConnector>
+              }
+            />
+            <Route
+              path="/watch/:id"
+              element={
+                <WatchMoviePage />
               }
             />
             <Route path="*" element={<Navigate to="/" />} />
