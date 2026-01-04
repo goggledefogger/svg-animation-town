@@ -35,7 +35,19 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Stable sync function using refs to avoid dependency issues
+  // Keep refs to current values for unmount flush
+  const currentValuesRef = useRef({ name, duration, order, prompt });
+  currentValuesRef.current = { name, duration, order, prompt };
+
+  // Keep refs to functions for unmount flush
+  const updateClipRef = useRef(updateClip);
+  const onClipUpdateRef = useRef(onClipUpdate);
+  const activeClipIdRef = useRef(activeClipId);
+  updateClipRef.current = updateClip;
+  onClipUpdateRef.current = onClipUpdate;
+  activeClipIdRef.current = activeClipId;
+
+  // Stable sync function
   const syncToContext = useCallback(() => {
     if (!activeClipId) return;
 
@@ -80,19 +92,32 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
     };
   }, [activeClipId, name, duration, order, prompt]); // Note: syncToContext NOT in deps
 
-  // Flush on unmount
+  // Flush on unmount using refs (not stale closure)
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
-        // Flush immediately - use current values from closure
-        syncToContext();
+
+        // Flush immediately using refs for latest values
+        const clipId = activeClipIdRef.current;
+        if (clipId) {
+          const current = currentValuesRef.current;
+          const last = lastSyncedRef.current;
+
+          if (current.name !== last.name ||
+              current.duration !== last.duration ||
+              current.order !== last.order ||
+              current.prompt !== last.prompt) {
+            updateClipRef.current(clipId, current);
+            onClipUpdateRef.current();
+          }
+        }
       }
       if (savedTimerRef.current) {
         clearTimeout(savedTimerRef.current);
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // Navigate to animation editor with stored prompt
   const navigateToAnimationEditor = useCallback(() => {
