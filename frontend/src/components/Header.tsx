@@ -264,9 +264,11 @@ const Header: React.FC<HeaderProps> = ({
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showMovieExportModal, setShowMovieExportModal] = useState(false);
   const [animationName, setAnimationName] = useState('');
   const [showNavDropdown, setShowNavDropdown] = useState(false);
   const [showAnimationList, setShowAnimationList] = useState(false);
+  const [includeCaptions, setIncludeCaptions] = useState(false);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const desktopNavRef = useRef<HTMLDivElement>(null);
   const animationListButtonRef = useRef<HTMLButtonElement>(null);
@@ -328,6 +330,16 @@ const Header: React.FC<HeaderProps> = ({
   const handleExport = (filename: string, format: 'svg' | 'json', includeBackground?: boolean) => {
     exportAnimation(filename, format, includeBackground);
     setShowExportModal(false);
+  };
+
+  const openMovieExportModal = () => {
+    setIncludeCaptions(false);
+    setShowMovieExportModal(true);
+  };
+
+  const handleMovieExport = () => {
+    exportStoryboard('svg', { includePrompts: includeCaptions });
+    setShowMovieExportModal(false);
   };
 
   // Handle animation selection
@@ -513,7 +525,7 @@ const Header: React.FC<HeaderProps> = ({
           {isMovieEditorPage ? (
             <ExportDropdown
               isMovieEditorPage={isMovieEditorPage}
-              onExportSvg={onExport || (() => { })}
+              onExportSvg={openMovieExportModal}
               onExportJson={handleExportJson}
               dropdownRef={exportDropdownRef}
             />
@@ -619,7 +631,7 @@ const Header: React.FC<HeaderProps> = ({
           {/* Export Button - Yellow button */}
           {isMovieEditorPage ? (
             <ActionButton
-              onClick={onExport || (() => { })}
+              onClick={openMovieExportModal}
               disabled={false}
               ariaLabel="Export Movie"
               title="Export Movie as SVG"
@@ -682,6 +694,48 @@ const Header: React.FC<HeaderProps> = ({
           setAnimationName('');
         }}
       />
+
+      {/* Movie Export Modal */}
+      {isMovieEditorPage && showMovieExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/50">
+          <div className="bg-gray-800 rounded-lg p-4 sm:p-5 w-full max-w-sm sm:max-w-md mx-auto my-auto">
+            <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-white">Export Movie</h2>
+            <p className="text-gray-300 text-sm sm:text-base mb-4">
+              Choose whether to include captions (scene prompts) in your exported SVG movie.
+            </p>
+
+            <label className="flex items-start gap-3 mb-6">
+              <input
+                type="checkbox"
+                checked={includeCaptions}
+                onChange={() => setIncludeCaptions(!includeCaptions)}
+                className="form-checkbox text-bat-yellow focus:ring-bat-yellow h-4 w-4 mt-1"
+              />
+              <div>
+                <span className="text-sm sm:text-base text-white block">Include captions</span>
+                <span className="text-gray-400 text-xs sm:text-sm">
+                  Adds subtitle overlays using each scene\'s prompt.
+                </span>
+              </div>
+            </label>
+
+            <div className="flex justify-end gap-2 sm:gap-3">
+              <button
+                onClick={() => setShowMovieExportModal(false)}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-gray-700 hover:bg-gray-600 text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMovieExport}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base bg-bat-yellow hover:bg-bat-yellow/90 text-black rounded"
+              >
+                Export SVG Movie
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export Modal */}
       <ExportModal
