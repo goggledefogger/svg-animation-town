@@ -121,7 +121,7 @@ interface MovieContextType {
 }
 
 // Create context
-const MovieContext = createContext<MovieContextType | undefined>(undefined);
+export const MovieContext = createContext<MovieContextType | undefined>(undefined);
 
 // Context provider component
 interface MovieProviderProps {

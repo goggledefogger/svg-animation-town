@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import AnimationCanvas from './AnimationCanvas';
-import { MovieClip, Storyboard } from '../contexts/MovieContext';
+import { MovieContext, MovieClip, Storyboard } from '../contexts/MovieContext';
 import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
+import { useAnimation } from '../contexts/AnimationContext';
 
 interface MoviePlayerProps {
   movie: Storyboard;
@@ -25,6 +26,9 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   const [currentPromptPage, setCurrentPromptPage] = useState(0);
   const [showControls, setShowControls] = useState(true);
 
+  // Context hook
+  const { resumeAnimations, pauseAnimations } = useAnimation();
+
   // Refs
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const clipTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -32,6 +36,44 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const activeClip = movie.clips[currentClipIndex];
+
+  // Helper to sync with AnimationContext for playback
+  useEffect(() => {
+    if (isPlaying) {
+      resumeAnimations();
+    } else {
+      pauseAnimations();
+    }
+  }, [isPlaying, resumeAnimations, pauseAnimations]);
+
+  // ReadOnly Context Value for AnimationCanvas
+  const readOnlyContextValue = {
+    currentStoryboard: movie,
+    savedStoryboards: [],
+    activeClipId: activeClip ? activeClip.id : null,
+    activeClip: activeClip || null,
+    setCurrentStoryboard: () => {},
+    createNewStoryboard: () => {},
+    renameStoryboard: () => {},
+    updateStoryboardDescription: () => {},
+    saveStoryboard: async () => false,
+    loadStoryboard: async () => false,
+    getSavedStoryboards: async () => [],
+    deleteStoryboard: async () => false,
+    addClip: () => '',
+    saveCurrentAnimationAsClip: () => null,
+    updateClip: () => {},
+    removeClip: () => {},
+    reorderClips: () => {},
+    setActiveClipId: () => {},
+    getActiveClip: () => activeClip || null,
+    isPlaying: isPlaying,
+    setIsPlaying: setIsPlaying,
+    currentPlaybackPosition: 0,
+    setCurrentPlaybackPosition: () => {},
+    exportStoryboard: () => {},
+    createStoryboardFromResponse: async () => movie
+  };
 
   // Helper to go to next clip
   const nextClip = useCallback(() => {
@@ -147,8 +189,9 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   const activePageContent = pages[currentPromptPage % pages.length];
 
   return (
-    <div
-      ref={containerRef}
+    <MovieContext.Provider value={readOnlyContextValue}>
+      <div
+        ref={containerRef}
       className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center group"
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
@@ -287,7 +330,8 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
            </div>
         </div>
       </div>
-    </div>
+      </div>
+    </MovieContext.Provider>
   );
 };
 
