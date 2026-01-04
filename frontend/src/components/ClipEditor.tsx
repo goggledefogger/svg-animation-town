@@ -71,7 +71,10 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
       prompt !== synced.prompt
     );
 
+    console.log(`[ClipEditor] Effect run - hasPending: ${hasPending}, isDirty state: ${isDirty}`);
+
     if (!hasPending) {
+      console.log(`[ClipEditor] No pending changes, clearing state`);
       pendingValuesRef.current = null;
       setIsDirty(false);
       return;
@@ -79,15 +82,19 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
 
     // Track pending values for flush
     pendingValuesRef.current = { name, duration, order, prompt };
+    console.log(`[ClipEditor] Setting isDirty to true`);
     setIsDirty(true);
 
     // Clear existing timer
     if (updateTimerRef.current) {
+      console.log(`[ClipEditor] Clearing existing timer`);
       clearTimeout(updateTimerRef.current);
     }
 
     // Debounce context update by 500ms
+    console.log(`[ClipEditor] Starting 500ms timer`);
     updateTimerRef.current = setTimeout(() => {
+      console.log(`[ClipEditor] Timer fired! Updating context and setting isDirty to false`);
       updateClip(activeClipId, { name, duration, order, prompt });
       lastSyncedValues.current = { name, duration, order, prompt };
       pendingValuesRef.current = null;
@@ -96,11 +103,12 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
     }, 500);
 
     return () => {
+      console.log(`[ClipEditor] Effect cleanup - clearing timer`);
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
       }
     };
-  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]);
+  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]); // Note: isDirty NOT in deps - it would cause loop
 
   // Navigate to animation editor with stored prompt
   const navigateToAnimationEditor = useCallback(() => {
