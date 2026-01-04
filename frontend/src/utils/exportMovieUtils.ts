@@ -16,6 +16,7 @@ export const exportMovieAsSvg = (
   filename: string,
   options: {
     includePrompts: boolean,
+    includeMoviePrompt?: boolean, // New option for movie-level description
     background?: BackgroundOption,
     includeBackground?: boolean
   }
@@ -26,15 +27,15 @@ export const exportMovieAsSvg = (
   }
 
   const orderedClips = [...storyboard.clips].sort((a, b) => a.order - b.order);
-  
+
   // Initialize SVG document with standard viewport
   let svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">\n`;
   svgContent += `  <!-- Movie: ${storyboard.name} -->\n`;
   svgContent += `  <!-- Total clips: ${orderedClips.length} -->\n\n`;
-  
+
   // Add defs section for gradients and other definitions
   svgContent += `  <defs>\n`;
-  
+
   // Add background gradient if needed
   if (options.background && options.includeBackground !== false) {
     const background = options.background;
@@ -69,9 +70,9 @@ export const exportMovieAsSvg = (
       }
     }
   }
-  
-  // Add styles for subtitles
-  if (options.includePrompts) {
+
+  // Add styles for subtitles and overlays
+  if (options.includePrompts || options.includeMoviePrompt) {
     svgContent += `    <style>
       .subtitle-background {
         fill: rgba(0, 0, 0, 0.4);
@@ -85,98 +86,136 @@ export const exportMovieAsSvg = (
         text-anchor: middle;
         text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.8);
       }
+      .overlay-background {
+        fill: rgba(0, 0, 0, 0.6);
+        rx: 8;
+        ry: 8;
+      }
+      .overlay-text {
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        fill: white;
+        text-anchor: start;
+        text-shadow: 0px 0px 2px rgba(0, 0, 0, 0.8);
+      }
     </style>\n`;
   }
-  
+
   svgContent += `  </defs>\n\n`;
-  
+
   // Add background
   if (options.background && options.includeBackground !== false) {
     const background = options.background;
-    const fillValue = background.type === 'solid' 
-      ? background.value 
+    const fillValue = background.type === 'solid'
+      ? background.value
       : `url(#movie-background-gradient)`;
-    
+
     svgContent += `  <rect width="100%" height="100%" fill="${fillValue}" />\n\n`;
   }
-  
+
   // Create animation timing controller
   svgContent += `  <!-- Animation timeline controller -->\n`;
-  
+
   // Calculate total duration
   const totalDuration = orderedClips.reduce((sum, clip) => sum + (clip.duration || 5), 0);
-  
+
   svgContent += `  <rect id="timeline-tracker" width="1" height="1" opacity="0">
     <animate id="main-timeline" attributeName="x" from="0" to="1" dur="${totalDuration}s" fill="freeze" />
   </rect>\n\n`;
-  
+
+  // Render Movie Prompt Overlay (Top-Left) - visible for entire duration
+  if (options.includeMoviePrompt && storyboard.description) {
+    const promptText = storyboard.description.replace(/"/g, '&quot;');
+    const lines = formatPromptIntoLines(promptText, 70); // 70 chars max per line for overlay
+
+    svgContent += `  <!-- Movie Prompt Overlay -->\n`;
+    svgContent += `  <g id="movie-prompt-overlay" opacity="1">\n`; // Default opacity 1
+
+    // Layout calculation for top-left overlay
+    const lineHeight = 18;
+    const padding = 12;
+    const bgHeight = (padding * 2) + (lineHeight * (lines.length - 1)) + 6;
+
+    const rectX = 20;
+    const rectY = 20;
+    const textX = 32; // x + padding
+    const firstTextY = 20 + padding + 5;
+    const boxWidth = 500;
+
+    svgContent += `    <rect class="overlay-background" x="${rectX}" y="${rectY}" width="${boxWidth}" height="${bgHeight}" />\n`;
+
+    lines.forEach((line, lineIndex) => {
+      const yPosition = firstTextY + (lineIndex * lineHeight);
+      svgContent += `    <text class="overlay-text" x="${textX}" y="${yPosition}">${line}</text>\n`;
+    });
+
+    svgContent += `  </g>\n\n`;
+  }
+
   // Process each clip and add to SVG with timing
   let cumulativeTime = 0;
-  
+
   orderedClips.forEach((clip, index) => {
     const clipId = `clip-${index}`;
     const duration = clip.duration || 5; // Default to 5 seconds if not specified
-    
+
     // Extract the SVG content from the clip, removing the outer svg tag
     const clipContent = processClipSvg(clip, clipId);
-    
+
     // Calculate begin time
     const beginTime = cumulativeTime;
     const endTime = beginTime + duration;
-    
+
     // Create a group for this clip with visibility timing
     svgContent += `  <!-- Clip ${index + 1}: ${clip.name} (Duration: ${duration}s, Time: ${beginTime}s - ${endTime}s) -->\n`;
     svgContent += `  <g id="${clipId}" opacity="0">\n`;
-    
+
     // Add visibility animation - fade in at start time, fade out at end time
     svgContent += `    <animate attributeName="opacity" from="0" to="1" begin="main-timeline.begin+${beginTime}s" dur="0.5s" fill="freeze" />\n`;
     svgContent += `    <animate attributeName="opacity" from="1" to="0" begin="main-timeline.begin+${endTime - 0.5}s" dur="0.5s" fill="freeze" />\n`;
-    
+
     // Add initial setting to ensure it's not visible (needed for some browsers)
     svgContent += `    <set attributeName="display" to="none" />\n`;
     svgContent += `    <set attributeName="display" to="inline" begin="main-timeline.begin+${beginTime}s" end="main-timeline.begin+${endTime}s" />\n`;
-    
+
     // Add the clip content
     svgContent += clipContent;
-    
+
     // Close the clip group
     svgContent += `  </g>\n\n`;
-    
-    // Add subtitle if prompts should be included
+
+    // Add Clip Caption (Subtitle) - Bottom Centered
     if (options.includePrompts && clip.prompt) {
       const promptText = clip.prompt.replace(/"/g, '&quot;');
-      // Limit the subtitle width by truncating or breaking into multiple lines
-      const lines = formatPromptIntoLines(promptText, 80); // 80 chars max per line
-      
+      const lines = formatPromptIntoLines(promptText, 80);
+
       svgContent += `  <!-- Subtitle for clip ${index + 1} -->\n`;
       svgContent += `  <g id="subtitle-${clipId}" opacity="0">\n`;
-      
+
       // Add subtitle animations to match clip timing
       svgContent += `    <animate attributeName="opacity" from="0" to="1" begin="main-timeline.begin+${beginTime + 0.5}s" dur="0.5s" fill="freeze" />\n`;
       svgContent += `    <animate attributeName="opacity" from="1" to="0" begin="main-timeline.begin+${endTime - 0.5}s" dur="0.5s" fill="freeze" />\n`;
       svgContent += `    <set attributeName="display" to="none" />\n`;
       svgContent += `    <set attributeName="display" to="inline" begin="main-timeline.begin+${beginTime}s" end="main-timeline.begin+${endTime}s" />\n`;
-      
-      // Calculate background size based on number of lines
-      const lineHeight = 18; // pixels per text line
-      const bgHeight = 24 + (lineHeight * (lines.length - 1)); // Base height plus additional lines
-      
-      // Center the subtitle at the bottom with proper padding
+
+      // Bottom subtitle layout
+      const lineHeight = 18;
+      const bgHeight = 24 + (lineHeight * (lines.length - 1));
+
       svgContent += `    <rect class="subtitle-background" x="150" y="${550 - bgHeight}" width="500" height="${bgHeight}" />\n`;
-      
-      // Add each line of text
+
       lines.forEach((line, lineIndex) => {
         const yPosition = 550 - bgHeight + 16 + (lineIndex * lineHeight);
         svgContent += `    <text class="subtitle-text" x="400" y="${yPosition}">${line}</text>\n`;
       });
-      
+
       svgContent += `  </g>\n\n`;
     }
-    
+
     // Update cumulative time
     cumulativeTime += duration;
   });
-  
+
   // Add a replay button
   svgContent += `  <!-- Replay button -->\n`;
   svgContent += `  <g id="replay-button" opacity="0" cursor="pointer" onclick="document.getElementById('main-timeline').beginElement()">
@@ -185,23 +224,23 @@ export const exportMovieAsSvg = (
     <path d="M385,275 L385,325 L425,300 Z" fill="#121212" />
     <text x="400" y="370" font-family="Arial" font-size="16" fill="white" text-anchor="middle">Click to replay</text>
   </g>\n`;
-  
+
   // Close the SVG tag
   svgContent += `</svg>`;
-  
+
   // Create a Blob from the SVG content
   const blob = new Blob([svgContent], { type: 'image/svg+xml' });
   const downloadUrl = URL.createObjectURL(blob);
-  
+
   // Create a download link and trigger it
   const downloadLink = document.createElement('a');
   downloadLink.href = downloadUrl;
   downloadLink.download = `${filename}_movie.svg`;
-  
+
   document.body.appendChild(downloadLink);
   downloadLink.click();
   document.body.removeChild(downloadLink);
-  
+
   // Clean up the URL object
   URL.revokeObjectURL(downloadUrl);
 };
@@ -216,23 +255,23 @@ function processClipSvg(clip: MovieClip, clipId: string): string {
   if (!clip.svgContent) {
     return `    <!-- Missing SVG content for clip: ${clip.name} -->\n`;
   }
-  
+
   try {
     // Parse the SVG to extract content
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(clip.svgContent, 'image/svg+xml');
     const svgElement = svgDoc.querySelector('svg');
-    
+
     if (!svgElement) {
       return `    <!-- Invalid SVG content for clip: ${clip.name} -->\n`;
     }
-    
+
     // Prefix all IDs in the SVG to avoid conflicts
     prefixIds(svgElement, clipId);
-    
+
     // Extract all elements from the SVG (except defs, which we'll handle specially)
     let processedContent = '';
-    
+
     // Handle any defs elements separately and merge them
     const defs = svgElement.querySelector('defs');
     if (defs) {
@@ -242,13 +281,13 @@ function processClipSvg(clip: MovieClip, clipId: string): string {
         .split('\n')
         .map(line => `    ${line}`)
         .join('\n');
-      
+
       processedContent += defsContent + '\n';
     }
-    
+
     // Get all top-level elements except defs
     const topLevelElements = Array.from(svgElement.children).filter(el => el.tagName.toLowerCase() !== 'defs');
-    
+
     // Add each element with proper indentation
     topLevelElements.forEach(element => {
       const elementText = element.outerHTML
@@ -256,10 +295,10 @@ function processClipSvg(clip: MovieClip, clipId: string): string {
         .split('\n')
         .map(line => `    ${line}`)
         .join('\n');
-      
+
       processedContent += elementText + '\n';
     });
-    
+
     return processedContent;
   } catch (e) {
     console.error(`Error processing SVG for clip ${clip.name}:`, e);
@@ -275,7 +314,7 @@ function processClipSvg(clip: MovieClip, clipId: string): string {
 function prefixIds(element: Element, prefix: string): void {
   // First collect all IDs to create a mapping
   const idMap = new Map<string, string>();
-  
+
   // Find all elements with IDs
   const elementsWithIds = element.querySelectorAll('[id]');
   elementsWithIds.forEach(el => {
@@ -284,10 +323,10 @@ function prefixIds(element: Element, prefix: string): void {
     idMap.set(originalId, newId);
     el.setAttribute('id', newId);
   });
-  
+
   // Now update all references to these IDs
   // Look for href, url(), animations, etc.
-  
+
   // Update href attributes
   const elementsWithHref = element.querySelectorAll('[href^="#"]');
   elementsWithHref.forEach(el => {
@@ -298,7 +337,7 @@ function prefixIds(element: Element, prefix: string): void {
       el.setAttribute('href', `#${newId}`);
     }
   });
-  
+
   // Update url() references in styles and attributes
   const allElements = element.querySelectorAll('*');
   allElements.forEach(el => {
@@ -312,7 +351,7 @@ function prefixIds(element: Element, prefix: string): void {
       });
       el.setAttribute('style', newStyle);
     }
-    
+
     // Update fill, stroke, clip-path, mask attributes
     ['fill', 'stroke', 'clip-path', 'mask', 'filter'].forEach(attr => {
       const value = el.getAttribute(attr);
@@ -325,7 +364,7 @@ function prefixIds(element: Element, prefix: string): void {
         el.setAttribute(attr, newValue);
       }
     });
-    
+
     // Update begin, end attributes in animations (for SMIL)
     if (el.tagName.toLowerCase().includes('animate')) {
       ['begin', 'end'].forEach(attr => {
@@ -353,13 +392,13 @@ function prefixIds(element: Element, prefix: string): void {
 function formatPromptIntoLines(text: string, maxLength: number): string[] {
   if (!text) return [];
   if (text.length <= maxLength) return [text];
-  
+
   const lines: string[] = [];
   let currentLine = '';
-  
+
   // Split by spaces and distribute across lines
   const words = text.split(' ');
-  
+
   words.forEach(word => {
     if (currentLine.length + word.length + 1 <= maxLength) {
       currentLine += (currentLine ? ' ' : '') + word;
@@ -368,11 +407,11 @@ function formatPromptIntoLines(text: string, maxLength: number): string[] {
       currentLine = word;
     }
   });
-  
+
   if (currentLine) {
     lines.push(currentLine);
   }
-  
+
   // Limit to max 3 lines to prevent excessive vertical space
   if (lines.length > 3) {
     lines.splice(3);
@@ -383,6 +422,6 @@ function formatPromptIntoLines(text: string, maxLength: number): string[] {
       lines[2] = lastLine + '...';
     }
   }
-  
+
   return lines;
-} 
+}

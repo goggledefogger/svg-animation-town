@@ -259,7 +259,7 @@ const Header: React.FC<HeaderProps> = ({
   onReset
 }) => {
   const { resetEverything, saveAnimation, loadAnimation, deleteAnimation, exportAnimation, svgContent, chatHistory } = useAnimation();
-  const { exportStoryboard } = useMovie();
+  const { exportStoryboard, activeClip } = useMovie();
   const location = useLocation();
   const [showResetModal, setShowResetModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -269,12 +269,49 @@ const Header: React.FC<HeaderProps> = ({
   const [showNavDropdown, setShowNavDropdown] = useState(false);
   const [showAnimationList, setShowAnimationList] = useState(false);
   const [includeCaptions, setIncludeCaptions] = useState(false);
+  const [includeMoviePrompt, setIncludeMoviePrompt] = useState(false);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const desktopNavRef = useRef<HTMLDivElement>(null);
   const animationListButtonRef = useRef<HTMLButtonElement>(null);
   const isMovieEditorPage = location.pathname === '/movie-editor';
   const isMobile = window.innerWidth < 768;
   const exportDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close nav on resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 640) {
+        setShowNavDropdown(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Keyboard navigation for dropdowns
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNavDropdown(false);
+        setShowAnimationList(false);
+        setShowResetModal(false);
+        setShowSaveModal(false);
+        setShowExportModal(false);
+        setShowMovieExportModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown as any);
+    return () => window.removeEventListener('keydown', handleKeyDown as any);
+  }, []);
+
+  // Update animation name when current clip changes
+  useEffect(() => {
+    if (activeClip) {
+      setAnimationName(activeClip.name);
+    }
+  }, [activeClip]);
 
   // Reset - refresh from server and clear session state
   const resetPage = useCallback(() => {
@@ -321,7 +358,7 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && animationName.trim()) {
       handleSave();
     }
@@ -334,11 +371,15 @@ const Header: React.FC<HeaderProps> = ({
 
   const openMovieExportModal = () => {
     setIncludeCaptions(false);
+    setIncludeMoviePrompt(false);
     setShowMovieExportModal(true);
   };
 
   const handleMovieExport = () => {
-    exportStoryboard('svg', { includePrompts: includeCaptions });
+    exportStoryboard('svg', {
+      includePrompts: includeCaptions,
+      includeMoviePrompt: includeMoviePrompt
+    });
     setShowMovieExportModal(false);
   };
 
@@ -701,23 +742,42 @@ const Header: React.FC<HeaderProps> = ({
           <div className="bg-gray-800 rounded-lg p-4 sm:p-5 w-full max-w-sm sm:max-w-md mx-auto my-auto">
             <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4 text-white">Export Movie</h2>
             <p className="text-gray-300 text-sm sm:text-base mb-4">
-              Choose whether to include captions (scene prompts) in your exported SVG movie.
+              Choose export options for your SVG movie.
             </p>
 
-            <label className="flex items-start gap-3 mb-6">
-              <input
-                type="checkbox"
-                checked={includeCaptions}
-                onChange={() => setIncludeCaptions(!includeCaptions)}
-                className="form-checkbox text-bat-yellow focus:ring-bat-yellow h-4 w-4 mt-1"
-              />
-              <div>
-                <span className="text-sm sm:text-base text-white block">Include captions</span>
-                <span className="text-gray-400 text-xs sm:text-sm">
-                  Adds subtitle overlays using each scene\'s prompt.
-                </span>
-              </div>
-            </label>
+            <div className="space-y-4 mb-6">
+              {/* Include Clip Captions Toggle */}
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={includeCaptions}
+                  onChange={() => setIncludeCaptions(!includeCaptions)}
+                  className="form-checkbox text-bat-yellow focus:ring-bat-yellow h-4 w-4 mt-1"
+                />
+                <div>
+                  <span className="text-sm sm:text-base text-white block">Include Clip Captions</span>
+                  <span className="text-gray-400 text-xs sm:text-sm">
+                    Adds subtitle overlays at the bottom for each scene.
+                  </span>
+                </div>
+              </label>
+
+              {/* Include Movie Prompt Toggle */}
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={includeMoviePrompt}
+                  onChange={() => setIncludeMoviePrompt(!includeMoviePrompt)}
+                  className="form-checkbox text-bat-yellow focus:ring-bat-yellow h-4 w-4 mt-1"
+                />
+                <div>
+                  <span className="text-sm sm:text-base text-white block">Include Movie Prompt</span>
+                  <span className="text-gray-400 text-xs sm:text-sm">
+                    Adds the movie description as a permanent overlay in the top-left.
+                  </span>
+                </div>
+              </label>
+            </div>
 
             <div className="flex justify-end gap-2 sm:gap-3">
               <button

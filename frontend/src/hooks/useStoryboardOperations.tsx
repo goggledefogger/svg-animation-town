@@ -131,7 +131,7 @@ export function useStoryboardOperations(showToastNotification: (message: string,
   /**
    * Export the storyboard in the specified format
    */
-  const handleExport = (format: 'json' | 'svg', options?: { includePrompts?: boolean }) => {
+  const handleExport = (format: 'json' | 'svg', options?: { includePrompts?: boolean; includeMoviePrompt?: boolean }) => {
     try {
       exportStoryboard(format, options);
       const formatDisplay = format === 'svg' ? 'SVG Movie' : 'JSON';

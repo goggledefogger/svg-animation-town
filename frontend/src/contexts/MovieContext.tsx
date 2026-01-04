@@ -114,7 +114,7 @@ interface MovieContextType {
   setCurrentPlaybackPosition: React.Dispatch<React.SetStateAction<number>>;
 
   // Export
-  exportStoryboard: (format: 'json' | 'svg', options?: { includePrompts?: boolean }) => void;
+  exportStoryboard: (format: 'json' | 'svg', options?: { includePrompts?: boolean; includeMoviePrompt?: boolean }) => void;
 
   // Storyboard generation
   createStoryboardFromResponse: (storyboardResponse: StoryboardResponse) => Promise<Storyboard>;
@@ -721,25 +721,27 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   }, [activeClipId, currentStoryboard.clips]);
 
   // Export storyboard
-  const exportStoryboard = useCallback((format: 'json' | 'svg', options?: { includePrompts?: boolean }) => {
+  const exportStoryboard = useCallback((format: 'json' | 'svg', options?: { includePrompts?: boolean; includeMoviePrompt?: boolean }) => {
     const includePrompts = options?.includePrompts ?? false;
+    const includeMoviePrompt = options?.includeMoviePrompt ?? false;
 
     if (format === 'json') {
       // Export as JSON
       const jsonData = JSON.stringify(currentStoryboard, null, 2);
       const blob = new Blob([jsonData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentStoryboard.name.replace(/\s+/g, '_')}_storyboard.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${currentStoryboard.name.replace(/\s+/g, '_')}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } else if (format === 'svg') {
       // Use our new movie exporter for SVG export
       exportMovieAsSvg(currentStoryboard, currentStoryboard.name.replace(/\s+/g, '_'), {
         includePrompts,
+        includeMoviePrompt,
         background: currentBackground,
         includeBackground: true
       });
