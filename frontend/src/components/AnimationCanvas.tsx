@@ -527,7 +527,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
         // When rapidly clicking through clips, increase debounce time to prevent excessive updates
         const isRapidClicking = renderCountRef.current > 3 && renderCountRef.current % 3 === 0;
-        const delay = isRapidClicking ? 300 : (window.innerWidth < 768 ? 100 : 10);
+        // Immediate update for smooth transitions, only delay if rapid clicking
+        const delay = isRapidClicking ? 300 : 0;
 
         debouncedUpdateRef.current = window.setTimeout(() => {
           if (svgContainerRef.current) {
@@ -669,80 +670,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
   // Adjust SVG to container size when container dimensions change
   useEffect(() => {
-    // Create a ResizeObserver to detect container size changes
-    if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
-      const resizeObserver = new ResizeObserver(() => {
-        // Get container dimensions
-        if (containerRef.current && finalSvgContent) {
-          const containerWidth = containerRef.current.clientWidth;
-          const containerHeight = containerRef.current.clientHeight;
-
-          // console.log(`[Layout] Container size changed: ${containerWidth}x${containerHeight}`);
-
-          // Trigger resize of SVG content
-          const svgElement = getSvgContainer()?.querySelector('svg');
-          if (svgElement) {
-            // Get the original viewBox values
-            const viewBox = svgElement.getAttribute('viewBox');
-            if (viewBox) {
-              const [, , vbWidth, vbHeight] = viewBox.split(' ').map(parseFloat);
-
-              // Calculate aspect ratios
-              const svgRatio = vbWidth / vbHeight;
-              const containerRatio = containerWidth / containerHeight;
-
-              // Different behavior based on whether we're in the animation editor or movie editor
-              if (isAnimationEditor) {
-                // In Animation Editor - allow more height usage
-                svgElement.setAttribute('width', '100%');
-                svgElement.setAttribute('height', '100%');
-                svgElement.style.maxWidth = '100%';
-                // Don't constrain max-height to allow vertical filling
-                svgElement.style.maxHeight = 'none';
-              } else {
-                // In Movie Editor - ensure it fits completely in the container
-                if (containerRatio > svgRatio) {
-                  // Container is wider than SVG - fit to height
-                  const height = containerHeight;
-                  const width = height * svgRatio;
-                  svgElement.setAttribute('width', `${width}px`);
-                  svgElement.setAttribute('height', `${height}px`);
-                } else {
-                  // Container is taller than SVG - fit to width
-                  const width = containerWidth;
-                  const height = width / svgRatio;
-                  svgElement.setAttribute('width', `${width}px`);
-                  svgElement.setAttribute('height', `${height}px`);
-                }
-
-                // Ensure SVG doesn't overflow container
-                svgElement.style.maxWidth = '100%';
-                svgElement.style.maxHeight = '100%';
-              }
-            } else {
-              // If no viewBox, set a default one and use preserveAspectRatio
-              svgElement.setAttribute('viewBox', '0 0 800 600');
-              svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            }
-
-            // Common styling for both modes
-            svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            svgElement.style.display = 'block';
-            svgElement.style.margin = '0 auto';
-          }
-        }
-      });
-
-      // Start observing the container
-      resizeObserver.observe(containerRef.current);
-
-      // Clean up
-      return () => {
-        resizeObserver.disconnect();
-      };
-    }
-
-    // Fallback for browsers without ResizeObserver
+    // Legacy support or specific animation editor behaviors could go here
+    // But main sizing is now handled via CSS in the render method
     return undefined;
   }, [finalSvgContent, getSvgContainer, isAnimationEditor]);
 
@@ -1135,7 +1064,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       <div
         ref={svgContainerRef}
         data-testid="svg-container"
-        className={`w-full h-full px-2 sm:px-4 flex items-center justify-center transition-opacity duration-300 ${
+        className={`w-full h-full px-2 sm:px-4 flex items-center justify-center transition-opacity duration-300 [&>svg]:w-full [&>svg]:h-full [&>svg]:max-w-full [&>svg]:max-h-full ${
           isLoading && !finalSvgContent ? 'opacity-40' : showEmptyState ? 'opacity-0' : 'opacity-100'
         }`}
       />

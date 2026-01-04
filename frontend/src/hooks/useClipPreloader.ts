@@ -71,6 +71,13 @@ export const useClipPreloader = ({
 
     if (shouldPreload) {
       preloadClip(nextIndex);
+      // Aggressively preload 2 steps ahead to handle short clips
+      if (clips.length > 2) {
+        const nextNextIndex = (currentClipIndex + 2) % clips.length;
+        if (isLooping || currentClipIndex < clips.length - 2) {
+            preloadClip(nextNextIndex);
+        }
+      }
     }
   }, [currentClipIndex, isPlaying, isLooping, clips.length, preloadClip]);
 };
