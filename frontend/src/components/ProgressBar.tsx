@@ -77,7 +77,12 @@ const ProgressBar: React.FC<ProgressBarProps> = ({ clips, currentClipIndex, isPl
   return (
     <div className="w-full flex gap-1 h-1">
       {clips.map((clip, idx) => (
-        <div key={clip.id} className="h-full flex-1 bg-gray-700/50 rounded-full overflow-hidden">
+        <div
+          key={clip.id}
+          className={`h-full flex-1 bg-gray-700/50 rounded-full overflow-hidden ${
+            idx === currentClipIndex ? 'animate-pulse' : ''
+          }`}
+        >
           <div
             className={`h-full bg-bat-yellow transition-all duration-75 ease-linear ${
               idx < currentClipIndex ? 'w-full' :
