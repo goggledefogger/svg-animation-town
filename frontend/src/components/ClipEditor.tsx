@@ -9,7 +9,7 @@ interface ClipEditorProps {
 }
 
 const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => {
-  const { activeClipId, getActiveClip, updateClip } = useMovie();
+  const { activeClipId, getActiveClip, updateClip, saveStoryboard } = useMovie();
   const navigate = useNavigate();
 
   // Get initial clip data - key prop on parent forces remount on clip change
@@ -34,26 +34,34 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   // Timer for hiding the "saved" status
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // The actual save function
-  const performSave = useCallback(() => {
+  // The actual save function - updates context AND persists to database
+  const performSave = useCallback(async () => {
     if (!activeClipId) return;
 
+    // Update local context first
     updateClip(activeClipId, { name, duration, order, prompt });
     lastSavedValues.current = { name, duration, order, prompt };
     onClipUpdate();
 
-    setSaveStatus('saved');
+    // Persist to database
+    try {
+      await saveStoryboard();
+      setSaveStatus('saved');
+    } catch (error) {
+      console.error('Failed to save to database:', error);
+      setSaveStatus('error');
+    }
 
     // Clear any existing hide timer
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
 
-    // Auto-hide "saved" after 2 seconds
+    // Auto-hide status after 2 seconds
     hideTimerRef.current = setTimeout(() => {
       setSaveStatus('idle');
     }, 2000);
-  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]);
+  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate, saveStoryboard]);
 
   // Debounced save - waits 1s after last change before saving
   const debouncedSave = useDebouncedCallback(performSave, 1000);
@@ -155,7 +163,10 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
           step="0.5"
           className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
           value={duration}
-          onChange={(e) => setDuration(parseFloat(e.target.value))}
+          onChange={(e) => {
+            const val = parseFloat(e.target.value);
+            setDuration(isNaN(val) ? 0.5 : val);
+          }}
         />
         <p className="text-xs text-gray-400 mt-1">
           Animation timing will automatically adjust to match this duration when possible.
@@ -173,7 +184,10 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
           step="1"
           className="w-full p-2 bg-gray-700 rounded border border-gray-600 text-white"
           value={order}
-          onChange={(e) => setOrder(parseInt(e.target.value, 10))}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            setOrder(isNaN(val) ? 0 : val);
+          }}
         />
       </div>
 
@@ -218,6 +232,14 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
               </svg>
               Changes saved
+            </span>
+          )}
+          {saveStatus === 'error' && (
+            <span className="text-red-400 flex items-center">
+              <svg className="h-3 w-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Save failed
             </span>
           )}
         </div>
