@@ -183,39 +183,44 @@ The AI assistant becomes your creative partner - understanding context, making i
 
 ## Developer Notes
 
-### ClipEditor Auto-Save Pattern
+### Debounced Auto-Save Pattern
 
-The `ClipEditor` component (`frontend/src/components/ClipEditor.tsx`) uses debounced auto-save for clip properties with a specific pattern to avoid React effect dependency issues:
+The `ClipEditor` component uses debounced auto-save with a reusable hook pattern:
 
-**Problem**: Effects that depend on callback functions re-run on every parent render because callbacks are recreated each time. This caused constant effect runs and the "Saving changes..." status getting stuck.
-
-**Solution**: Use refs to store latest values and the save function, so the effect only depends on `isDirty`:
+**Hook**: `frontend/src/hooks/useDebouncedCallback.ts`
 
 ```tsx
-// Latest values in a ref (updated every render, doesn't trigger effects)
-const valuesRef = useRef({ name, duration, ... });
-valuesRef.current = { name, duration, ... };
+// Creates a debounced version of any callback
+const debouncedSave = useDebouncedCallback(performSave, 1000);
+```
 
-// Stable save function reads from ref
-const performSaveRef = useRef(() => {
-  updateClip(activeClipId, valuesRef.current);
-});
+**Usage in ClipEditor** (`frontend/src/components/ClipEditor.tsx`):
 
-// Effect ONLY depends on isDirty
+```tsx
+// The actual save function (uses current form values)
+const performSave = useCallback(() => {
+  updateClip(activeClipId, { name, duration, order, prompt });
+  lastSavedValues.current = { name, duration, order, prompt };
+  setSaveStatus('saved');
+}, [activeClipId, name, duration, order, prompt, updateClip]);
+
+// Debounced version - waits 1s after last call
+const debouncedSave = useDebouncedCallback(performSave, 1000);
+
+// Trigger on form value changes
 useEffect(() => {
-  if (!isDirty) { setSaveStatus('idle'); return; }
-  setSaveStatus('saving');
-  const timer = setTimeout(() => {
-    performSaveRef.current();
-    setSaveStatus('saved');
-  }, 1000);
-  return () => clearTimeout(timer);
-}, [isDirty]);  // ✅ Stable - no callback in deps
+  if (isDirty) {
+    setSaveStatus('saving');
+    debouncedSave();  // Resets the 1s timer on every call
+  }
+}, [name, duration, order, prompt, debouncedSave]);
 ```
 
 **Key points**:
+- `useDebouncedCallback` uses refs internally to always call the latest callback (no stale closures)
+- Each keystroke resets the debounce timer, so save happens 1s after user stops typing
 - `key={activeClipId}` on `<ClipEditor>` forces remount on clip switch
-- `isDirty` compares to `lastSavedValues` ref (not context) to avoid oscillation after save
+- `lastSavedValues` ref tracks what was last saved to detect dirty state
 
 ## OpenAI Integration
 
