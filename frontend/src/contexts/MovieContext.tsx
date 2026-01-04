@@ -543,6 +543,16 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Update the current storyboard state
       setCurrentStoryboard(storyboard);
 
+      // Mark as "already saved" so auto-save doesn't trigger on initial load
+      if (storyboard.clips && storyboard.clips.length > 0) {
+        lastSavedRef.current = JSON.stringify({
+          id: storyboard.id,
+          clips: storyboard.clips.map(c => ({
+            id: c.id, name: c.name, duration: c.duration, order: c.order, prompt: c.prompt
+          }))
+        });
+      }
+
       // If there are clips, set the first one as active
       if (storyboard.clips && storyboard.clips.length > 0) {
         setActiveClipId(storyboard.clips[0].id);
