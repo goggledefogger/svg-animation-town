@@ -23,6 +23,7 @@ import { useModalManager } from '../hooks/useModalManager';
 import { useStoryboardOperations } from '../hooks/useStoryboardOperations';
 import { useStoryboardGenerator } from '../hooks/useStoryboardGenerator';
 import { usePlaybackController } from '../hooks/usePlaybackController';
+import { useClipPreloader } from '../hooks/useClipPreloader';
 
 // Import the new session storage utility
 import {
@@ -53,8 +54,21 @@ const MovieEditorPage: React.FC = () => {
     getSavedStoryboards,
     createNewStoryboard,
     addClip,
-    renameStoryboard
+    renameStoryboard,
+    updateClip
   } = useMovie();
+
+  // Derive current index for preloader
+  const currentClipIndex = currentStoryboard?.clips?.findIndex(c => c.id === activeClipId) ?? -1;
+
+  // Preload next clip
+  useClipPreloader({
+    clips: currentStoryboard?.clips || [],
+    currentClipIndex,
+    isPlaying,
+    isLooping: false, // Editor typically doesn't loop by default, or we can add a toggle later
+    updateClip
+  });
 
   // Initialize the custom hooks
   const modalManager = useModalManager();

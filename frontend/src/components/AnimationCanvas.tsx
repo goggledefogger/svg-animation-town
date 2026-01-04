@@ -236,6 +236,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   const loadAnimation = useCallback((animationId: string, clipId: string, existingSvgContent?: string) => {
     // If we already have SVG content, use it directly
     if (existingSvgContent && existingSvgContent.length > 100) {
+      // console.log(`[AnimationCanvas] Using provided SVG content directly`);
       setSvgContent(existingSvgContent);
       setShowEmptyState(false);
 
@@ -248,9 +249,9 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // If no direct SVG content but we have an animationId, check cache or load from server
     if (animationId) {
-      // First check our global cache for the content
       const cachedContent = getCachedContent(animationId);
       if (cachedContent) {
+        console.log(`[AnimationCanvas] Using global cache for ${animationId}`);
         setSvgContent(cachedContent);
         setShowEmptyState(false);
         updateClip(clipId, { svgContent: cachedContent });
@@ -357,10 +358,16 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     }
 
     // Use the centralized load animation helper
+    // If we have prop content (finalSvgContent) and it matches what we expect,
+    // we can rely on debounced updates to handle it.
+    // However, we still need to ensure cache is populated.
+
+    const hasPropContent = activeClip.svgContent && activeClip.svgContent.length > 100;
+
     loadAnimation(
       activeClip.animationId || '',
       activeClip.id,
-      activeClip.svgContent
+      hasPropContent ? activeClip.svgContent : undefined
     );
 
   }, [activeClipId, getActiveClip, isAnimationEditor, createPlaceholderSvg, loadAnimation]);
@@ -1115,21 +1122,21 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         ...getBackgroundStyle()
       }}
     >
-      {/* Empty state or loading overlay - ensure it's visible when loading */}
+      {/* Empty state or loading overlay - hide if we have valid content to show */}
       <div
         className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
-          showEmptyState || isLoading ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'
+          (showEmptyState || isLoading) && !finalSvgContent ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none'
         }`}
       >
         <EmptyState loading={isLoading} />
       </div>
 
-      {/* SVG container with automatic centering - fade out when loading */}
+      {/* SVG container with automatic centering - fade out when loading ONLY if we don't have content */}
       <div
         ref={svgContainerRef}
         data-testid="svg-container"
         className={`w-full h-full px-2 sm:px-4 flex items-center justify-center transition-opacity duration-300 ${
-          isLoading ? 'opacity-40' : showEmptyState ? 'opacity-0' : 'opacity-100'
+          isLoading && !finalSvgContent ? 'opacity-40' : showEmptyState ? 'opacity-0' : 'opacity-100'
         }`}
       />
     </div>

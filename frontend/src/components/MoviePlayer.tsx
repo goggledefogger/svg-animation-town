@@ -4,6 +4,7 @@ import { MovieContext, MovieClip, Storyboard } from '../contexts/MovieContext';
 import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { useAnimation } from '../contexts/AnimationContext';
 import ProgressBar from './ProgressBar';
+import { useClipPreloader } from '../hooks/useClipPreloader';
 
 interface MoviePlayerProps {
   movie: Storyboard;
@@ -49,6 +50,7 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
 
   const activeClip = localMovie.clips[currentClipIndex];
 
+
   // Helper to sync with AnimationContext for playback
   useEffect(() => {
     if (isPlaying) {
@@ -60,11 +62,21 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
 
   // Memoized updateClip to handle caching of loaded SVGs
   const updateClip = useCallback((clipId: string, updates: Partial<MovieClip>) => {
+    // console.log(`[MoviePlayer] Updating clip ${clipId}`, Object.keys(updates));
     setLocalMovie(prev => {
       const newClips = prev.clips.map(c => c.id === clipId ? { ...c, ...updates } : c);
       return { ...prev, clips: newClips };
     });
   }, []);
+
+  // Preload next clip
+  useClipPreloader({
+    clips: localMovie.clips,
+    currentClipIndex,
+    isPlaying,
+    isLooping,
+    updateClip
+  });
 
   // ReadOnly Context Value for AnimationCanvas
   const readOnlyContextValue = React.useMemo(() => ({
