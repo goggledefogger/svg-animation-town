@@ -35,7 +35,18 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   const promptIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const activeClip = movie.clips[currentClipIndex];
+  // Local Movie State (to handle updates like loaded SVG content)
+  const [localMovie, setLocalMovie] = useState<Storyboard>(movie);
+
+  // Update local movie when prop changes (if needed, though unlikely for read-only view)
+  useEffect(() => {
+    // Only update if ID changes to avoid overwriting local state with stale prop data
+    if (movie.id !== localMovie.id) {
+       setLocalMovie(movie);
+    }
+  }, [movie]);
+
+  const activeClip = localMovie.clips[currentClipIndex];
 
   // Helper to sync with AnimationContext for playback
   useEffect(() => {
@@ -46,9 +57,17 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
     }
   }, [isPlaying, resumeAnimations, pauseAnimations]);
 
+  // Memoized updateClip to handle caching of loaded SVGs
+  const updateClip = useCallback((clipId: string, updates: Partial<MovieClip>) => {
+    setLocalMovie(prev => {
+      const newClips = prev.clips.map(c => c.id === clipId ? { ...c, ...updates } : c);
+      return { ...prev, clips: newClips };
+    });
+  }, []);
+
   // ReadOnly Context Value for AnimationCanvas
-  const readOnlyContextValue = {
-    currentStoryboard: movie,
+  const readOnlyContextValue = React.useMemo(() => ({
+    currentStoryboard: localMovie,
     savedStoryboards: [],
     activeClipId: activeClip ? activeClip.id : null,
     activeClip: activeClip || null,
@@ -62,7 +81,7 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
     deleteStoryboard: async () => false,
     addClip: () => '',
     saveCurrentAnimationAsClip: () => null,
-    updateClip: () => {},
+    updateClip: updateClip,
     removeClip: () => {},
     reorderClips: () => {},
     setActiveClipId: () => {},
@@ -72,8 +91,8 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
     currentPlaybackPosition: 0,
     setCurrentPlaybackPosition: () => {},
     exportStoryboard: () => {},
-    createStoryboardFromResponse: async () => movie
-  };
+    createStoryboardFromResponse: async () => localMovie
+  }), [localMovie, activeClip, isPlaying, updateClip, setIsPlaying]);
 
   // Helper to go to next clip
   const nextClip = useCallback(() => {
