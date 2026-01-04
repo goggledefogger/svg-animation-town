@@ -172,6 +172,56 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     notFoundMovieIds.current = new Set();
   }, []);
 
+  // Auto-save timer ref
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedRef = useRef<string>('');
+
+  // Debounced auto-save: when storyboard changes, save to server after 2s of no changes
+  useEffect(() => {
+    // Skip auto-save for empty/new storyboards
+    if (!currentStoryboard.clips || currentStoryboard.clips.length === 0) {
+      return;
+    }
+
+    // Create a hash of the current state to detect real changes
+    const storyboardHash = JSON.stringify({
+      id: currentStoryboard.id,
+      clips: currentStoryboard.clips.map(c => ({
+        id: c.id, name: c.name, duration: c.duration, order: c.order, prompt: c.prompt
+      }))
+    });
+
+    // Skip if nothing actually changed
+    if (storyboardHash === lastSavedRef.current) {
+      return;
+    }
+
+    // Clear existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Debounce save by 2 seconds
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await MovieStorageApi.saveMovie({
+          ...currentStoryboard,
+          updatedAt: new Date()
+        });
+        console.log('[AutoSave] Saved storyboard to server:', result.id);
+        lastSavedRef.current = storyboardHash;
+      } catch (error) {
+        console.error('[AutoSave] Failed to save:', error);
+      }
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [currentStoryboard]);
+
   // Get all saved storyboard IDs from local storage
   const getSavedStoryboardsFromStorage = (): string[] => {
     try {

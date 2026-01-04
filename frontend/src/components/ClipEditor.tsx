@@ -2,14 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMovie } from '../contexts/MovieContext';
 import { useNavigate } from 'react-router-dom';
 import { addDurationGuidance } from '../utils/animationUtils';
-import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 
 interface ClipEditorProps {
   onClipUpdate?: () => void;
 }
 
 const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => {
-  const { activeClipId, getActiveClip, updateClip, saveStoryboard } = useMovie();
+  const { activeClipId, getActiveClip, updateClip } = useMovie();
   const navigate = useNavigate();
 
   // Get initial clip data - key prop on parent forces remount on clip change
@@ -21,77 +20,58 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const [order, setOrder] = useState(initialClip?.order || 0);
   const [prompt, setPrompt] = useState(initialClip?.prompt || '');
 
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-
-  // Track last saved values to detect dirty state
-  const lastSavedValues = useRef({
+  // Track last synced values to detect changes
+  const lastSyncedValues = useRef({
     name: initialClip?.name || '',
     duration: initialClip?.duration || 5,
     order: initialClip?.order || 0,
     prompt: initialClip?.prompt || '',
   });
 
-  // Timer for hiding the "saved" status
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // The actual save function - updates context AND persists to database
-  const performSave = useCallback(async () => {
-    if (!activeClipId) return;
-
-    // Update local context first
-    updateClip(activeClipId, { name, duration, order, prompt });
-    lastSavedValues.current = { name, duration, order, prompt };
-    onClipUpdate();
-
-    // Persist to database
-    try {
-      await saveStoryboard();
-      setSaveStatus('saved');
-    } catch (error) {
-      console.error('Failed to save to database:', error);
-      setSaveStatus('error');
-    }
-
-    // Clear any existing hide timer
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-    }
-
-    // Auto-hide status after 2 seconds
-    hideTimerRef.current = setTimeout(() => {
-      setSaveStatus('idle');
-    }, 2000);
-  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate, saveStoryboard]);
-
-  // Debounced save - waits 1s after last change before saving
-  const debouncedSave = useDebouncedCallback(performSave, 1000);
+  // Debounce timer for updating context
+  const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (hideTimerRef.current) {
-        clearTimeout(hideTimerRef.current);
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
       }
     };
   }, []);
 
-  // Trigger debounced save when form values change
+  // Debounced sync to context when form values change
   useEffect(() => {
     if (!activeClipId) return;
 
-    const saved = lastSavedValues.current;
+    const synced = lastSyncedValues.current;
     const isDirty = (
-      name !== saved.name ||
-      duration !== saved.duration ||
-      order !== saved.order ||
-      prompt !== saved.prompt
+      name !== synced.name ||
+      duration !== synced.duration ||
+      order !== synced.order ||
+      prompt !== synced.prompt
     );
 
-    if (isDirty) {
-      setSaveStatus('saving');
-      debouncedSave();
+    if (!isDirty) return;
+
+    // Clear existing timer
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
     }
-  }, [activeClipId, name, duration, order, prompt, debouncedSave]);
+
+    // Debounce context update by 500ms
+    updateTimerRef.current = setTimeout(() => {
+      updateClip(activeClipId, { name, duration, order, prompt });
+      lastSyncedValues.current = { name, duration, order, prompt };
+      onClipUpdate();
+    }, 500);
+
+    return () => {
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+    };
+  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]);
 
   // Navigate to animation editor with stored prompt
   const navigateToAnimationEditor = useCallback(() => {
@@ -212,36 +192,6 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
           >
             Edit in Animation Editor
           </button>
-        </div>
-      </div>
-
-      <div className="pt-2 flex items-center justify-between">
-        <div className="text-xs transition-opacity duration-300">
-          {saveStatus === 'saving' && (
-            <span className="text-bat-yellow flex items-center">
-              <svg className="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Saving changes...
-            </span>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="text-green-400 flex items-center">
-              <svg className="h-3 w-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Changes saved
-            </span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-red-400 flex items-center">
-              <svg className="h-3 w-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Save failed
-            </span>
-          )}
         </div>
       </div>
     </div>
