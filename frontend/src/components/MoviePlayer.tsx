@@ -3,6 +3,7 @@ import AnimationCanvas from './AnimationCanvas';
 import { MovieContext, MovieClip, Storyboard } from '../contexts/MovieContext';
 import { useViewerPreferences } from '../contexts/ViewerPreferencesContext';
 import { useAnimation } from '../contexts/AnimationContext';
+import ProgressBar from './ProgressBar';
 
 interface MoviePlayerProps {
   movie: Storyboard;
@@ -15,7 +16,7 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   movie,
   initialCaptions = false,
   initialPrompt = true,
-  initialLoop = false,
+  initialLoop = true,
 }) => {
   // State
   const [isPlaying, setIsPlaying] = useState(true);
@@ -263,27 +264,12 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
         onClick={(e) => e.stopPropagation()} // Prevent play/pause toggle when clicking controls
       >
         <div className="max-w-4xl mx-auto flex flex-col gap-2">
-           {/* Progress Bar (Simulated per clip for now, ideally global) */}
-           <div className="w-full flex gap-1 h-1">
-              {movie.clips.map((clip, idx) => (
-                <div key={clip.id} className="h-full flex-1 bg-gray-700/50 rounded-full overflow-hidden">
-                   <div
-                     className={`h-full bg-bat-yellow transition-all duration-300 ${
-                       idx < currentClipIndex ? 'w-full' :
-                       idx === currentClipIndex ? 'w-full animate-progress-fill' : 'w-0'
-                     }`}
-                     style={{
-                       // For active clip, we could use CSS animation for smooth fill if we passed exact percentage
-                       width: idx < currentClipIndex ? '100%' : (idx === currentClipIndex ? '100%' : '0%'), // Placeholder for improved progress
-                       // A better way is using keyframes or JS to animate width from 0 to 100 over duration
-                       transition: idx === currentClipIndex ? `width ${clip.duration || 5}s linear` : 'none',
-                       // Reset width to 0 when not active to restart animation
-                       // Note: React key or forcing redraw might be needed for perfect restart
-                     }}
-                   />
-                </div>
-              ))}
-           </div>
+           {/* Progress Bar */}
+           <ProgressBar
+             clips={localMovie.clips}
+             currentClipIndex={currentClipIndex}
+             isPlaying={isPlaying}
+           />
 
            <div className="flex items-center justify-between text-white mt-2">
               <div className="flex items-center gap-4">
