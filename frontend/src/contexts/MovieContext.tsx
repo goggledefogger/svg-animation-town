@@ -21,6 +21,7 @@ export interface MovieClip {
   createdAt?: Date;     // When the clip was created
   provider?: AIProviderId;
   model?: string;
+  playbackSpeed?: number; // Per-clip playback speed multiplier (default 1.0)
 }
 
 // Define storyboard interface

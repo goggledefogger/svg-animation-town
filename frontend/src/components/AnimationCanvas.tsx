@@ -50,11 +50,6 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     playbackSpeed: contextPlaybackSpeed
   } = useAnimation();
 
-  // Enforce 1x playback speed when not in animation editor mode,
-  // unless we want to support global speed controls for the movie player later.
-  // This prevents "grooving" or fast-forward settings from the editor leaking into the movie experience.
-  const playbackSpeed = isAnimationEditor ? contextPlaybackSpeed : 1;
-
   // Get movie context if this is used in a movie editor
   const {
     getActiveClip,
@@ -64,6 +59,19 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     currentStoryboard,
     setCurrentStoryboard
   } = useMovie();
+
+  // Enforce playback speed based on context:
+  // 1. Animation Editor: Combine global editor speed (multiplier) with clip's native speed
+  //    - If Editor is 1x and Clip is 2x -> Plays at 2x
+  //    - If Editor is 0.5x (slow mo) and Clip is 2x -> Plays at 1x (half of native)
+  // 2. Movie Player (Clip): Use clip-specific speed from metadata (default 1.0)
+  // 3. Fallback: 1.0
+  const activeClipSpeed = activeClipId ? getActiveClip()?.playbackSpeed : undefined;
+  const effectiveClipSpeed = activeClipSpeed !== undefined ? activeClipSpeed : 1;
+
+  const playbackSpeed = isAnimationEditor
+    ? (contextPlaybackSpeed as number) * effectiveClipSpeed
+    : effectiveClipSpeed;
 
   // Create a proper ref for the current SVG element
   const currentSvgRef = useRef<SVGSVGElement | null>(null);
@@ -376,7 +384,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       hasPropContent ? activeClip.svgContent : undefined
     );
 
-  }, [activeClipId, getActiveClip, isAnimationEditor, createPlaceholderSvg, loadAnimation]);
+  }, [activeClipId, getActiveClip, isAnimationEditor, createPlaceholderSvg, loadAnimation, activeClip?.playbackSpeed]);
 
   // Memoize the function to handle SVG element setup to avoid recreating it on every render
   const setupSvgElement = useCallback((svgElement: SVGSVGElement) => {
@@ -452,11 +460,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
     controlAnimations(svgElement, {
       playState,
       shouldReset: shouldPerformReset, // Only reset if not changing playback state or clip
-      playbackSpeed, // Use current playback speed
+      playbackSpeed, // Use determined playback speed
       initialSetup: shouldPerformReset // This should match shouldReset
     });
 
-    console.log(`[AnimationCanvas] Applied local control. Speed: ${playbackSpeed}, isEditor: ${isAnimationEditor}`);
+    console.log(`[AnimationCanvas] Applied local control. Speed: ${playbackSpeed} (Editor: ${isAnimationEditor}, Clip: ${activeClip?.playbackSpeed})`);
 
     if (window._isPlaybackStateChanging) {
       // console.log('[AnimationCanvas] Preserving animation state during playback change - no reset');
@@ -596,6 +604,27 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       }
     };
   }, [finalSvgContent, setupSvgElement, hasMessageBeenSent, isLoading, activeClipId, isAnimationEditor, playing, moviePlaying]);
+
+  // Dedicated effect to apply playback speed changes without re-rendering the SVG
+  useEffect(() => {
+    if (svgContainerRef.current) {
+      const svgElement = svgContainerRef.current.querySelector('svg');
+      if (svgElement) {
+        // Just re-run controlAnimations to update speed/playState
+        // This avoids destroying/recreating the DOM
+        const playState = getPlaybackState(isAnimationEditor, playing, moviePlaying);
+
+        controlAnimations(svgElement, {
+          playState,
+          shouldReset: false, // Never reset when just tweaking speed
+          playbackSpeed,
+          initialSetup: false
+        });
+
+        console.log(`[AnimationCanvas] Live speed update: ${playbackSpeed}x`);
+      }
+    }
+  }, [playbackSpeed, isAnimationEditor, playing, moviePlaying]);
 
   // Monitor API calls to show loading state appropriately
   useEffect(() => {
