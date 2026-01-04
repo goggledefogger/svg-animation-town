@@ -57,6 +57,62 @@ const truncatePrompt = (prompt: string | undefined, maxLength = 100) => {
   return prompt.length > maxLength ? `${prompt.substring(0, maxLength)}...` : prompt;
 };
 
+// Helper function to get a short display label for a model ID
+const getModelLabel = (modelId: string | undefined): string | null => {
+  if (!modelId) return null;
+
+  // Common model ID to short label mappings
+  const modelLabels: Record<string, string> = {
+    // OpenAI
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gpt-4o': 'GPT-4o',
+    'o3-mini': 'O3 Mini',
+    'o1-mini': 'O1 Mini',
+    'o1': 'O1',
+    'gpt-5-pro': 'GPT-5 Pro',
+    'gpt-5.2-pro': 'GPT-5.2 Pro',
+    'gpt-5-mini': 'GPT-5 Mini',
+    // Anthropic
+    'claude-sonnet-4-5-20250929': 'Claude 4.5',
+    'claude-haiku-4-5-20251015': 'Claude 4.5 Haiku',
+    'claude-3-7-sonnet-20250219': 'Claude 3.7',
+    'claude-3-5-sonnet-20241022': 'Claude 3.5',
+    // Google
+    'gemini-2.5-flash': 'Gemini 2.5',
+    'gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'gemini-2.5-flash-lite': 'Gemini 2.5 Lite',
+    'gemini-3-pro-preview': 'Gemini 3 Pro',
+    'gemini-3-flash': 'Gemini 3 Flash',
+    'gemini-2.0-flash': 'Gemini 2.0',
+  };
+
+  return modelLabels[modelId] || modelId;
+};
+
+// Model badge component to show which AI model generated a clip
+const ModelBadge: React.FC<{ model?: string; provider?: string }> = ({ model, provider }) => {
+  const label = getModelLabel(model);
+  if (!label) return null;
+
+  // Get provider display name for tooltip
+  const providerNames: Record<string, string> = {
+    'openai': 'OpenAI',
+    'anthropic': 'Anthropic',
+    'google': 'Google',
+  };
+  const providerName = provider ? providerNames[provider] || provider : '';
+  const tooltip = providerName ? `Generated with ${providerName} ${label}` : `Generated with ${label}`;
+
+  return (
+    <span
+      className="text-[10px] bg-gray-700/80 text-gray-300 px-1.5 py-0.5 rounded-full truncate max-w-[60px] md:max-w-[100px]"
+      title={tooltip}
+    >
+      {label}
+    </span>
+  );
+};
+
 // Helper function to create a placeholder SVG
 const createPlaceholderSvg = (message: string): string => {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
@@ -471,7 +527,10 @@ const StoryboardPanel: React.FC<StoryboardPanelProps> = ({
                     {/* Bottom overlay with duration and prompt */}
                     <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-90 group-hover:opacity-100 transition-opacity">
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs text-white font-medium">{clip.duration}s</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white font-medium">{clip.duration}s</span>
+                          <ModelBadge model={clip.model} provider={clip.provider} />
+                        </div>
                         <div className="flex items-center gap-1">
                           <button
                             className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-black/30"

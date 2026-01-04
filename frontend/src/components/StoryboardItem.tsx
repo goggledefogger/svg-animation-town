@@ -8,6 +8,60 @@ interface StoryboardItemProps {
   onRequestDelete: (id: string) => void;
 }
 
+// Helper function to get a short display label for a model ID
+const getModelLabel = (modelId: string | undefined): string | null => {
+  if (!modelId) return null;
+
+  const modelLabels: Record<string, string> = {
+    // OpenAI
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gpt-4o': 'GPT-4o',
+    'o3-mini': 'O3 Mini',
+    'o1-mini': 'O1 Mini',
+    'o1': 'O1',
+    'gpt-5-pro': 'GPT-5 Pro',
+    'gpt-5.2-pro': 'GPT-5.2 Pro',
+    'gpt-5-mini': 'GPT-5 Mini',
+    // Anthropic
+    'claude-sonnet-4-5-20250929': 'Claude 4.5',
+    'claude-haiku-4-5-20251015': 'Claude 4.5 Haiku',
+    'claude-3-7-sonnet-20250219': 'Claude 3.7',
+    'claude-3-5-sonnet-20241022': 'Claude 3.5',
+    // Google
+    'gemini-2.5-flash': 'Gemini 2.5',
+    'gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'gemini-2.5-flash-lite': 'Gemini 2.5 Lite',
+    'gemini-3-pro-preview': 'Gemini 3 Pro',
+    'gemini-3-flash': 'Gemini 3 Flash',
+    'gemini-2.0-flash': 'Gemini 2.0',
+  };
+
+  return modelLabels[modelId] || modelId;
+};
+
+// Model badge component for storyboard/movie items
+const MovieModelBadge: React.FC<{ model?: string; provider?: string }> = ({ model, provider }) => {
+  const label = getModelLabel(model);
+  if (!label) return null;
+
+  const providerNames: Record<string, string> = {
+    'openai': 'OpenAI',
+    'anthropic': 'Anthropic',
+    'google': 'Google',
+  };
+  const providerName = provider ? providerNames[provider] || provider : '';
+  const tooltip = providerName ? `Generated with ${providerName} ${label}` : `Generated with ${label}`;
+
+  return (
+    <span
+      className="text-[10px] bg-gray-600/80 text-gray-300 px-1.5 py-0.5 rounded-sm truncate max-w-[80px] md:max-w-[140px]"
+      title={tooltip}
+    >
+      {label}
+    </span>
+  );
+};
+
 const StoryboardItem = React.forwardRef<HTMLDivElement, StoryboardItemProps>(
   ({ storyboard, onLoadStoryboard, onRequestDelete }, ref) => {
     // Find the first clip to use as a thumbnail
@@ -84,9 +138,10 @@ const StoryboardItem = React.forwardRef<HTMLDivElement, StoryboardItemProps>(
           {/* Title row - full width */}
           <h3 className="font-medium text-bat-yellow text-sm truncate">{storyboard.name}</h3>
 
-          {/* Date row */}
-          <div className="text-xs text-gray-400 mt-0.5">
-            {formatDate(storyboard.updatedAt)}
+          {/* Date row with model badge */}
+          <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-2">
+            <span>{formatDate(storyboard.updatedAt)}</span>
+            <MovieModelBadge model={storyboard.aiModel} provider={storyboard.aiProvider} />
           </div>
 
           {/* Description row */}
