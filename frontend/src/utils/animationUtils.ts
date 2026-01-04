@@ -325,9 +325,14 @@ export function controlAnimations(element: SVGElement, options: AnimationControl
     // 3. Handle CSS animations (from multiple sources)
 
     // 3.1 Get speed value
-    const isReverse = typeof playbackSpeed === 'number' && playbackSpeed < 0;
-    const speedValue = typeof playbackSpeed === 'number' ? Math.abs(playbackSpeed) : 1;
+    // User Feedback: "Make 1x be half as fast".
+    // We apply a base calibration of 0.4 to slow everything down globally.
+    // This means 1x UI speed = 0.4x actual speed (2.5x duration).
+    const BASE_SPEED_CALIBRATION = 0.4;
 
+    const isReverse = typeof playbackSpeed === 'number' && playbackSpeed < 0;
+    const rawSpeed = typeof playbackSpeed === 'number' ? Math.abs(playbackSpeed) : 1;
+    const speedValue = rawSpeed * BASE_SPEED_CALIBRATION;
     // Update SMIL animation speed directly
     if (playbackSpeed !== 'groovy') {
       // Find all SMIL animation elements

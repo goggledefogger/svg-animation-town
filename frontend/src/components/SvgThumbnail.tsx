@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { resetAnimations } from '../utils/animationUtils';
+import { resetAnimations, controlAnimations } from '../utils/animationUtils';
 
 interface SvgThumbnailProps {
   svgContent: string;
@@ -45,15 +45,14 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
     newSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
     newSvg.innerHTML = svgElement.innerHTML;
 
-    // Reset animations and ensure they always play in thumbnails
-    resetAnimations(newSvg);
-
-    // Ensure CSS animations are always running in thumbnails
-    const cssElements = newSvg.querySelectorAll('[style*="animation"]');
-    cssElements.forEach(element => {
-      if (element instanceof SVGElement && element.style) {
-        element.style.animationPlayState = 'running';
-      }
+    // Use the comprehensive controlAnimations utility
+    // This ensures consistent speed (1x) and robust handling (data-original-dur)
+    // just like the main player.
+    controlAnimations(newSvg, {
+      playState: 'running',
+      playbackSpeed: 1,
+      shouldReset: true,
+      initialSetup: true
     });
 
     // Add debug logging

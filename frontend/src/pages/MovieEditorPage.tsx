@@ -330,7 +330,7 @@ const MovieEditorPage: React.FC = () => {
               <>
                 <div className="flex-1 h-0 flex-grow overflow-hidden flex items-center justify-center">
                   <div className="w-full h-full">
-                    <AnimationCanvas />
+                    <AnimationCanvas isAnimationEditor={true} />
                   </div>
                 </div>
                 <AnimationControls />
