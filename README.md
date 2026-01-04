@@ -181,6 +181,42 @@ The AI assistant becomes your creative partner - understanding context, making i
     └── .env.example           # Example environment variables
 ```
 
+## Developer Notes
+
+### ClipEditor Auto-Save Pattern
+
+The `ClipEditor` component (`frontend/src/components/ClipEditor.tsx`) uses debounced auto-save for clip properties with a specific pattern to avoid React effect dependency issues:
+
+**Problem**: Effects that depend on callback functions re-run on every parent render because callbacks are recreated each time. This caused constant effect runs and the "Saving changes..." status getting stuck.
+
+**Solution**: Use refs to store latest values and the save function, so the effect only depends on `isDirty`:
+
+```tsx
+// Latest values in a ref (updated every render, doesn't trigger effects)
+const valuesRef = useRef({ name, duration, ... });
+valuesRef.current = { name, duration, ... };
+
+// Stable save function reads from ref
+const performSaveRef = useRef(() => {
+  updateClip(activeClipId, valuesRef.current);
+});
+
+// Effect ONLY depends on isDirty
+useEffect(() => {
+  if (!isDirty) { setSaveStatus('idle'); return; }
+  setSaveStatus('saving');
+  const timer = setTimeout(() => {
+    performSaveRef.current();
+    setSaveStatus('saved');
+  }, 1000);
+  return () => clearTimeout(timer);
+}, [isDirty]);  // ✅ Stable - no callback in deps
+```
+
+**Key points**:
+- `key={activeClipId}` on `<ClipEditor>` forces remount on clip switch
+- `isDirty` compares to `lastSavedValues` ref (not context) to avoid oscillation after save
+
 ## OpenAI Integration
 
 The integration with OpenAI gpt-4o-mini requires prompt engineering to generate appropriate SVG elements. The system is designed to:

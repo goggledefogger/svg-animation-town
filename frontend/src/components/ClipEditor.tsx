@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMovie } from '../contexts/MovieContext';
 import { useNavigate } from 'react-router-dom';
 import { addDurationGuidance } from '../utils/animationUtils';
@@ -11,71 +11,107 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const { activeClipId, getActiveClip, updateClip } = useMovie();
   const navigate = useNavigate();
 
+  // Get initial clip data - since we use a 'key' in parent,
+  // this component remounts on activeClipId change, so we can init state directly
+  const initialClip = getActiveClip();
+
   // Form state
-  const [name, setName] = useState('');
-  const [duration, setDuration] = useState(5);
-  const [order, setOrder] = useState(0);
-  const [prompt, setPrompt] = useState('');
+  const [name, setName] = useState(initialClip?.name || '');
+  const [duration, setDuration] = useState(initialClip?.duration || 5);
+  const [order, setOrder] = useState(initialClip?.order || 0);
+  const [prompt, setPrompt] = useState(initialClip?.prompt || '');
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Load clip data when active clip changes
-  useEffect(() => {
-    if (activeClipId) {
-      const clip = getActiveClip();
-      if (clip) {
-        setName(clip.name);
-        setDuration(clip.duration || 5);
-        setOrder(clip.order);
-        setPrompt(clip.prompt || '');
-        setSaveStatus('idle'); // Reset status on clip switch
-      }
-    }
-  }, [activeClipId, getActiveClip]);
+  // Track what we last saved - this prevents isDirty from oscillating
+  const lastSavedValues = useRef({
+    name: initialClip?.name || '',
+    duration: initialClip?.duration || 5,
+    order: initialClip?.order || 0,
+    prompt: initialClip?.prompt || '',
+  });
 
-  // Check if form is dirty
-  const isDirty = (() => {
+  // Track timers to properly clean them up
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Check if form is dirty by comparing to LAST SAVED values (not context)
+  const isDirty = React.useMemo(() => {
     if (!activeClipId) return false;
-    const clip = getActiveClip();
-    if (!clip) return false;
 
+    const saved = lastSavedValues.current;
     return (
-      name !== clip.name ||
-      duration !== (clip.duration || 5) ||
-      order !== clip.order ||
-      prompt !== (clip.prompt || '')
+      name !== saved.name ||
+      duration !== saved.duration ||
+      order !== saved.order ||
+      prompt !== saved.prompt
     );
-  })();
+  }, [activeClipId, name, duration, order, prompt]);
 
-  // Save changes to the active clip (now private for auto-save)
-  const performSave = useCallback(() => {
-    if (!activeClipId || !isDirty) return;
+  // Use a ref to always have access to the latest values without causing effect re-runs
+  const valuesRef = useRef({ name, duration, order, prompt, activeClipId, onClipUpdate, updateClip });
+  valuesRef.current = { name, duration, order, prompt, activeClipId, onClipUpdate, updateClip };
 
-    updateClip(activeClipId, {
-      name,
-      duration,
-      order,
-      prompt
-    });
+  // Store the stable save function in a ref
+  const performSaveRef = useRef(() => {
+    const { name, duration, order, prompt, activeClipId, onClipUpdate, updateClip } = valuesRef.current;
+    if (!activeClipId) return;
 
+    updateClip(activeClipId, { name, duration, order, prompt });
+    lastSavedValues.current = { name, duration, order, prompt };
     onClipUpdate();
-  }, [activeClipId, isDirty, name, duration, order, prompt, updateClip, onClipUpdate]);
+  });
 
-  // Auto-save effect
+  // Cleanup all timers on unmount
   useEffect(() => {
-    if (!isDirty) return;
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, []);
 
+  // Auto-save effect - ONLY runs when isDirty changes (not on every render)
+  useEffect(() => {
+    // Clear any existing timers
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+
+    if (!isDirty) {
+      // Reset to idle if we're not dirty (e.g., after switching clips)
+      setSaveStatus('idle');
+      return;
+    }
+
+    // Start saving indicator
     setSaveStatus('saving');
-    const timer = setTimeout(() => {
-      performSave();
+
+    // Debounce the save for 1 second
+    saveTimerRef.current = setTimeout(() => {
+      performSaveRef.current();
       setSaveStatus('saved');
+
+      // Auto-hide "saved" after 2 seconds
+      hideTimerRef.current = setTimeout(() => {
+        setSaveStatus('idle');
+      }, 2000);
     }, 1000);
 
-    return () => clearTimeout(timer);
-  }, [isDirty, performSave]);
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [isDirty]); // ONLY depend on isDirty - not performSave or other values
 
   // Navigate to animation editor with stored prompt
-  const navigateToAnimationEditor = () => {
+  const navigateToAnimationEditor = useCallback(() => {
     if (!activeClipId) return;
 
     const activeClip = getActiveClip();
@@ -118,7 +154,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
 
     // Navigate to animation editor
     navigate('/animation-editor');
-  };
+  }, [activeClipId, getActiveClip, navigate]);
 
   // If no clip is selected, show a placeholder
   if (!activeClipId) {

@@ -336,12 +336,10 @@ const MovieEditorPage: React.FC = () => {
           </div>
 
           {/* Right sidebar - Clip Editor (desktop only) */}
-          {activeClipId && (
             <div className="hidden md:block md:w-72 border-l border-gray-700 bg-gray-800 p-4 overflow-y-auto order-3">
               <h3 className="text-lg font-medium text-white mb-4">Clip Properties</h3>
-              <ClipEditor />
+              <ClipEditor key={activeClipId} />
             </div>
-          )}
         </div>
 
         {/* Modals */}
@@ -545,9 +543,12 @@ const MovieEditorPage: React.FC = () => {
             </div>
             {/* Content */}
             <div className="flex-1 overflow-auto p-4">
-              <ClipEditor onClipUpdate={() => {
-                modalManager.setShowMobileClipEditor(false);
-              }} />
+              <ClipEditor
+                key={activeClipId}
+                onClipUpdate={() => {
+                  modalManager.setShowMobileClipEditor(false);
+                }}
+              />
             </div>
           </div>
         </div>
