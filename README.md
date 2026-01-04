@@ -259,6 +259,15 @@ To ensure a graceful user experience, the system includes several safeguards:
 - Descriptive error messages that guide the user
 - Rate limiting and error handling for OpenAI API issues
 
+### Robust Animation Playback
+
+The animation system has been engineered for consistency and stability:
+
+- **Global Speed Calibration**: All animations are calibrated to `0.4x` speed by default for a cinematic feel. This is enforced globally across the Animation Creator, Movie Player, Thumbnails, and Export functions.
+- **Immutable Duration Logic**: To prevent compounding speed issues (where re-reads multiply speed factors), the system stores the `data-original-dur` on all SVG elements. All speed calculations are derived from this immutable baseline.
+- **Consistent Export**: The movie exporter (`exportMovieUtils`) applies the same `0.4x` calibration (inverse 2.5x duration multiplier) to ensuring "What You See Is What You Get" for downloaded files.
+- **Glitch-Free Rendering**: The `AnimationCanvas` uses reference-based content tracking (`lastRenderedContentRef`) to prevent duplicate renders from resetting animations mid-playback.
+
 ## Rate Limiting
 
 The application includes a token bucket rate limiter for Claude API requests to prevent rate limit errors (429):
