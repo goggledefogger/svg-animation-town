@@ -116,6 +116,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
   // Get the current active clip's SVG content
   const activeClipSvgContent = activeClipId ? getActiveClip()?.svgContent : null;
   const lastValidContentRef = useRef<string>('');
+  const lastRenderedContentRef = useRef<string | null>(null);
 
   // Create a function to check if we should display empty state
   const displayEmptyState = useMemo(() => {
@@ -529,10 +530,9 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
     // Check if we have SVG content to display and we're not in the middle of a clip change
     if (finalSvgContent) {
-      // Only update if different from current content to prevent unnecessary re-renders
-      const currentContent = svgContainerRef.current.innerHTML;
-
-      if (currentContent !== finalSvgContent) {
+      // Use reference comparison to avoid innerHTML serialization mismatches
+      // Browsers often rewrite HTML/SVG (e.g. attributes order, quotes), so innerHTML !== string is unreliable
+      if (lastRenderedContentRef.current !== finalSvgContent) {
         // Skip rendering old content when we know we're in the middle of a clip change
         if (clipChangePendingRef.current && activeClipId !== lastValidContentRef.current) {
           return;
@@ -545,20 +545,11 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
 
         debouncedUpdateRef.current = window.setTimeout(() => {
           if (svgContainerRef.current) {
-            // Only update if the content has actually changed
-            if (svgContainerRef.current.innerHTML !== finalSvgContent) {
-              // Log animation refresh state before updating content
-              /*
-              console.log('[AnimationDebug] Animation refresh state:', {
-                usingContextPlayback: isAnimationEditor ? playing : moviePlaying,
-                lastContentHash: svgContainerRef.current.innerHTML?.length,
-                newContentHash: finalSvgContent.length,
-                isContentReplaced: true,
-                timestamp: new Date().toISOString()
-              });
-              */
+            // Double check inside timeout
+            if (lastRenderedContentRef.current !== finalSvgContent) {
 
               svgContainerRef.current.innerHTML = finalSvgContent;
+              lastRenderedContentRef.current = finalSvgContent; // Update tracker
 
               // Find the SVG element in the container
               const svgElement = svgContainerRef.current.querySelector('svg');
@@ -571,7 +562,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
               }
             } else {
               // Log that content hasn't changed
-              console.log('[AnimationDebug] Content unchanged, skipping refresh');
+              console.log('[AnimationDebug] Content unchanged (ref match), skipping refresh');
             }
           }
           debouncedUpdateRef.current = null;
@@ -588,6 +579,7 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       if (svgContainerRef.current) {
         svgContainerRef.current.innerHTML = '';
       }
+      lastRenderedContentRef.current = null; // Clear tracker
 
       // Clear reference when there's no content
       if (currentSvgRef.current) {

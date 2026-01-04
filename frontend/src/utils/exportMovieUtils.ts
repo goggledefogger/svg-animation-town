@@ -4,6 +4,7 @@
 
 import { Storyboard, MovieClip } from '../contexts/MovieContext';
 import { BackgroundOption } from '../contexts/ViewerPreferencesContext';
+import { BASE_SPEED_CALIBRATION } from './animationUtils';
 
 /**
  * Exports a complete movie as an SVG with sequenced animations
@@ -295,6 +296,39 @@ function processClipSvg(clip: MovieClip, clipId: string): string {
 
     // Prefix all IDs in the SVG to avoid conflicts
     prefixIds(svgElement, clipId);
+
+    // Apply global speed calibration to match the player (0.4x baseline)
+    // We invert the calibration (1 / 0.4 = 2.5) because we are modifying DURATION, not speed.
+    // Lower speed = Higher duration.
+    const calibrator = 1 / BASE_SPEED_CALIBRATION;
+
+    // 1. Scale SMIL durations
+    const smilElements = svgElement.querySelectorAll('animate, animateTransform, animateMotion');
+    smilElements.forEach(el => {
+      const dur = el.getAttribute('dur');
+      if (dur) {
+        const durVal = parseFloat(dur);
+        if (!isNaN(durVal)) {
+          el.setAttribute('dur', `${durVal * calibrator}s`);
+        }
+      }
+    });
+
+    // 2. Scale CSS durations (simple inline styles)
+    const elementsWithStyle = svgElement.querySelectorAll('[style*="animation"]');
+    elementsWithStyle.forEach(el => {
+      if (el instanceof SVGElement) {
+        const style = el.getAttribute('style') || '';
+        // Look for animation-duration in style string... Regex is risky but serviceable for export
+        // Better: parse it if possible, but DOMParser creates elements with style access
+        if (el.style && el.style.animationDuration) {
+           const dur = parseFloat(el.style.animationDuration);
+           if (!isNaN(dur)) {
+             el.style.animationDuration = `${dur * calibrator}s`;
+           }
+        }
+      }
+    });
 
     // Extract all elements from the SVG (except defs, which we'll handle specially)
     let processedContent = '';
