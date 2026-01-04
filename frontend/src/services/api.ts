@@ -38,7 +38,11 @@ export async function fetchApi<T>(
     const response = await fetch(`${API_URL}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
       },
+      cache: 'no-store',
       ...options,
     });
 

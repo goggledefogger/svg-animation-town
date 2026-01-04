@@ -162,10 +162,14 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   const { currentBackground } = useViewerPreferences();
 
 
-  // Load saved storyboard list on mount
+  // Clear legacy local storage to ensure fresh server data
   useEffect(() => {
-    const storedStoryboardIds = getSavedStoryboardsFromStorage();
-    setSavedStoryboards(storedStoryboardIds);
+    try {
+        localStorage.removeItem(STORYBOARD_STORAGE_KEY);
+        console.log('[Cleanup] Cleared legacy storyboard local storage');
+    } catch (e) {
+        console.warn('Failed to clear local storage:', e);
+    }
   }, []);
 
   // Clear server not-found cache on component mount
@@ -188,7 +192,13 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     const storyboardHash = JSON.stringify({
       id: currentStoryboard.id,
       clips: currentStoryboard.clips.map(c => ({
-        id: c.id, name: c.name, duration: c.duration, order: c.order, prompt: c.prompt
+        id: c.id,
+        name: c.name,
+        duration: c.duration,
+        order: c.order,
+        prompt: c.prompt,
+        playbackSpeed: c.playbackSpeed,
+        animationId: c.animationId
       }))
     });
 
@@ -249,14 +259,9 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
 
       console.log(`Received ${serverStoryboards.length} storyboards from server`);
 
-      // Update localStorage cache for offline use
-      try {
-        const cache: Record<string, Storyboard> = {};
-        serverStoryboards.forEach(sb => { cache[sb.id] = sb; });
-        localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(cache));
-      } catch (cacheError) {
-        console.warn('Failed to update localStorage cache:', cacheError);
-      }
+      // Local storage cache disabled to prevent conflicts with server state
+      // The server is the single source of truth.
+      // localStorage.removeItem(STORYBOARD_STORAGE_KEY);
 
       const serverIds = serverStoryboards.map(sb => sb.id);
       setSavedStoryboards(serverIds);
@@ -301,14 +306,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
         setCurrentStoryboard(updatedStoryboard);
       }
 
-      // Update localStorage cache for offline fallback
-      try {
-        const cache = JSON.parse(localStorage.getItem(STORYBOARD_STORAGE_KEY) || '{}');
-        cache[finalStoryboard.id] = finalStoryboard;
-        localStorage.setItem(STORYBOARD_STORAGE_KEY, JSON.stringify(cache));
-      } catch (cacheError) {
-        console.warn('Failed to update localStorage cache:', cacheError);
-      }
+      // Local storage cache disabled to prevent conflicts with server state
 
       // Update saved storyboards list
       setSavedStoryboards(prev => [...new Set([...prev, finalStoryboard.id])]);
@@ -365,6 +363,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       if (clipIndex === -1) return prev;
 
       const updatedClips = [...prev.clips];
+
+      // Merge updates
       updatedClips[clipIndex] = {
         ...updatedClips[clipIndex],
         ...updates
@@ -509,7 +509,8 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
       // Validate and synchronize clips if needed
       if (storyboard.clips && storyboard.clips.length > 0) {
         // Validate clips for integrity
-        storyboard.clips = validateMovieClips(storyboard.clips);
+        const validatedClips = validateMovieClips(storyboard.clips);
+        storyboard.clips = validatedClips;
 
         // Sort clips by order to ensure correct sequence
         storyboard.clips.sort((a, b) => a.order - b.order);
@@ -549,7 +550,13 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
         lastSavedRef.current = JSON.stringify({
           id: storyboard.id,
           clips: storyboard.clips.map(c => ({
-            id: c.id, name: c.name, duration: c.duration, order: c.order, prompt: c.prompt
+            id: c.id,
+            name: c.name,
+            duration: c.duration,
+            order: c.order,
+            prompt: c.prompt,
+            playbackSpeed: c.playbackSpeed,
+            animationId: c.animationId
           }))
         });
       }

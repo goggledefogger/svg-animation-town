@@ -1085,6 +1085,17 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
         ...getBackgroundStyle()
       }}
     >
+
+
+      {/* Loading overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10 transition-opacity duration-300">
+          <div className="text-white text-xl font-light tracking-wider animate-pulse flex flex-col items-center">
+             <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+             Generating Animation...
+          </div>
+        </div>
+      )}
       {/* Empty state or loading overlay - hide if we have valid content to show */}
       <div
         className={`absolute inset-0 flex items-center justify-center transition-opacity duration-500 ${
