@@ -123,34 +123,7 @@ export const exportMovieAsSvg = (
     <animate id="main-timeline" attributeName="x" from="0" to="1" dur="${totalDuration}s" fill="freeze" />
   </rect>\n\n`;
 
-  // Render Movie Prompt Overlay (Top-Left) - visible for entire duration
-  if (options.includeMoviePrompt && storyboard.description) {
-    const promptText = storyboard.description.replace(/"/g, '&quot;');
-    const lines = formatPromptIntoLines(promptText, 70); // 70 chars max per line for overlay
 
-    svgContent += `  <!-- Movie Prompt Overlay -->\n`;
-    svgContent += `  <g id="movie-prompt-overlay" opacity="1">\n`; // Default opacity 1
-
-    // Layout calculation for top-left overlay
-    const lineHeight = 18;
-    const padding = 12;
-    const bgHeight = (padding * 2) + (lineHeight * (lines.length - 1)) + 6;
-
-    const rectX = 20;
-    const rectY = 20;
-    const textX = 32; // x + padding
-    const firstTextY = 20 + padding + 5;
-    const boxWidth = 500;
-
-    svgContent += `    <rect class="overlay-background" x="${rectX}" y="${rectY}" width="${boxWidth}" height="${bgHeight}" />\n`;
-
-    lines.forEach((line, lineIndex) => {
-      const yPosition = firstTextY + (lineIndex * lineHeight);
-      svgContent += `    <text class="overlay-text" x="${textX}" y="${yPosition}">${line}</text>\n`;
-    });
-
-    svgContent += `  </g>\n\n`;
-  }
 
   // Process each clip and add to SVG with timing
   let cumulativeTime = 0;
@@ -215,6 +188,35 @@ export const exportMovieAsSvg = (
     // Update cumulative time
     cumulativeTime += duration;
   });
+
+  // Render Movie Prompt Overlay (Top-Left) - visible for entire duration
+  if (options.includeMoviePrompt && storyboard.description) {
+    const promptText = storyboard.description.replace(/"/g, '&quot;');
+    const lines = formatPromptIntoLines(promptText, 70); // 70 chars max per line for overlay
+
+    svgContent += `  <!-- Movie Prompt Overlay -->\n`;
+    svgContent += `  <g id="movie-prompt-overlay" opacity="1">\n`; // Default opacity 1
+
+    // Layout calculation for top-left overlay
+    const lineHeight = 18;
+    const padding = 12;
+    const bgHeight = (padding * 2) + (lineHeight * (lines.length - 1)) + 6;
+
+    const rectX = 20;
+    const rectY = 20;
+    const textX = 32; // x + padding
+    const firstTextY = 20 + padding + 5;
+    const boxWidth = 500;
+
+    svgContent += `    <rect class="overlay-background" x="${rectX}" y="${rectY}" width="${boxWidth}" height="${bgHeight}" />\n`;
+
+    lines.forEach((line, lineIndex) => {
+      const yPosition = firstTextY + (lineIndex * lineHeight);
+      svgContent += `    <text class="overlay-text" x="${textX}" y="${yPosition}">${line}</text>\n`;
+    });
+
+    svgContent += `  </g>\n\n`;
+  }
 
   // Add a replay button
   svgContent += `  <!-- Replay button -->\n`;
