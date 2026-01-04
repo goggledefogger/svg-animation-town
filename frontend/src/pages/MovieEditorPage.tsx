@@ -68,57 +68,19 @@ const MovieEditorPage: React.FC = () => {
 
   const navigate = useNavigate();
 
-  // Load the most recent storyboard on component mount if available
+  // Fetch storyboards list on mount (but don't auto-load any - always start fresh)
   useEffect(() => {
     const fetchStoryboards = async () => {
       try {
         await getSavedStoryboards();
-
-        // If no clips, try to load from localStorage
-        if (currentStoryboard.clips.length === 0) {
-          const storyboardsString = localStorage.getItem('svg-animator-storyboards');
-          if (storyboardsString) {
-            try {
-              const storyboards = JSON.parse(storyboardsString);
-              const storyboardsList = Object.values(storyboards) as Array<{
-                id: string;
-                name: string;
-                updatedAt: string | Date;
-                clips?: Array<any>;
-              }>;
-
-              // Convert stored dates back to Date objects for comparison
-              storyboardsList.forEach((sb) => {
-                sb.updatedAt = new Date(sb.updatedAt);
-              });
-
-              // Sort by updated date (newest first)
-              storyboardsList.sort((a, b) =>
-                new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-              );
-
-              if (storyboardsList.length > 0) {
-                const newestStoryboard = storyboardsList[0];
-                console.log(`Loading most recent storyboard: ${newestStoryboard.name} with ${newestStoryboard.clips?.length || 0} clips`);
-                try {
-                  await loadStoryboard(newestStoryboard.id);
-                } catch (loadError) {
-                  console.error('Error loading most recent storyboard:', loadError);
-                  alert(`Failed to load storyboard: ${loadError instanceof Error ? loadError.message : 'Unknown error'}`);
-                }
-              }
-            } catch (error) {
-              console.error('Error loading most recent storyboard:', error);
-            }
-          }
-        }
+        // Note: We don't auto-load any storyboard - user can use Load button to load one
       } catch (error) {
         console.error('Error fetching storyboards:', error);
       }
     };
 
     fetchStoryboards();
-  }, [loadStoryboard]);
+  }, [getSavedStoryboards]);
 
   // Add a new function to handle proper storyboard creation
   const handleCreateNewStoryboard = useCallback(() => {
@@ -284,6 +246,9 @@ const MovieEditorPage: React.FC = () => {
     // Clear sessionStorage animation state using utility function
     clearCacheForServerRefresh();
 
+    // Clear sessionStorage flags
+    sessionStorage.removeItem('hasCheckedIncompleteGeneration');
+
     // Create a new empty storyboard
     createNewStoryboard();
 
@@ -292,9 +257,6 @@ const MovieEditorPage: React.FC = () => {
 
     // Reload the page to ensure a clean state
     window.location.reload();
-
-    // Clear sessionStorage flags
-    sessionStorage.removeItem('hasCheckedIncompleteGeneration');
   }, [createNewStoryboard]);
 
   const handleClipSelect = (clipId: string) => {

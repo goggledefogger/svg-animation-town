@@ -153,9 +153,8 @@ const EditorDropdown: React.FC<EditorDropdownProps> = ({
           <div className="py-1">
             <Link
               to="/"
-              className={`flex items-center px-4 py-2 ${
-                !isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 ${!isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
+                }`}
               onClick={() => setShowNav(false)}
             >
               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -165,9 +164,8 @@ const EditorDropdown: React.FC<EditorDropdownProps> = ({
             </Link>
             <Link
               to="/movie-editor"
-              className={`flex items-center px-4 py-2 ${
-                isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
-              }`}
+              className={`flex items-center px-4 py-2 ${isMovieEditorPage ? 'bg-gray-700 text-bat-yellow' : 'text-gray-300 hover:bg-gray-700'
+                }`}
               onClick={() => setShowNav(false)}
             >
               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -215,9 +213,8 @@ const ExportDropdown: React.FC<ExportDropdownProps> = ({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className={`flex items-center justify-center h-10 px-3 rounded transition-colors ${
-          showDropdown ? 'bg-bat-yellow text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'
-        } ${showDropdown ? 'ring-2 ring-bat-yellow' : ''}`}
+        className={`flex items-center justify-center h-10 px-3 rounded transition-colors ${showDropdown ? 'bg-bat-yellow text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'
+          } ${showDropdown ? 'ring-2 ring-bat-yellow' : ''}`}
         aria-label="Export"
         title="Export"
       >
@@ -514,9 +511,9 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* Export Button - Yellow button */}
           {isMovieEditorPage ? (
-            <ExportDropdown 
+            <ExportDropdown
               isMovieEditorPage={isMovieEditorPage}
-              onExportSvg={onExport || (() => {})}
+              onExportSvg={onExport || (() => { })}
               onExportJson={handleExportJson}
               dropdownRef={exportDropdownRef}
             />
@@ -622,7 +619,7 @@ const Header: React.FC<HeaderProps> = ({
           {/* Export Button - Yellow button */}
           {isMovieEditorPage ? (
             <ActionButton
-              onClick={onExport || (() => {})}
+              onClick={onExport || (() => { })}
               disabled={false}
               ariaLabel="Export Movie"
               title="Export Movie as SVG"
