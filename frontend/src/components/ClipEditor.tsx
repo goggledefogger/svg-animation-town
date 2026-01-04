@@ -19,6 +19,7 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const [duration, setDuration] = useState(initialClip?.duration || 5);
   const [order, setOrder] = useState(initialClip?.order || 0);
   const [prompt, setPrompt] = useState(initialClip?.prompt || '');
+  const [isDirty, setIsDirty] = useState(false);
 
   // Track last synced values to detect changes
   const lastSyncedValues = useRef({
@@ -31,11 +32,29 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   // Debounce timer for updating context
   const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Cleanup on unmount
+  // Track pending values for flush on unmount
+  const pendingValuesRef = useRef<{ name: string; duration: number; order: number; prompt: string } | null>(null);
+  const updateClipRef = useRef(updateClip);
+  const onClipUpdateRef = useRef(onClipUpdate);
+  const activeClipIdRef = useRef(activeClipId);
+
+  // Keep refs updated
+  updateClipRef.current = updateClip;
+  onClipUpdateRef.current = onClipUpdate;
+  activeClipIdRef.current = activeClipId;
+
+  // Flush pending changes on unmount
   useEffect(() => {
     return () => {
+      // Clear timer
       if (updateTimerRef.current) {
         clearTimeout(updateTimerRef.current);
+      }
+      // Flush any pending changes immediately
+      if (pendingValuesRef.current && activeClipIdRef.current) {
+        const { name, duration, order, prompt } = pendingValuesRef.current;
+        updateClipRef.current(activeClipIdRef.current, { name, duration, order, prompt });
+        onClipUpdateRef.current();
       }
     };
   }, []);
@@ -45,14 +64,22 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
     if (!activeClipId) return;
 
     const synced = lastSyncedValues.current;
-    const isDirty = (
+    const hasPending = (
       name !== synced.name ||
       duration !== synced.duration ||
       order !== synced.order ||
       prompt !== synced.prompt
     );
 
-    if (!isDirty) return;
+    if (!hasPending) {
+      pendingValuesRef.current = null;
+      setIsDirty(false);
+      return;
+    }
+
+    // Track pending values for flush
+    pendingValuesRef.current = { name, duration, order, prompt };
+    setIsDirty(true);
 
     // Clear existing timer
     if (updateTimerRef.current) {
@@ -63,6 +90,8 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
     updateTimerRef.current = setTimeout(() => {
       updateClip(activeClipId, { name, duration, order, prompt });
       lastSyncedValues.current = { name, duration, order, prompt };
+      pendingValuesRef.current = null;
+      setIsDirty(false);
       onClipUpdate();
     }, 500);
 
@@ -192,6 +221,21 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
           >
             Edit in Animation Editor
           </button>
+        </div>
+      </div>
+
+      {/* Save status indicator */}
+      <div className="pt-2">
+        <div className="text-xs transition-opacity duration-300">
+          {isDirty && (
+            <span className="text-bat-yellow flex items-center">
+              <svg className="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Saving changes...
+            </span>
+          )}
         </div>
       </div>
     </div>
