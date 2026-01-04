@@ -114,7 +114,7 @@ interface MovieContextType {
   setCurrentPlaybackPosition: React.Dispatch<React.SetStateAction<number>>;
 
   // Export
-  exportStoryboard: (format: 'json' | 'svg') => void;
+  exportStoryboard: (format: 'json' | 'svg', options?: { includePrompts?: boolean }) => void;
 
   // Storyboard generation
   createStoryboardFromResponse: (storyboardResponse: StoryboardResponse) => Promise<Storyboard>;
@@ -721,7 +721,9 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
   }, [activeClipId, currentStoryboard.clips]);
 
   // Export storyboard
-  const exportStoryboard = useCallback((format: 'json' | 'svg') => {
+  const exportStoryboard = useCallback((format: 'json' | 'svg', options?: { includePrompts?: boolean }) => {
+    const includePrompts = options?.includePrompts ?? false;
+
     if (format === 'json') {
       // Export as JSON
       const jsonData = JSON.stringify(currentStoryboard, null, 2);
@@ -737,7 +739,7 @@ export const MovieProvider: React.FC<MovieProviderProps> = ({ children, animatio
     } else if (format === 'svg') {
       // Use our new movie exporter for SVG export
       exportMovieAsSvg(currentStoryboard, currentStoryboard.name.replace(/\s+/g, '_'), {
-        includePrompts: true,
+        includePrompts,
         background: currentBackground,
         includeBackground: true
       });
