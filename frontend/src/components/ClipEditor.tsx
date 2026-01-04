@@ -19,96 +19,80 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
   const [duration, setDuration] = useState(initialClip?.duration || 5);
   const [order, setOrder] = useState(initialClip?.order || 0);
   const [prompt, setPrompt] = useState(initialClip?.prompt || '');
-  const [isDirty, setIsDirty] = useState(false);
+
+  // Save status state
+  const [showSaved, setShowSaved] = useState(false);
 
   // Track last synced values to detect changes
-  const lastSyncedValues = useRef({
+  const lastSyncedRef = useRef({
     name: initialClip?.name || '',
     duration: initialClip?.duration || 5,
     order: initialClip?.order || 0,
     prompt: initialClip?.prompt || '',
   });
 
-  // Debounce timer for updating context
-  const updateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Timer refs
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track pending values for flush on unmount
-  const pendingValuesRef = useRef<{ name: string; duration: number; order: number; prompt: string } | null>(null);
-  const updateClipRef = useRef(updateClip);
-  const onClipUpdateRef = useRef(onClipUpdate);
-  const activeClipIdRef = useRef(activeClipId);
-
-  // Keep refs updated
-  updateClipRef.current = updateClip;
-  onClipUpdateRef.current = onClipUpdate;
-  activeClipIdRef.current = activeClipId;
-
-  // Flush pending changes on unmount
-  useEffect(() => {
-    return () => {
-      // Clear timer
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current);
-      }
-      // Flush any pending changes immediately
-      if (pendingValuesRef.current && activeClipIdRef.current) {
-        const { name, duration, order, prompt } = pendingValuesRef.current;
-        updateClipRef.current(activeClipIdRef.current, { name, duration, order, prompt });
-        onClipUpdateRef.current();
-      }
-    };
-  }, []);
-
-  // Debounced sync to context when form values change
-  useEffect(() => {
+  // Stable sync function using refs to avoid dependency issues
+  const syncToContext = useCallback(() => {
     if (!activeClipId) return;
 
-    const synced = lastSyncedValues.current;
-    const hasPending = (
-      name !== synced.name ||
-      duration !== synced.duration ||
-      order !== synced.order ||
-      prompt !== synced.prompt
-    );
+    const current = { name, duration, order, prompt };
+    const last = lastSyncedRef.current;
 
-    console.log(`[ClipEditor] Effect run - hasPending: ${hasPending}, isDirty state: ${isDirty}`);
-
-    if (!hasPending) {
-      console.log(`[ClipEditor] No pending changes, clearing state`);
-      pendingValuesRef.current = null;
-      setIsDirty(false);
+    // Check if actually changed
+    if (current.name === last.name &&
+        current.duration === last.duration &&
+        current.order === last.order &&
+        current.prompt === last.prompt) {
       return;
     }
 
-    // Track pending values for flush
-    pendingValuesRef.current = { name, duration, order, prompt };
-    console.log(`[ClipEditor] Setting isDirty to true`);
-    setIsDirty(true);
+    // Sync to context
+    updateClip(activeClipId, current);
+    lastSyncedRef.current = current;
+    onClipUpdate();
+
+    // Show "Saved" briefly
+    setShowSaved(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setShowSaved(false), 1500);
+  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]);
+
+  // Debounced sync - trigger on value changes
+  useEffect(() => {
+    if (!activeClipId) return;
 
     // Clear existing timer
-    if (updateTimerRef.current) {
-      console.log(`[ClipEditor] Clearing existing timer`);
-      clearTimeout(updateTimerRef.current);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
 
     // Debounce context update by 500ms
-    console.log(`[ClipEditor] Starting 500ms timer`);
-    updateTimerRef.current = setTimeout(() => {
-      console.log(`[ClipEditor] Timer fired! Updating context and setting isDirty to false`);
-      updateClip(activeClipId, { name, duration, order, prompt });
-      lastSyncedValues.current = { name, duration, order, prompt };
-      pendingValuesRef.current = null;
-      setIsDirty(false);
-      onClipUpdate();
-    }, 500);
+    debounceTimerRef.current = setTimeout(syncToContext, 500);
 
     return () => {
-      console.log(`[ClipEditor] Effect cleanup - clearing timer`);
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [activeClipId, name, duration, order, prompt, updateClip, onClipUpdate]); // Note: isDirty NOT in deps - it would cause loop
+  }, [activeClipId, name, duration, order, prompt]); // Note: syncToContext NOT in deps
+
+  // Flush on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        // Flush immediately - use current values from closure
+        syncToContext();
+      }
+      if (savedTimerRef.current) {
+        clearTimeout(savedTimerRef.current);
+      }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Navigate to animation editor with stored prompt
   const navigateToAnimationEditor = useCallback(() => {
@@ -232,20 +216,15 @@ const ClipEditor: React.FC<ClipEditorProps> = ({ onClipUpdate = () => { } }) => 
         </div>
       </div>
 
-      {/* Save status indicator */}
-      <div className="pt-2">
-        <div className="text-xs transition-opacity duration-300">
-          {isDirty && (
-            <span className="text-bat-yellow flex items-center">
-              <svg className="animate-spin h-3 w-3 mr-2" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Saving changes...
-            </span>
-          )}
+      {/* Saved indicator */}
+      {showSaved && (
+        <div className="text-xs text-green-400 flex items-center transition-opacity">
+          <svg className="h-3 w-3 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Saved
         </div>
-      </div>
+      )}
     </div>
   );
 };
