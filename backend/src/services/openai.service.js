@@ -7,8 +7,8 @@ const config = require('../config');
 const clientId = Math.random().toString(36).substring(7);
 console.log(`[OpenAI Service] Created OpenAI client instance ${clientId}`);
 
-// GPT-5 and O1 families currently require the Responses API instead of chat completions
-const RESPONSES_MODEL_PREFIXES = ['o1', 'o3', 'gpt-5'];
+// Reasoning and GPT-5 families require the Responses API instead of chat completions
+const RESPONSES_MODEL_PREFIXES = ['o1', 'o3', 'o4', 'gpt-5'];
 
 const shouldUseResponsesApi = (modelId) => {
   if (typeof modelId !== 'string') {

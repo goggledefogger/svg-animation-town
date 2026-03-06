@@ -12,7 +12,8 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
     aiModel,
     setAIProvider,
     setAIModel,
-    availableProviders
+    availableProviders,
+    configuredProviders
   } = useAnimation();
 
   // Use providers from context (loaded from backend's ai-providers.json)
@@ -22,6 +23,8 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
 
   const currentProvider =
     providerList.find((provider: AIProviderInfo) => provider.id === aiProvider) ?? providerList[0];
+
+  const isCurrentProviderConfigured = configuredProviders?.[currentProvider?.id as AIProviderId] !== false;
 
   const models = currentProvider?.models ?? [];
 
@@ -60,15 +63,25 @@ const AIProviderSelector: React.FC<AIProviderSelectorProps> = ({ className }) =>
           id="ai-provider"
           value={currentProvider?.id}
           onChange={(e) => handleProviderChange(e.target.value)}
-          className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 px-2 py-1 min-w-0 w-full max-w-[180px]"
+          className={`bg-gray-700 border text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 px-2 py-1 min-w-0 w-full max-w-[180px] ${
+            !isCurrentProviderConfigured
+              ? 'border-yellow-500 text-yellow-300'
+              : 'border-gray-600 text-white'
+          }`}
           aria-label="Select AI Provider"
         >
-          {providerList.map((provider: AIProviderInfo) => (
-            <option key={provider.id} value={provider.id}>
-              {provider.displayName}
-            </option>
-          ))}
+          {providerList.map((provider: AIProviderInfo) => {
+            const isConfigured = configuredProviders?.[provider.id] !== false;
+            return (
+              <option key={provider.id} value={provider.id}>
+                {provider.displayName}{!isConfigured ? ' (no key)' : ''}
+              </option>
+            );
+          })}
         </select>
+        {!isCurrentProviderConfigured && (
+          <span className="text-yellow-400 text-[10px] mt-0.5">API key not configured</span>
+        )}
       </div>
       <div className="flex flex-col text-xs text-gray-300 min-w-0 flex-shrink-0">
         <label htmlFor="ai-model" className="mb-1 uppercase tracking-wide">

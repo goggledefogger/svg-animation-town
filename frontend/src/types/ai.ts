@@ -20,6 +20,7 @@ export interface AIConfigResponse {
   providers: AIProviderInfo[];
   defaults: Record<AIProviderId, string>;
   currentModels: Record<AIProviderId, string>;
+  configuredProviders: Record<AIProviderId, boolean>;
 }
 
 export interface ProviderSelection {
