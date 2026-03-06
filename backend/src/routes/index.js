@@ -28,6 +28,13 @@ router.get('/config', async (req, res) => {
       // Fallback to static providers already set above
     }
 
+    // Indicate which providers have API keys configured (without exposing the keys)
+    const configuredProviders = {
+      openai: !!config.openai.apiKey,
+      anthropic: !!config.anthropic.apiKey,
+      google: !!config.google.apiKey
+    };
+
     // Only return safe configuration values that can be exposed to the frontend
     res.json({
       success: true,
@@ -39,12 +46,18 @@ router.get('/config', async (req, res) => {
           openai: config.openai.model,
           anthropic: config.anthropic.model,
           google: config.google.model
-        }
+        },
+        configuredProviders
       }
     });
   } catch (error) {
     console.error('[Config Route] Error generating config:', error);
     // Return static config as fallback
+    const configuredProvidersFallback = {
+      openai: !!config.openai.apiKey,
+      anthropic: !!config.anthropic.apiKey,
+      google: !!config.google.apiKey
+    };
     res.json({
       success: true,
       config: {
@@ -55,7 +68,8 @@ router.get('/config', async (req, res) => {
           openai: config.openai.model,
           anthropic: config.anthropic.model,
           google: config.google.model
-        }
+        },
+        configuredProviders: configuredProvidersFallback
       }
     });
   }

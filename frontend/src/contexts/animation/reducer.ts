@@ -12,6 +12,7 @@ export type AnimationAction =
   | { type: 'SET_CHAT_HISTORY'; payload: Message[] | ((prev: Message[]) => Message[]) } // Support functional updates
   | { type: 'SET_AVAILABLE_PROVIDERS'; payload: AIProviderInfo[] }
   | { type: 'SET_DEFAULT_MODELS'; payload: Record<AIProviderId, string> }
+  | { type: 'SET_CONFIGURED_PROVIDERS'; payload: Record<AIProviderId, boolean> }
 
   // Lifecycle: Loading
   | { type: 'LOAD_START'; payload: { id?: string; name?: string } }
@@ -51,6 +52,7 @@ export const initialState: AnimationState = {
     aiModel: '',
     availableProviders: [],
     defaultModels: { openai: '', anthropic: '', google: '' },
+    configuredProviders: { openai: false, anthropic: false, google: false },
   },
 };
 
@@ -98,6 +100,9 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
 
     case 'SET_DEFAULT_MODELS':
       return { ...state, meta: { ...state.meta, defaultModels: action.payload } };
+
+    case 'SET_CONFIGURED_PROVIDERS':
+      return { ...state, meta: { ...state.meta, configuredProviders: action.payload } };
 
     // --- Loading ---
     case 'LOAD_START':
@@ -180,7 +185,7 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       };
 
     case 'RESET_EVERYTHING':
-      return { ...initialState, meta: { ...initialState.meta, availableProviders: state.meta.availableProviders, defaultModels: state.meta.defaultModels } }; // Keep loaded config
+      return { ...initialState, meta: { ...initialState.meta, availableProviders: state.meta.availableProviders, defaultModels: state.meta.defaultModels, configuredProviders: state.meta.configuredProviders } }; // Keep loaded config
 
     default:
       return state;

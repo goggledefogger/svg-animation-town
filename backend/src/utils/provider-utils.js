@@ -65,10 +65,10 @@ function getDefaultModel(provider) {
 function modelSupportsTemperature(provider, modelId) {
   const metadata = getProviderMetadata(provider);
   if (!metadata) {
-    // For OpenAI, auto-detect O1 models that don't support temperature
+    // For OpenAI, auto-detect reasoning models that don't support temperature
     if (provider === 'openai') {
       const id = modelId.toLowerCase();
-      if (id.startsWith('o1') || id.startsWith('gpt-5') || id.startsWith('o3')) {
+      if (id.startsWith('o1') || id.startsWith('o3') || id.startsWith('o4') || id.startsWith('gpt-5')) {
         return false;
       }
     }
@@ -88,10 +88,10 @@ function modelSupportsTemperature(provider, modelId) {
   }
 
   if (!model) {
-    // Model not in registry - for OpenAI, auto-detect O1
+    // Model not in registry - for OpenAI, auto-detect reasoning models
     if (provider === 'openai') {
       const id = modelId.toLowerCase();
-      if (id.startsWith('o1') || id.startsWith('gpt-5') || id.startsWith('o3')) {
+      if (id.startsWith('o1') || id.startsWith('o3') || id.startsWith('o4') || id.startsWith('gpt-5')) {
         return false;
       }
     }

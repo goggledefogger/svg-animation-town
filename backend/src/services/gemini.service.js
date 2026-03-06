@@ -18,9 +18,10 @@ const svgRateLimiter = new RateLimiter({
   maxWaitTime: 30 * 1000 // 30 seconds max wait time
 });
 
-// Known broken/disabled model IDs with a preferred fallback that actually works
+// Known broken/disabled/deprecated model IDs with a preferred fallback
 const BROKEN_GEMINI_MODEL_MAP = {
-  'gemini-2.0-pro-exp-0102': 'gemini-2.5-pro'
+  'gemini-2.0-pro-exp-0102': 'gemini-2.5-pro',
+  'gemini-3-pro-preview': 'gemini-3.1-pro-preview'   // Deprecated March 9, 2026
 };
 
 // Derive a non-experimental candidate if the requested model is an -exp variant

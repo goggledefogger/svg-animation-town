@@ -34,6 +34,9 @@ export function useAnimationLogic(): AnimationContextType {
                 if (data.config) {
                     dispatch({ type: 'SET_AVAILABLE_PROVIDERS', payload: data.config.providers || [] });
                     dispatch({ type: 'SET_DEFAULT_MODELS', payload: data.config.defaults || {} });
+                    if (data.config.configuredProviders) {
+                        dispatch({ type: 'SET_CONFIGURED_PROVIDERS', payload: data.config.configuredProviders });
+                    }
 
                     // Set initial provider if not set
                     if (!state.meta.aiProvider) {
@@ -362,6 +365,7 @@ export function useAnimationLogic(): AnimationContextType {
         aiModel: state.meta.aiModel,
         availableProviders: state.meta.availableProviders,
         defaultModels: state.meta.defaultModels,
+        configuredProviders: state.meta.configuredProviders,
 
         // Setters
         setPlaying: useCallback((val: boolean) => dispatch({ type: 'SET_PLAYING', payload: val }), []),

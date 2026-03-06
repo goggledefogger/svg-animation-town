@@ -40,6 +40,7 @@ export interface AnimationState {
     aiModel: string;
     availableProviders: AIProviderInfo[];
     defaultModels: Record<AIProviderId, string>;
+    configuredProviders: Record<AIProviderId, boolean>;
   };
   error?: string;
 }
@@ -63,6 +64,7 @@ export interface AnimationContextType {
   aiModel: string;
   availableProviders: AIProviderInfo[];
   defaultModels: Record<AIProviderId, string>;
+  configuredProviders: Record<AIProviderId, boolean>;
 
   // State Setters (Legacy compatibility)
   setPlaying: (playing: boolean) => void;

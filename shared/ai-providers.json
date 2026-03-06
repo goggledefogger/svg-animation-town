@@ -2,58 +2,59 @@
   "openai": {
     "id": "openai",
     "displayName": "OpenAI",
-    "description": "GPT-4o and o3 family models tuned for fast SVG-friendly JSON output.",
-    "defaultModel": "gpt-4o-mini",
+    "description": "GPT-4.1 and GPT-5 family models tuned for fast SVG-friendly JSON output.",
+    "defaultModel": "gpt-4.1-mini",
     "models": [
+      {
+        "id": "gpt-4.1-nano",
+        "label": "GPT-4.1 Nano",
+        "useCase": "Fastest and most cost-efficient, good for simple animations."
+      },
+      {
+        "id": "gpt-4.1-mini",
+        "label": "GPT-4.1 Mini",
+        "useCase": "Recommended default, balanced speed and quality."
+      },
+      {
+        "id": "gpt-4.1",
+        "label": "GPT-4.1",
+        "useCase": "Smartest non-reasoning model with 1M context window."
+      },
       {
         "id": "gpt-4o-mini",
         "label": "GPT-4o Mini",
-        "useCase": "Recommended default, balanced for SVG animations."
+        "useCase": "Legacy model, still available for existing workflows."
       },
       {
         "id": "gpt-4o",
         "label": "GPT-4o",
-        "useCase": "More capable GPT-4o for complex animations."
+        "useCase": "Legacy GPT-4o for complex animations."
       },
       {
-        "id": "o3-mini",
-        "label": "O3 Mini",
-        "useCase": "Latest high-intelligence, low-latency reasoning model.",
+        "id": "o4-mini",
+        "label": "O4 Mini",
+        "useCase": "Fast, cost-efficient reasoning model.",
         "supportsTemperature": false,
         "supportsThinking": true
       },
       {
-        "id": "o1-mini",
-        "label": "O1 Mini",
-        "useCase": "Previous generation reasoning model for STEM tasks.",
-        "supportsTemperature": false,
-        "supportsThinking": true
-      },
-      {
-        "id": "o1",
-        "label": "O1",
+        "id": "o3",
+        "label": "O3",
         "useCase": "Advanced reasoning model for complex problem solving.",
         "supportsTemperature": false,
         "supportsThinking": true
       },
       {
-        "id": "gpt-5-pro",
-        "label": "GPT-5 Pro",
-        "useCase": "Next-generation professional reasoning model.",
+        "id": "o3-mini",
+        "label": "O3 Mini",
+        "useCase": "Smaller reasoning model, good balance of speed and capability.",
         "supportsTemperature": false,
         "supportsThinking": true
       },
       {
-        "id": "gpt-5.2-pro",
-        "label": "GPT-5.2 Pro",
-        "useCase": "Latest frontier model with peak intelligence.",
-        "supportsTemperature": false,
-        "supportsThinking": true
-      },
-      {
-        "id": "gpt-5-mini",
-        "label": "GPT-5 Mini",
-        "useCase": "Efficient next-generation model for general tasks.",
+        "id": "gpt-5.2",
+        "label": "GPT-5.2",
+        "useCase": "Latest flagship model with peak intelligence.",
         "supportsTemperature": false,
         "supportsThinking": true
       }
@@ -62,38 +63,45 @@
   "anthropic": {
     "id": "anthropic",
     "displayName": "Anthropic Claude",
-    "description": "Claude 4.x family models excel at structured SVG aware instructions and reasoning.",
+    "description": "Claude 4.x family models excel at structured SVG-aware instructions and reasoning.",
     "defaultModel": "claude-sonnet-4-5-20250929",
     "models": [
       {
+        "id": "claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6",
+        "useCase": "Latest Sonnet with improved coding and reasoning.",
+        "supportsThinking": true
+      },
+      {
+        "id": "claude-opus-4-6",
+        "label": "Claude Opus 4.6",
+        "useCase": "Most capable model, exceptional for complex animations.",
+        "supportsThinking": true
+      },
+      {
         "id": "claude-sonnet-4-5-20250929",
-        "label": "Claude 4.5 Sonnet",
-        "useCase": "State-of-the-art model with highest intelligence and SVG awareness.",
+        "label": "Claude Sonnet 4.5",
+        "useCase": "High-quality Sonnet with extended thinking support.",
         "supportsThinking": true
       },
       {
         "id": "claude-haiku-4-5-20251015",
-        "label": "Claude 4.5 Haiku",
-        "useCase": "Blazing fast model with near-sonnet intelligence.",
+        "label": "Claude Haiku 4.5",
+        "useCase": "Blazing fast with near-Sonnet intelligence.",
         "supportsThinking": true
       },
       {
-        "id": "claude-3-7-sonnet-20250219",
-        "label": "Claude 3.7 Sonnet",
-        "useCase": "High-performance model with extended thinking support.",
+        "id": "claude-sonnet-4-20250514",
+        "label": "Claude Sonnet 4",
+        "useCase": "Solid all-round model for coding and SVG generation.",
         "supportsThinking": true
-      },
-      {
-        "id": "claude-3-5-sonnet-20241022",
-        "label": "Claude 3.5 Sonnet",
-        "useCase": "Legacy 3.5 Sonnet with improved coherence."
       }
     ]
   },
   "google": {
     "id": "google",
     "displayName": "Google Gemini",
-    "description": "Gemini 2.5 and 3.0 models optimized for creative SVG prompting and fast generation.",
+    "description": "Gemini 2.5 and 3.x models optimized for creative SVG prompting and fast generation.",
     "defaultModel": "gemini-2.5-flash",
     "models": [
       {
@@ -115,21 +123,21 @@
         "supportsThinking": true
       },
       {
-        "id": "gemini-3-pro-preview",
-        "label": "Gemini 3 Pro (Preview)",
-        "useCase": "Next-generation model emphasizing enhanced reasoning.",
+        "id": "gemini-3.1-pro-preview",
+        "label": "Gemini 3.1 Pro (Preview)",
+        "useCase": "Latest reasoning-first model for complex agentic workflows.",
         "supportsThinking": true
       },
       {
-        "id": "gemini-3-flash",
-        "label": "Gemini 3 Flash",
-        "useCase": "Next-generation high-speed model.",
+        "id": "gemini-3-flash-preview",
+        "label": "Gemini 3 Flash (Preview)",
+        "useCase": "Fast frontier-class performance at low cost.",
         "supportsThinking": true
       },
       {
         "id": "gemini-2.0-flash",
         "label": "Gemini 2.0 Flash",
-        "useCase": "Legacy 2.0 model with superior speed."
+        "useCase": "Legacy 2.0 model, retiring June 2026."
       }
     ]
   }

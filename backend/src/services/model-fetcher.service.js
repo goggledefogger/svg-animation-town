@@ -86,7 +86,9 @@ function isOpenAIModelSuitable(model) {
     'gpt-4',
     'gpt-3.5',
     'gpt-5',
-    'o1'
+    'o1',
+    'o3',
+    'o4'
   ];
 
   return allowedPrefixes.some(prefix => id.startsWith(prefix));
@@ -236,10 +238,31 @@ async function fetchAnthropicModels() {
       return null;
     }
 
-    const response = await anthropic.models.list();
-    const models = response.data || [];
+    // Anthropic SDK returns paginated results - collect all pages
+    const allModels = [];
+    let hasMore = true;
+    let afterId = undefined;
+    let pageCount = 0;
 
-    const filtered = models
+    while (hasMore) {
+      pageCount++;
+      const listParams = { limit: 100 };
+      if (afterId) {
+        listParams.after_id = afterId;
+      }
+
+      const response = await anthropic.models.list(listParams);
+      const models = response.data || [];
+      allModels.push(...models);
+
+      // Check if there are more pages
+      hasMore = response.has_more === true && models.length > 0;
+      if (hasMore && models.length > 0) {
+        afterId = models[models.length - 1].id;
+      }
+    }
+
+    const filtered = allModels
       .map(model => ({
         id: model.id,
         label: model.display_name || model.id,
@@ -248,7 +271,7 @@ async function fetchAnthropicModels() {
       }))
       .filter(isAnthropicModelSuitable);
 
-    console.log(`[Model Fetcher] Anthropic: ${filtered.length} suitable models out of ${models.length} total`);
+    console.log(`[Model Fetcher] Anthropic: ${filtered.length} suitable models out of ${allModels.length} total (pages: ${pageCount})`);
     return filtered;
   } catch (error) {
     console.error('[Model Fetcher] Error fetching Anthropic models:', error.message);
@@ -280,18 +303,21 @@ function isGoogleModelSuitable(model) {
     return false;
   }
 
-  // Skip known-broken experimental SKUs that 404 for generateContent
+  // Skip known-broken or deprecated model IDs
   const brokenIds = new Set([
-    'gemini-2.5-pro-exp-03-25'
+    'gemini-2.5-pro-exp-03-25',
+    'gemini-3-pro-preview'         // Deprecated March 9, 2026
   ]);
   if (brokenIds.has(id)) {
     return false;
   }
 
-  // Exclude embedding models explicitly (even if they somehow pass above checks)
+  // Exclude non-text-generation models
   if (id.includes('embedding') ||
       id.includes('embed-') ||
-      id.includes('text-embedding')) {
+      id.includes('text-embedding') ||
+      id.includes('-image') ||
+      id.includes('imagen')) {
     return false;
   }
 
