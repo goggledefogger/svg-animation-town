@@ -62,6 +62,7 @@
         "id": "gpt-5.3-codex",
         "label": "GPT-5.3 Codex",
         "useCase": "Advanced coding model.",
+        "supportsTemperature": false,
         "supportsThinking": true,
         "showInUi": true
       },
@@ -69,6 +70,7 @@
         "id": "gpt-5.4",
         "label": "GPT-5.4",
         "useCase": "Next-generation flagship model with top-tier intelligence.",
+        "supportsTemperature": false,
         "supportsThinking": true,
         "showInUi": true
       }
