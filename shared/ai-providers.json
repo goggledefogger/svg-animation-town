@@ -85,8 +85,8 @@
         "supportsThinking": true
       },
       {
-        "id": "claude-haiku-4-5-20251015",
-        "label": "Claude Haiku 4.5",
+        "id": "claude-3-5-haiku-20241022",
+        "label": "Claude Haiku 3.5",
         "useCase": "Blazing fast with near-Sonnet intelligence.",
         "supportsThinking": true
       },
