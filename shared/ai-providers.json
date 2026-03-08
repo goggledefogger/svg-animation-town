@@ -57,6 +57,20 @@
         "useCase": "Latest flagship model with peak intelligence.",
         "supportsTemperature": false,
         "supportsThinking": true
+      },
+      {
+        "id": "gpt-5.3-codex",
+        "label": "GPT-5.3 Codex",
+        "useCase": "Advanced coding model.",
+        "supportsThinking": true,
+        "showInUi": true
+      },
+      {
+        "id": "gpt-5.4",
+        "label": "GPT-5.4",
+        "useCase": "Next-generation flagship model with top-tier intelligence.",
+        "supportsThinking": true,
+        "showInUi": true
       }
     ]
   },
