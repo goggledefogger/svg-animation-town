@@ -114,6 +114,7 @@
         "id": "claude-3-haiku-20240307",
         "label": "Claude 3 Haiku",
         "useCase": "Legacy fast model, optimized for speed.",
+        "maxOutputTokens": 4096,
         "supportsThinking": false,
         "showInUi": true
       }

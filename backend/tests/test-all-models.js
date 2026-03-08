@@ -30,6 +30,8 @@ const BASE_URL = args.local
   : (args['base-url'] || 'http://34.82.192.210/api');
 const FILTER_PROVIDER = args.provider || null;
 const TIMEOUT_MS = parseInt(args.timeout, 10) || 120_000;
+const CONCURRENCY = parseInt(args.concurrency, 10) || 3;
+const PARALLEL = !!args.parallel;
 const PROMPT = 'Create a simple animated fire with flickering orange and red flames';
 
 // --- Colors ---
@@ -66,9 +68,18 @@ async function checkConfig() {
   }
 }
 
-async function testModel(providerName, model) {
+async function testModel(providerName, model, testTemperature = null) {
   const label = `${providerName}/${model.id}`;
   const startTime = Date.now();
+  const body = {
+    prompt: PROMPT,
+    provider: providerName,
+    model: model.id,
+  };
+
+  if (testTemperature !== null) {
+    body.temperature = testTemperature;
+  }
 
   try {
     const res = await fetchWithTimeout(
@@ -76,11 +87,7 @@ async function testModel(providerName, model) {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: PROMPT,
-          provider: providerName,
-          model: model.id,
-        }),
+        body: JSON.stringify(body),
       },
       TIMEOUT_MS
     );
@@ -91,7 +98,13 @@ async function testModel(providerName, model) {
     if (res.ok && data.success && data.svg) {
       const svgLen = data.svg.length;
       const hasAnimation = /<animate|<animateTransform|<animateMotion|@keyframes|animation:/i.test(data.svg);
+      const isFallback = data.message?.includes('Simple animated SVG') || data.svg.includes('Animation:');
       const resolvedModel = data.metadata?.model || model.id;
+
+      if (isFallback) {
+        console.log(`  ${c.yellow}⚠${c.reset} ${c.bold}${label}${c.reset} ${c.dim}(${elapsed}s)${c.reset} — ${c.yellow}Returned Fallback SVG${c.reset}`);
+        return { status: 'fallback', provider: providerName, model: model.id, elapsed, error: 'Fallback returned' };
+      }
 
       console.log(
         `  ${c.green}✓${c.reset} ${c.bold}${label}${c.reset}` +
@@ -159,12 +172,36 @@ async function main() {
       continue;
     }
 
-    for (const model of modelsToTest) {
-      const result = await testModel(providerName, model);
-      results.push(result);
+    const testModelWithVerify = async (model) => {
+      // Test 1: Basic generation
+      let result = await testModel(providerName, model);
+      
+      // Test 2: Verify temperature support
+      const supportsTemp = model.supportsTemperature !== false;
+      if (supportsTemp && result.status === 'pass') {
+        const tempResult = await testModel(providerName, model, 0.8);
+        if (tempResult.status !== 'pass') {
+          console.log(`  ${c.red}✗${c.reset} ${c.bold}${model.id}${c.reset} failed temperature test!`);
+          result.error = (result.error ? result.error + ' | ' : '') + 'Temperature Error: ' + tempResult.error;
+          result.status = 'fail';
+        }
+      }
+      return result;
+    };
 
-      // Small delay between requests to be gentle on rate limits
-      await new Promise(r => setTimeout(r, 2000));
+    if (PARALLEL) {
+      console.log(`${c.dim}  Testing in parallel (concurrency: ${CONCURRENCY})${c.reset}`);
+      for (let i = 0; i < modelsToTest.length; i += CONCURRENCY) {
+        const chunk = modelsToTest.slice(i, i + CONCURRENCY);
+        const chunkResults = await Promise.all(chunk.map(m => testModelWithVerify(m)));
+        results.push(...chunkResults);
+      }
+    } else {
+      for (const model of modelsToTest) {
+        const result = await testModelWithVerify(model);
+        results.push(result);
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
     console.log();
   }
