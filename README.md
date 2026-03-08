@@ -88,7 +88,7 @@ The AI assistant becomes your creative partner - understanding context, making i
 - Create, modify and animate SVG elements through natural language
 - Ask for specific animations, effects, or timing adjustments
 - **Debounced Auto-Save**: Clip properties (prompt, duration, name) are automatically persisted with a 1000ms debounce.
-- Get intelligent responses from OpenAI (GPT-4o, GPT-5), Anthropic (Claude 3.7/4.5), and Google (Gemini 2.5/3.0)
+- Get intelligent responses from OpenAI (GPT-4o, GPT-5.x), Anthropic (Claude 3.7/4.5/4.6), and Google (Gemini 2.5/3.0/3.1)
 
 ### SVG Animation Capabilities
 - Create and manage basic shapes (rectangles, circles, paths, lines)
@@ -149,14 +149,14 @@ The AI assistant becomes your creative partner - understanding context, making i
    VITE_REQUEST_TIMEOUT_MS=300000
    VITE_SCENE_GENERATION_TIMEOUT_MS=300000
    ```
-   The timeout settings are particularly important for movie generation, where multiple scenes need to be created:
+   The timeout settings are particularly important for movie generation and reasoning-heavy models (e.g. GPT-5, Gemini 3 Pro), where generations can take up to 3 minutes:
    - `VITE_REQUEST_TIMEOUT_MS`: Controls the overall API request timeout (default: 5 minutes)
    - `VITE_SCENE_GENERATION_TIMEOUT_MS`: Controls the timeout for individual scene generation (default: 5 minutes)
 4. Start the frontend development server: `npm start`
 5. Open your browser to `http://localhost:3000`
 
 ## Basic Usage
-1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-4o/GPT-5 family, Anthropic Claude 3.7/4.5, or Google Gemini 2.5/3.0 tiers)
+1. Choose an AI provider and model using the selector above the chat (OpenAI GPT-4o/5.x family, Anthropic Claude 3.7/4.5/4.6, or Google Gemini 2.5/3.0/3.1 tiers)
 2. Type your animation request in the chat interface (e.g., "Create a night sky with stars that twinkle randomly")
 3. Review the AI's implementation in the preview window
 4. Make additional requests to refine or expand your animation (e.g., "Make the stars blue instead of white")
@@ -317,6 +317,24 @@ npm outdated                         # Check for available major version updates
 ```
 
 Note: Major version updates may include breaking changes. Review migration guides before upgrading.
+
+### Automated Testing
+
+The project includes a robust parallel test suite for AI providers:
+
+```bash
+cd backend
+# Test only UI models
+node tests/test-all-models.js
+
+# Test ALL models in the registry in parallel with a 300s timeout
+node tests/test-all-models.js --all --parallel --concurrency=5 --timeout=300000
+```
+
+The test suite validates:
+- **Generation Quality**: Ensures valid, animated SVG output.
+- **Parameter Support**: Verifies temperature support and handles reasoning model limitations.
+- **Fallback Detection**: Flags models that rely on baseline fallbacks due to API failures.
 
 ## License
 
