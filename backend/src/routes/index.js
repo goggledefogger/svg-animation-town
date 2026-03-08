@@ -40,7 +40,10 @@ router.get('/config', async (req, res) => {
       success: true,
       config: {
         aiProvider: config.aiProvider,
-        providers: providers,
+        providers: providers.map(p => ({
+          ...p,
+          models: p.models.filter(m => m.showInUi)
+        })),
         defaults: config.defaults,
         currentModels: {
           openai: config.openai.model,
@@ -62,7 +65,10 @@ router.get('/config', async (req, res) => {
       success: true,
       config: {
         aiProvider: config.aiProvider,
-        providers: config.publicProviders,
+        providers: config.publicProviders.map(p => ({
+          ...p,
+          models: p.models.filter(m => m.showInUi)
+        })),
         defaults: config.defaults,
         currentModels: {
           openai: config.openai.model,

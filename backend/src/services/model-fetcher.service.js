@@ -511,6 +511,7 @@ function mergeWithMetadata(provider, apiModels) {
       useCase: meta?.useCase,
       supportsTemperature: supportsTemperature,
       maxOutputTokens: meta?.maxOutputTokens,
+      showInUi: meta?.showInUi || false,
       // Preserve date fields for sorting (we'll remove them before returning to frontend)
       created: apiModel.created,
       createdAt: apiModel.createdAt,
@@ -625,7 +626,8 @@ async function getModelsForProvider(provider, forceRefresh = false) {
         supportsTemperature: typeof model.supportsTemperature === 'boolean'
           ? model.supportsTemperature
           : undefined,
-        maxOutputTokens: model.maxOutputTokens
+        maxOutputTokens: model.maxOutputTokens,
+        showInUi: model.showInUi || false
       }));
 
       // Sort fallback models by date (extracted from ID if available)
@@ -695,7 +697,8 @@ async function getPublicProviderInfoWithDynamicModels(forceRefresh = false) {
         supportsTemperature: typeof model.supportsTemperature === 'boolean'
           ? model.supportsTemperature
           : undefined,
-        maxOutputTokens: model.maxOutputTokens
+        maxOutputTokens: model.maxOutputTokens,
+        showInUi: model.showInUi || false
       }))
     };
   });

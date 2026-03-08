@@ -63,7 +63,17 @@ cd "$FRONTEND_DIR"
 npm install --include=dev
 log "Frontend dependencies updated."
 
-# 4. Restart Services
+# 4. Configure Nginx timeouts for long-running reasoning models
+log "Configuring Nginx timeouts..."
+if sudo grep -q "proxy_pass http://127.0.0.1:3001;" /etc/nginx/sites-available/default && ! sudo grep -q "proxy_read_timeout 300s;" /etc/nginx/sites-available/default; then
+    sudo sed -i '/proxy_pass http:\/\/127.0.0.1:3001;/a \        proxy_read_timeout 300s;\n        proxy_connect_timeout 300s;\n        proxy_send_timeout 300s;' /etc/nginx/sites-available/default
+    sudo nginx -t && sudo systemctl reload nginx
+    log "Nginx timeouts updated successfully."
+else
+    log "Nginx timeouts already configured or default file not found."
+fi
+
+# 5. Restart Services
 log "Restarting systemd services..."
 # Using sudo - user will be prompted for password if not NOPASSWD configured
 sudo systemctl restart svg-backend
@@ -71,7 +81,7 @@ sudo systemctl restart svg-frontend
 
 log "Services restarted."
 
-# 5. Verification
+# 6. Verification
 log "Verifying services status..."
 sleep 2
 sudo systemctl status svg-backend --no-pager

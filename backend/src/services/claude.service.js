@@ -272,7 +272,15 @@ const processSvgWithClaude = async (prompt, currentSvg = '', isUpdate = false, o
       return fallback.svg;
     }
 
-    throw new ServiceUnavailableError(`Claude API Error: ${error.message}`);
+    // Try to extract the true error message
+    let errorMessage = error.message;
+    if (error.error && error.error.error && error.error.error.message) {
+        errorMessage = error.error.error.message;
+    } else if (error.error && error.error.message) {
+        errorMessage = error.error.message;
+    }
+    
+    throw new ServiceUnavailableError(`Claude API Error: ${errorMessage}`);
   }
 };
 

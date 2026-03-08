@@ -11,24 +11,22 @@
         "useCase": "Fastest and most cost-efficient, good for simple animations."
       },
       {
-        "id": "gpt-4.1-mini",
-        "label": "GPT-4.1 Mini",
-        "useCase": "Recommended default, balanced speed and quality."
-      },
-      {
         "id": "gpt-4.1",
         "label": "GPT-4.1",
-        "useCase": "Smartest non-reasoning model with 1M context window."
+        "useCase": "Smartest non-reasoning model with 1M context window.",
+        "showInUi": true
       },
       {
         "id": "gpt-4o-mini",
         "label": "GPT-4o Mini",
-        "useCase": "Legacy model, still available for existing workflows."
+        "useCase": "Legacy model, still available for existing workflows.",
+        "showInUi": true
       },
       {
         "id": "gpt-4o",
         "label": "GPT-4o",
-        "useCase": "Legacy GPT-4o for complex animations."
+        "useCase": "Legacy GPT-4o for complex animations.",
+        "showInUi": true
       },
       {
         "id": "o4-mini",
@@ -38,18 +36,20 @@
         "supportsThinking": true
       },
       {
-        "id": "o3",
-        "label": "O3",
+        "id": "o1",
+        "label": "O1",
         "useCase": "Advanced reasoning model for complex problem solving.",
         "supportsTemperature": false,
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "o3-mini",
         "label": "O3 Mini",
         "useCase": "Smaller reasoning model, good balance of speed and capability.",
         "supportsTemperature": false,
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "gpt-5.2",
@@ -67,10 +67,11 @@
     "defaultModel": "claude-sonnet-4-5-20250929",
     "models": [
       {
-        "id": "claude-sonnet-4-6",
-        "label": "Claude Sonnet 4.6",
+        "id": "claude-3-7-sonnet-20250219",
+        "label": "Claude 3.7 Sonnet",
         "useCase": "Latest Sonnet with improved coding and reasoning.",
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "claude-opus-4-6",
@@ -79,22 +80,32 @@
         "supportsThinking": true
       },
       {
-        "id": "claude-sonnet-4-5-20250929",
-        "label": "Claude Sonnet 4.5",
+        "id": "claude-3-5-sonnet-20241022",
+        "label": "Claude 3.5 Sonnet",
         "useCase": "High-quality Sonnet with extended thinking support.",
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "claude-3-5-haiku-20241022",
-        "label": "Claude Haiku 3.5",
+        "label": "Claude 3.5 Haiku",
         "useCase": "Blazing fast with near-Sonnet intelligence.",
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
-        "id": "claude-sonnet-4-20250514",
-        "label": "Claude Sonnet 4",
-        "useCase": "Solid all-round model for coding and SVG generation.",
-        "supportsThinking": true
+        "id": "claude-3-opus-20240229",
+        "label": "Claude 3 Opus",
+        "useCase": "Legacy model with deep intelligence and stylistic nuance.",
+        "supportsThinking": false,
+        "showInUi": true
+      },
+      {
+        "id": "claude-3-haiku-20240307",
+        "label": "Claude 3 Haiku",
+        "useCase": "Legacy fast model, strictly optimized for speed.",
+        "supportsThinking": false,
+        "showInUi": true
       }
     ]
   },
@@ -108,19 +119,22 @@
         "id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
         "useCase": "Recommended default with hybrid reasoning and 1M context window.",
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
         "useCase": "Advanced reasoning model for complex multimodal tasks.",
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "gemini-2.5-flash-lite",
         "label": "Gemini 2.5 Flash-Lite",
         "useCase": "Optimized for cost-efficiency and high throughput.",
-        "supportsThinking": true
+        "supportsThinking": true,
+        "showInUi": true
       },
       {
         "id": "gemini-3.1-pro-preview",
@@ -129,15 +143,16 @@
         "supportsThinking": true
       },
       {
-        "id": "gemini-3-flash-preview",
-        "label": "Gemini 3 Flash (Preview)",
-        "useCase": "Fast frontier-class performance at low cost.",
-        "supportsThinking": true
-      },
-      {
         "id": "gemini-2.0-flash",
         "label": "Gemini 2.0 Flash",
-        "useCase": "Legacy 2.0 model, retiring June 2026."
+        "useCase": "Legacy 2.0 model, highly reliable.",
+        "showInUi": true
+      },
+      {
+        "id": "gemini-2.0-flash-lite",
+        "label": "Gemini 2.0 Flash-Lite",
+        "useCase": "Legacy cost-optimized model.",
+        "showInUi": true
       }
     ]
   }

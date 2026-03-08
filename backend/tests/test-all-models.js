@@ -138,20 +138,28 @@ async function main() {
   const results = [];
   const skipped = [];
 
+  const TEST_ALL = !!args.all;
+
   // Use curated models from the static ai-providers.json
   for (const [providerName, providerData] of Object.entries(providers)) {
     if (FILTER_PROVIDER && providerName !== FILTER_PROVIDER) continue;
 
     const hasKey = configured[providerName];
-    console.log(`${c.cyan}${c.bold}─── ${providerData.displayName} (${providerData.models.length} models) ───${c.reset}`);
+    
+    // Filter models based on the --all flag
+    const modelsToTest = TEST_ALL 
+      ? providerData.models 
+      : providerData.models.filter(m => m.showInUi);
+
+    console.log(`${c.cyan}${c.bold}─── ${providerData.displayName} (${modelsToTest.length} models) ───${c.reset}`);
 
     if (!hasKey) {
       console.log(`  ${c.yellow}⚠ Skipping — no API key configured${c.reset}\n`);
-      providerData.models.forEach(m => skipped.push({ provider: providerName, model: m.id }));
+      modelsToTest.forEach(m => skipped.push({ provider: providerName, model: m.id }));
       continue;
     }
 
-    for (const model of providerData.models) {
+    for (const model of modelsToTest) {
       const result = await testModel(providerName, model);
       results.push(result);
 
