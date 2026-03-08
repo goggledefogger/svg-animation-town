@@ -67,9 +67,9 @@
     "defaultModel": "claude-sonnet-4-5-20250929",
     "models": [
       {
-        "id": "claude-3-7-sonnet-20250219",
-        "label": "Claude 3.7 Sonnet",
-        "useCase": "Latest Sonnet with improved coding and reasoning.",
+        "id": "claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6",
+        "useCase": "Latest and greatest Sonnet with improved coding and reasoning.",
         "supportsThinking": true,
         "showInUi": true
       },
@@ -77,33 +77,27 @@
         "id": "claude-opus-4-6",
         "label": "Claude Opus 4.6",
         "useCase": "Most capable model, exceptional for complex animations.",
-        "supportsThinking": true
-      },
-      {
-        "id": "claude-3-5-sonnet-20241022",
-        "label": "Claude 3.5 Sonnet",
-        "useCase": "High-quality Sonnet with extended thinking support.",
         "supportsThinking": true,
         "showInUi": true
       },
       {
-        "id": "claude-3-5-haiku-20241022",
-        "label": "Claude 3.5 Haiku",
-        "useCase": "Blazing fast with near-Sonnet intelligence.",
+        "id": "claude-sonnet-4-5-20250929",
+        "label": "Claude Sonnet 4.5",
+        "useCase": "Highly capable Sonnet model with excellent reasoning.",
         "supportsThinking": true,
         "showInUi": true
       },
       {
-        "id": "claude-3-opus-20240229",
-        "label": "Claude 3 Opus",
-        "useCase": "Legacy model with deep intelligence and stylistic nuance.",
-        "supportsThinking": false,
+        "id": "claude-haiku-4-5-20251001",
+        "label": "Claude Haiku 4.5",
+        "useCase": "Blazing fast with high intelligence.",
+        "supportsThinking": true,
         "showInUi": true
       },
       {
         "id": "claude-3-haiku-20240307",
         "label": "Claude 3 Haiku",
-        "useCase": "Legacy fast model, strictly optimized for speed.",
+        "useCase": "Legacy fast model, optimized for speed.",
         "supportsThinking": false,
         "showInUi": true
       }
@@ -116,42 +110,38 @@
     "defaultModel": "gemini-2.5-flash",
     "models": [
       {
-        "id": "gemini-2.5-flash",
-        "label": "Gemini 2.5 Flash",
-        "useCase": "Recommended default with hybrid reasoning and 1M context window.",
+        "id": "gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash-Lite",
+        "useCase": "Optimized for cost-efficiency and high throughput.",
+        "supportsThinking": false,
+        "showInUi": true
+      },
+      {
+        "id": "gemini-3-flash-preview",
+        "label": "Gemini 3 Flash",
+        "useCase": "Recommended default with fast reasoning and long context.",
         "supportsThinking": true,
         "showInUi": true
       },
       {
-        "id": "gemini-2.5-pro",
-        "label": "Gemini 2.5 Pro",
+        "id": "gemini-3-pro-preview",
+        "label": "Gemini 3 Pro",
         "useCase": "Advanced reasoning model for complex multimodal tasks.",
         "supportsThinking": true,
         "showInUi": true
       },
       {
-        "id": "gemini-2.5-flash-lite",
-        "label": "Gemini 2.5 Flash-Lite",
-        "useCase": "Optimized for cost-efficiency and high throughput.",
+        "id": "gemini-3.1-flash-lite-preview",
+        "label": "Gemini 3.1 Flashlight Preview",
+        "useCase": "Bleeding edge fast iteration format model.",
         "supportsThinking": true,
         "showInUi": true
       },
       {
         "id": "gemini-3.1-pro-preview",
-        "label": "Gemini 3.1 Pro (Preview)",
+        "label": "Gemini 3.1 Pro Preview",
         "useCase": "Latest reasoning-first model for complex agentic workflows.",
-        "supportsThinking": true
-      },
-      {
-        "id": "gemini-2.0-flash",
-        "label": "Gemini 2.0 Flash",
-        "useCase": "Legacy 2.0 model, highly reliable.",
-        "showInUi": true
-      },
-      {
-        "id": "gemini-2.0-flash-lite",
-        "label": "Gemini 2.0 Flash-Lite",
-        "useCase": "Legacy cost-optimized model.",
+        "supportsThinking": true,
         "showInUi": true
       }
     ]

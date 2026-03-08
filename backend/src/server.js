@@ -45,9 +45,13 @@ async function startServer() {
     await storageService.init();
 
     // Start the server
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Gotham Animation Studio backend running on port ${PORT} in ${config.server.nodeEnv} mode`);
     });
+
+    // Fix Node's 60s socket timeout default for long-running reasoning models
+    server.keepAliveTimeout = 300000;
+    server.headersTimeout = 305000; // should be > keepAliveTimeout
   } catch (error) {
     console.error('Failed to initialize server:', error);
     process.exit(1);

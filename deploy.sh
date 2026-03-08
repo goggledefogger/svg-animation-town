@@ -65,8 +65,8 @@ log "Frontend dependencies updated."
 
 # 4. Configure Nginx timeouts for long-running reasoning models
 log "Configuring Nginx timeouts..."
-if sudo grep -q "proxy_pass http://127.0.0.1:3001;" /etc/nginx/sites-available/default && ! sudo grep -q "proxy_read_timeout 300s;" /etc/nginx/sites-available/default; then
-    sudo sed -i '/proxy_pass http:\/\/127.0.0.1:3001;/a \        proxy_read_timeout 300s;\n        proxy_connect_timeout 300s;\n        proxy_send_timeout 300s;' /etc/nginx/sites-available/default
+if sudo grep -q "proxy_pass http://localhost:5000/api/;" /etc/nginx/sites-available/default && ! sudo grep -q "proxy_read_timeout 300s;" /etc/nginx/sites-available/default; then
+    sudo sed -i '/proxy_pass http:\/\/localhost:5000\/api\/;/a \        proxy_read_timeout 300s;\n        proxy_connect_timeout 300s;\n        proxy_send_timeout 300s;' /etc/nginx/sites-available/default
     sudo nginx -t && sudo systemctl reload nginx
     log "Nginx timeouts updated successfully."
 else
