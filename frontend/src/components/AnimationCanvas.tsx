@@ -7,6 +7,7 @@ import EmptyState from './EmptyState';
 import { AnimationApi, MovieStorageApi } from '../services/api';
 import useAnimationLoader, { AnimationRegistryHelpers } from '../hooks/useAnimationLoader';
 import { resetAnimations, getPlaybackState, controlAnimations } from '../utils/animationUtils';
+import { sanitizeSvg } from '../utils/sanitizeUtils';
 
 // Declare a module augmentation to add our custom property to Window
 declare global {
@@ -503,9 +504,13 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
       if (finalSvgContent && svgContainerRef.current) {
         // Only update if different from current content
         const currentContent = svgContainerRef.current.innerHTML;
-        if (currentContent !== finalSvgContent) {
+
+        // Sanitize the content before comparing and rendering
+        const sanitizedContent = sanitizeSvg(finalSvgContent);
+
+        if (currentContent !== sanitizedContent) {
           // Set the HTML directly
-          svgContainerRef.current.innerHTML = finalSvgContent;
+          svgContainerRef.current.innerHTML = sanitizedContent;
           // Find the SVG element and set it up
           const newSvgElement = svgContainerRef.current.querySelector('svg');
           if (newSvgElement) {
@@ -555,8 +560,8 @@ const AnimationCanvas: React.FC<AnimationCanvasProps> = ({
           if (svgContainerRef.current) {
             // Double check inside timeout
             if (lastRenderedContentRef.current !== finalSvgContent) {
-
-              svgContainerRef.current.innerHTML = finalSvgContent;
+              const sanitizedContent = sanitizeSvg(finalSvgContent);
+              svgContainerRef.current.innerHTML = sanitizedContent;
               lastRenderedContentRef.current = finalSvgContent; // Update tracker
 
               // Find the SVG element in the container

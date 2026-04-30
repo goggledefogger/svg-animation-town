@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { resetAnimations, controlAnimations } from '../utils/animationUtils';
+import { sanitizeSvg } from '../utils/sanitizeUtils';
 
 interface SvgThumbnailProps {
   svgContent: string;
@@ -21,9 +22,10 @@ const SvgThumbnail: React.FC<SvgThumbnailProps> = ({
   useEffect(() => {
     if (!containerRef.current || !svgContent) return;
 
-    // Parse the SVG content to extract and modify
+    // Sanitize and parse the SVG content to extract and modify
+    const sanitizedContent = sanitizeSvg(svgContent);
     const div = document.createElement('div');
-    div.innerHTML = svgContent;
+    div.innerHTML = sanitizedContent;
     const svgElement = div.querySelector('svg');
     if (!svgElement) {
       return;
