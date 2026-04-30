@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { sanitizeSvg } from '../utils/sanitizeUtils';
 
 interface SvgContainerProps {
   svgContent: string | null;
@@ -24,9 +25,10 @@ const SvgContainer: React.FC<SvgContainerProps> = ({
   useEffect(() => {
     if (!svgContent || !svgRef.current) return;
 
-    // Create a container for the SVG content
+    // Sanitize and create a container for the SVG content
+    const sanitizedContent = sanitizeSvg(svgContent.trim());
     const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = svgContent.trim();
+    tempDiv.innerHTML = sanitizedContent;
 
     // Get the SVG element
     const svgElement = tempDiv.querySelector('svg');
