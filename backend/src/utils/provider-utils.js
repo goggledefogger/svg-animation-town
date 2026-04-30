@@ -3,6 +3,18 @@ const path = require('path');
 // Load the shared AI provider registry so frontend and backend stay in sync
 const providerRegistry = require(path.join(__dirname, '../../../shared/ai-providers.json'));
 
+// Pre-compute maps for O(1) model lookups
+const modelMaps = {};
+Object.entries(providerRegistry).forEach(([providerId, metadata]) => {
+  const map = new Map();
+  if (metadata.models) {
+    metadata.models.forEach(model => {
+      map.set(model.id, model);
+    });
+  }
+  modelMaps[providerId] = map;
+});
+
 // Map legacy or shorthand values to canonical provider IDs
 const PROVIDER_ALIASES = {
   openai: 'openai',
@@ -63,10 +75,12 @@ function getDefaultModel(provider) {
  * @returns {boolean}
  */
 function modelSupportsTemperature(provider, modelId) {
-  const metadata = getProviderMetadata(provider);
+  const normalizedProvider = normalizeProvider(provider);
+  const metadata = normalizedProvider ? providerRegistry[normalizedProvider] : null;
+
   if (!metadata) {
     // For OpenAI, auto-detect reasoning models that don't support temperature
-    if (provider === 'openai') {
+    if (normalizedProvider === 'openai') {
       const id = modelId.toLowerCase();
       if (id.startsWith('o1') || id.startsWith('o3') || id.startsWith('o4') || id.startsWith('gpt-5')) {
         return false;
@@ -75,8 +89,8 @@ function modelSupportsTemperature(provider, modelId) {
     return true;
   }
 
-  // Try exact match first
-  let model = metadata.models?.find(entry => entry.id === modelId);
+  // Try exact match first using Map
+  let model = modelMaps[normalizedProvider]?.get(modelId);
 
   // If no exact match, try to find a model whose ID is a prefix of the requested model
   // This handles versioned models like "gpt-4o-2024-08-06" matching "gpt-4o"
@@ -89,7 +103,7 @@ function modelSupportsTemperature(provider, modelId) {
 
   if (!model) {
     // Model not in registry - for OpenAI, auto-detect reasoning models
-    if (provider === 'openai') {
+    if (normalizedProvider === 'openai') {
       const id = modelId.toLowerCase();
       if (id.startsWith('o1') || id.startsWith('o3') || id.startsWith('o4') || id.startsWith('gpt-5')) {
         return false;
@@ -116,13 +130,14 @@ function modelSupportsTemperature(provider, modelId) {
  * @returns {number|null}
  */
 function getMaxOutputTokens(provider, modelId) {
-  const metadata = getProviderMetadata(provider);
+  const normalizedProvider = normalizeProvider(provider);
+  const metadata = normalizedProvider ? providerRegistry[normalizedProvider] : null;
   if (!metadata || !metadata.models) {
     return null;
   }
 
-  // First try exact match
-  let model = metadata.models.find(entry => entry.id === modelId);
+  // First try exact match using Map
+  let model = modelMaps[normalizedProvider]?.get(modelId);
 
   // If no exact match, try to find a model whose ID is a prefix of the requested model
   // This handles cases like "claude-3-5-haiku-20241022" matching "claude-3-5-haiku-latest"
@@ -186,14 +201,16 @@ function getPublicProviderInfo() {
  * @returns {boolean}
  */
 function modelSupportsThinking(provider, modelId) {
-  const metadata = getProviderMetadata(provider);
-  if (!metadata) return false;
+  const normalizedProvider = normalizeProvider(provider);
+  const modelMap = normalizedProvider ? modelMaps[normalizedProvider] : null;
+  if (!modelMap) return false;
 
-  // Try exact match first
-  let model = metadata.models?.find(entry => entry.id === modelId);
+  // Try exact match first using Map
+  let model = modelMap.get(modelId);
 
   // If no exact match, try prefix match
   if (!model) {
+    const metadata = providerRegistry[normalizedProvider];
     model = metadata.models?.find(entry => {
       const baseId = entry.id.replace('-latest', '');
       return modelId.startsWith(baseId);
