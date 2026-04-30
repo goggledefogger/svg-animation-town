@@ -5,7 +5,7 @@ import { AnimationContextType, Message, ChatData } from '../../types/animation';
 import { AnimationApi, AnimationStorageApi, AnimationGenerateResult } from '../../services/api';
 import { AnimationRegistryHelpers } from '../../hooks/useAnimationLoader';
 import { useViewerPreferences } from '../ViewerPreferencesContext';
-import { AIProviderId, AIProviderInfo } from '@/types/ai';
+import { AIProviderId } from '@/types/ai';
 import { normalizeProviderId, buildProviderSelection } from '@/utils/providerUtils';
 import { exportAnimation as exportAnimationUtil, canExportAsSvg as canExportAsSvgUtil } from '../../utils/exportUtils';
 import { isMobileDevice, isFreshPageLoad } from '../../utils/deviceUtils';
