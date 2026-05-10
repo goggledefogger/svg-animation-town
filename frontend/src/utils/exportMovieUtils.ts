@@ -408,10 +408,9 @@ function prefixIds(element: Element, prefix: string): void {
     // Update style attribute
     const style = el.getAttribute('style');
     if (style && style.includes('url(#')) {
-      let newStyle = style;
-      idMap.forEach((newId, originalId) => {
-        const pattern = new RegExp(`url\\(#${originalId}\\)`, 'g');
-        newStyle = newStyle.replace(pattern, `url(#${newId})`);
+      const newStyle = style.replace(/url\(#([^)]+)\)/g, (match, id) => {
+        const newId = idMap.get(id);
+        return newId ? `url(#${newId})` : match;
       });
       el.setAttribute('style', newStyle);
     }
@@ -420,10 +419,9 @@ function prefixIds(element: Element, prefix: string): void {
     ['fill', 'stroke', 'clip-path', 'mask', 'filter'].forEach(attr => {
       const value = el.getAttribute(attr);
       if (value && value.includes('url(#')) {
-        let newValue = value;
-        idMap.forEach((newId, originalId) => {
-          const pattern = new RegExp(`url\\(#${originalId}\\)`, 'g');
-          newValue = newValue.replace(pattern, `url(#${newId})`);
+        const newValue = value.replace(/url\(#([^)]+)\)/g, (match, id) => {
+          const newId = idMap.get(id);
+          return newId ? `url(#${newId})` : match;
         });
         el.setAttribute(attr, newValue);
       }
@@ -434,11 +432,9 @@ function prefixIds(element: Element, prefix: string): void {
       ['begin', 'end'].forEach(attr => {
         const value = el.getAttribute(attr);
         if (value && value.includes('.')) {
-          let newValue = value;
-          idMap.forEach((newId, originalId) => {
-            // Replace patterns like "originalId.begin" or "originalId.end+2s"
-            const pattern = new RegExp(`${originalId}\\.`, 'g');
-            newValue = newValue.replace(pattern, `${newId}.`);
+          const newValue = value.replace(/([^;.\s]+)\./g, (match, id) => {
+            const newId = idMap.get(id);
+            return newId ? `${newId}.` : match;
           });
           el.setAttribute(attr, newValue);
         }
