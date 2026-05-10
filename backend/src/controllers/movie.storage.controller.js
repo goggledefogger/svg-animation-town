@@ -21,14 +21,6 @@ const movieStorageController = {
 
       const movieId = await storageService.saveMovie(storyboard);
 
-      // Debug log for playback speed persistence
-      if (storyboard.clips && storyboard.clips.length > 0) {
-        const clipsWithSpeed = storyboard.clips.filter(c => c.playbackSpeed && c.playbackSpeed !== 1);
-        if (clipsWithSpeed.length > 0) {
-           console.log(`[MOVIE_CONTROLLER] Saving ${clipsWithSpeed.length} clips with custom playback speed. Sample: ${clipsWithSpeed[0].playbackSpeed}x`);
-        }
-      }
-
       // Fetch the saved movie to return it in the response
       const savedMovie = await storageService.getMovie(movieId);
 
@@ -74,23 +66,6 @@ const movieStorageController = {
         });
       } else {
         console.warn(`[MOVIE_LOADING_WARNING] Movie ${id} has no clips or clips is not an array`);
-      }
-
-      // Log generation status information for debugging
-      if (movie.generationStatus) {
-        console.log(`[MOVIE_LOADING] Movie ${id} generation status:`, {
-          inProgress: movie.generationStatus.inProgress,
-          completedScenes: movie.generationStatus.completedScenes,
-          totalScenes: movie.generationStatus.totalScenes,
-          status: movie.generationStatus.status,
-          hasActiveSession: !!movie.generationStatus.activeSessionId
-        });
-
-        // Validate if activeSessionId exists and matches an actual session
-        if (movie.generationStatus.activeSessionId) {
-          // This will be used by the frontend to connect to SSE
-          console.log(`[MOVIE_LOADING] Movie ${id} has active session: ${movie.generationStatus.activeSessionId}`);
-        }
       }
 
       res.status(200).json({
@@ -185,7 +160,6 @@ const movieStorageController = {
       } catch (error) {
         // Improve error messaging based on error type
         if (error.message && error.message.includes('not found')) {
-          console.warn(`Animation ${animationId} was requested but not found - might still be generating`);
           throw new NotFoundError(`Animation with ID ${animationId} not found or is still being created`);
         } else {
           console.error(`Error retrieving animation ${animationId}:`, error);

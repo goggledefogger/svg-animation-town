@@ -42,11 +42,9 @@ exports.initializeGeneration = async (req, res) => {
 
     // If we have an existingMovieId, try to load it
     if (existingMovieId) {
-      console.log(`Attempting to reuse existing movie: ${existingMovieId}`);
       const existingMovie = await storageService.getMovie(existingMovieId);
       
       if (existingMovie) {
-        console.log(`Found existing movie: ${existingMovie.name}`);
         storyboard = {
           ...existingMovie,
           updatedAt: new Date(),
@@ -57,15 +55,12 @@ exports.initializeGeneration = async (req, res) => {
             startedAt: new Date()
           }
         };
-      } else {
-        console.log(`Existing movie ${existingMovieId} not found, creating new one`);
       }
     }
 
     // If we don't have a storyboard yet (no existingMovieId or not found), create a new one
     if (!storyboard) {
       // First, generate a complete storyboard with scene descriptions
-      console.log('Generating initial storyboard with scene descriptions...');
       const storyboardResponse = await storyboardService.generateStoryboard(prompt, providerKey, numScenes, resolvedModel);
 
       // Create new storyboard with the generated content
@@ -209,7 +204,6 @@ function updateSessionProgress(session, newClip = null) {
 
   if (newClip) {
     progressSet.add(newClip.order);
-    console.log(`[SSE_UPDATE] Sending clip update for session ${session.id}: scene=${newClip.order + 1}, clipId=${newClip.id}`);
   }
 
   // Update progress count atomically
@@ -225,13 +219,9 @@ function updateSessionProgress(session, newClip = null) {
 exports.startGeneration = async (req, res) => {
   const { sessionId } = req.params;
   
-  // Strategic log for important API calls
-  console.log(`[GENERATION] startGeneration called for sessionId: ${sessionId}`);
-  
   const session = activeSessions.get(sessionId);
 
   if (!session) {
-    console.log(`[GENERATION] Session ${sessionId} not found in activeSessions map`);
     return res.status(404).json({
       success: false,
       error: 'Generation session not found'
@@ -240,7 +230,6 @@ exports.startGeneration = async (req, res) => {
   
   // Prevent duplicate starts - if already generating, just return success
   if (session.progress.status === 'generating') {
-    console.log(`[GENERATION] Session ${sessionId} is already generating, preventing duplicate start`);
     return res.json({
       success: true,
       sessionId,
@@ -253,7 +242,6 @@ exports.startGeneration = async (req, res) => {
     // Update session status
     session.progress.status = 'generating';
     notifyClients(session);
-    console.log(`[GENERATION] Starting generation for session ${sessionId}`);
 
     // Load the storyboard to get scene descriptions
     const storyboard = await storageService.getMovie(session.storyboardId);
@@ -278,13 +266,6 @@ exports.startGeneration = async (req, res) => {
     // Generate clips for each scene in parallel
     const scenePromises = storyboard.originalScenes.map(async (scene, i) => {
       try {
-        console.log(`[GENERATION] Starting scene ${i + 1}/${storyboard.originalScenes.length}`);
-
-        // Only log detailed animation info during generation if this is the first scene
-        if (i === 0) {
-          console.log(`[SVG_GENERATION] Processing scene ${i + 1} with provider: ${session.provider}, model: ${session.model}`);
-        }
-
         // Use the scene's specific prompt for generation
         const result = await animationService.generateAnimation(scene.svgPrompt, {
           provider: session.provider,
@@ -331,7 +312,6 @@ exports.startGeneration = async (req, res) => {
 
         // Save clip to storyboard atomically
         await storageService.addClipToMovie(storyboard.id, clip);
-        console.log(`[GENERATION] Completed scene ${i + 1}/${storyboard.originalScenes.length}`);
 
         return clip;
       } catch (error) {
@@ -367,17 +347,12 @@ exports.startGeneration = async (req, res) => {
       activeSessionId: null
     };
 
-    // Add debug log to verify inProgress state
-    console.log(`[GENERATION] Setting final status for movie ${finalStoryboard.id}: inProgress=${finalStoryboard.generationStatus.inProgress}, status=${finalStoryboard.generationStatus.status}, completedClips=${completedClips}/${storyboard.originalScenes.length}`);
-
     // Save final state
     await storageService.saveMovie(finalStoryboard);
 
     // Update session status and notify clients
     session.progress.status = session.errors.length > 0 ? 'completed_with_errors' : 'completed';
     notifyClients(session);
-
-    console.log(`[GENERATION] Completed generation for session ${sessionId}: ${completedClips}/${storyboard.originalScenes.length} scenes`);
 
     // Return final status
     res.json({
@@ -404,8 +379,6 @@ exports.startGeneration = async (req, res) => {
         completedAt: new Date(),
         activeSessionId: null
       };
-      
-      console.log(`[GENERATION] Setting failed status for movie ${failedStoryboard.id}: inProgress=false, status=failed`);
       
       // Save failed state
       await storageService.saveMovie(failedStoryboard);
@@ -668,12 +641,10 @@ exports.recoveryHandler = async (req, res) => {
   try {
     // Wait a few seconds to allow the server to initialize
     setTimeout(async () => {
-      console.log('[STARTUP] Running initial recovery scan');
       await exports.recoveryHandler();
 
       // Set up periodic recovery scan every 15 minutes
       setInterval(async () => {
-        console.log('[SCHEDULED] Running periodic recovery scan');
         await exports.recoveryHandler();
       }, 15 * 60 * 1000); // 15 minutes
     }, 5000); // 5 second delay

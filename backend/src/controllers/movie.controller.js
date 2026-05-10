@@ -18,11 +18,7 @@ exports.generateStoryboard = asyncHandler(async (req, res) => {
 
   try {
     // Use the dedicated storyboard service - completely separate from SVG generation
-    console.log(`Generating storyboard for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
     const storyboard = await StoryboardService.generateStoryboard(prompt, provider, numScenes, model);
-
-    // By this point storyboard should be fully validated and ready to return
-    console.log(`Successfully generated storyboard outline with ${storyboard.scenes.length} scenes`);
 
     return res.status(200).json({
       success: true,
@@ -50,11 +46,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
   }
 
   try {
-    console.log(`Generating scene animation for prompt: ${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}`);
-    console.log('Movie context:', movieContext);
-    // Log provider information for debugging provider-specific issues
-    console.log(`Using animation provider: ${provider || config.aiProvider}${model ? ` (model: ${model})` : ''}`);
-
     // 3. Load the existing movie from storage before starting animation generation
     let movie = await storageService.getMovie(movieContext.storyboardId);
 
@@ -90,16 +81,11 @@ exports.generateScene = asyncHandler(async (req, res) => {
         throw new Error('Animation generation failed: No SVG content returned');
       }
 
-      // Add more detailed logging for provider-specific debugging
-      console.log(`Successfully generated animation for scene ${movieContext.sceneIndex + 1} with animation ID: ${animationResult.animationId || 'None'}`);
-      console.log(`Animation provider: ${animationResult.provider}, model: ${animationResult.model}, SVG content length: ${animationResult.svg.length}`);
-
       // Explicitly validate that we have a valid animationId for tracking
       if (!animationResult.animationId) {
         console.warn(`WARNING: Generated animation has no animationId. Provider: ${animationResult.provider}`);
         // Generate a fallback ID to ensure tracking works
         animationResult.animationId = uuidv4();
-        console.log(`Created fallback animation ID: ${animationResult.animationId}`);
 
         // Save the animation with the new ID
         await storageService.saveAnimation({
@@ -175,9 +161,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
       model: animationResult.model
     };
 
-    // Log new clip details to verify animation ID is set
-    console.log(`[CLIP_CREATION] Created clip: id=${newClip.id}, order=${newClip.order}, animationId=${newClip.animationId || 'MISSING!'}`);
-
     // 7. Initialize movie clips array if not exists
     if (!movie.clips) {
       movie.clips = [];
@@ -188,10 +171,8 @@ exports.generateScene = asyncHandler(async (req, res) => {
     const existingClipIndex = movie.clips.findIndex(clip => clip.order === movieContext.sceneIndex);
 
     if (existingClipIndex !== -1) {
-      console.log(`Replacing existing clip at index ${existingClipIndex} for order ${movieContext.sceneIndex}`);
       movie.clips[existingClipIndex] = newClip;
     } else {
-      console.log(`Adding new clip for order ${movieContext.sceneIndex}`);
       movie.clips.push(newClip);
     }
 
@@ -203,7 +184,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
     const currentMovie = await storageService.getMovie(movieContext.storyboardId);
     if (currentMovie && currentMovie.clips && currentMovie.clips.length > 0) {
       // Another request may have added more clips since we loaded the movie
-      console.log(`[CLIP_LINKING] Race check - Movie has ${currentMovie.clips.length} clips in storage vs ${movie.clips.length} in memory`);
 
       // Track which clip orders we already have
       const existingOrders = new Set(movie.clips.map(clip => clip.order));
@@ -213,8 +193,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
 
       // Add the missing clips if needed
       if (missingClips.length > 0) {
-        console.log(`[CLIP_LINKING] Adding ${missingClips.length} missing clips to our movie before saving`);
-
         // Add missing clips to our array
         movie.clips = [...movie.clips, ...missingClips];
 
@@ -229,7 +207,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
           // Look for a clip with the same order in the current movie that has an animationId
           const storedClip = currentMovie.clips.find(c => c.order === clip.order && c.animationId);
           if (storedClip && storedClip.animationId) {
-            console.log(`[CLIP_LINKING] Found matching animation ID ${storedClip.animationId} for clip at order ${clip.order}`);
             clip.animationId = storedClip.animationId;
           }
         }
@@ -263,8 +240,6 @@ exports.generateScene = asyncHandler(async (req, res) => {
 
       if (missingAnimationsCount > 0) {
         console.warn(`[ANIMATION_VERIFY] Found ${missingAnimationsCount} clips with missing or invalid animations`);
-      } else {
-        console.log(`[ANIMATION_VERIFY] All ${animationVerificationResults.length} animations verified successfully`);
       }
 
       // Update completion count based on the number of clips we have after the merge
@@ -288,12 +263,10 @@ exports.generateScene = asyncHandler(async (req, res) => {
       if (movie.generationStatus.completedScenes >= movie.generationStatus.totalScenes) {
         movie.generationStatus.inProgress = false;
         movie.generationStatus.completedAt = new Date();
-        console.log('[CLIP_LINKING] All scenes completed after merging clips, marked generation as complete');
       }
     }
 
     const savedMovieId = await storageService.saveMovie(movie);
-    console.log(`Saved updated movie with ID ${savedMovieId}, now has ${movie.clips.length} clips`);
 
     // 11. Return the animation with status information
     return res.status(200).json({
