@@ -54,6 +54,14 @@ else
   log "Swap space is already active."
 fi
 
+# Tune swappiness to reduce aggressive disk thrashing on low memory VM
+log "Tuning vm.swappiness to 10..."
+sudo sysctl vm.swappiness=10
+if ! grep -q "vm.swappiness" /etc/sysctl.conf; then
+  echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+fi
+
+
 # 1. Update Codebase
 log "Updating codebase..."
 cd "$APP_DIR"
@@ -108,7 +116,15 @@ log "Nginx updated successfully."
 log "Restarting systemd services..."
 sudo systemctl stop svg-frontend || true
 sudo systemctl disable svg-frontend || true
+
+# Secure environment files with private API keys
+if [ -f "$BACKEND_DIR/.env" ]; then
+  chmod 600 "$BACKEND_DIR/.env"
+  log "Secured backend environment file permissions."
+fi
+
 sudo systemctl restart svg-backend
+
 
 log "Services restarted."
 
