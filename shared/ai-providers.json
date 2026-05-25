@@ -126,7 +126,7 @@
     "id": "google",
     "displayName": "Google Gemini",
     "description": "Gemini 2.5, 3.x, and 3.5 models optimized for creative SVG prompting and fast generation.",
-    "defaultModel": "gemini-3.5-flash",
+    "defaultModel": "gemini-2.5-flash",
     "models": [
       {
         "id": "gemini-3.5-flash",

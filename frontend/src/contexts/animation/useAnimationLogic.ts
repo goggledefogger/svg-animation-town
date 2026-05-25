@@ -38,9 +38,10 @@ export function useAnimationLogic(): AnimationContextType {
                         dispatch({ type: 'SET_CONFIGURED_PROVIDERS', payload: data.config.configuredProviders });
                     }
 
-                    // Set initial provider if not set
-                    if (!state.meta.aiProvider) {
-                        const backendProvider = normalizeProviderId(data.config.aiProvider) || 'openai';
+                    // Set initial provider if no session was restored
+                    const hasSavedSession = !!sessionStorage.getItem('current_animation_state');
+                    if (!hasSavedSession) {
+                        const backendProvider = normalizeProviderId(data.config.aiProvider) || 'google';
                         dispatch({ type: 'SET_AI_CONFIG', payload: { provider: backendProvider, model: data.config.defaults?.[backendProvider] } });
                     }
                 }

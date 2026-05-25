@@ -48,8 +48,8 @@ export const initialState: AnimationState = {
   },
   meta: {
     isDirty: false,
-    aiProvider: 'openai',
-    aiModel: '',
+    aiProvider: 'google',
+    aiModel: 'gemini-2.5-flash',
     availableProviders: [],
     defaultModels: { openai: '', anthropic: '', google: '' },
     configuredProviders: { openai: false, anthropic: false, google: false },
@@ -80,12 +80,34 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       return { ...state, playback: { ...state.playback, isReverse: action.payload } };
 
     case 'SET_AI_CONFIG':
+      const newProvider = action.payload.provider || state.meta.aiProvider;
+      let newModel = action.payload.model;
+
+      if (!newModel) {
+        if (action.payload.provider && action.payload.provider !== state.meta.aiProvider) {
+          // Provider changed, reset model to default of new provider
+          const providerInfo = state.meta.availableProviders.find(p => p.id === newProvider);
+          newModel = providerInfo ? providerInfo.defaultModel : '';
+        } else {
+          newModel = state.meta.aiModel;
+        }
+      }
+
+      // Final validation to ensure model is valid
+      const finalProviderInfo = state.meta.availableProviders.find(p => p.id === newProvider);
+      if (finalProviderInfo && newModel) {
+        const isValidModel = finalProviderInfo.models.some(m => m.id === newModel);
+        if (!isValidModel) {
+          newModel = finalProviderInfo.defaultModel;
+        }
+      }
+
       return {
         ...state,
         meta: {
           ...state.meta,
-          aiProvider: action.payload.provider || state.meta.aiProvider,
-          aiModel: action.payload.model || state.meta.aiModel,
+          aiProvider: newProvider,
+          aiModel: newModel,
         },
       };
 
@@ -96,7 +118,26 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       return { ...state, data: { ...state.data, chatHistory: newHistory } };
 
     case 'SET_AVAILABLE_PROVIDERS':
-      return { ...state, meta: { ...state.meta, availableProviders: action.payload } };
+      const providers = action.payload;
+      const currentProviderId = state.meta.aiProvider;
+      let currentModelId = state.meta.aiModel;
+
+      const currentProviderInfo = providers.find(p => p.id === currentProviderId);
+      if (currentProviderInfo) {
+        const isValidModel = currentProviderInfo.models.some(m => m.id === currentModelId);
+        if (!isValidModel) {
+          currentModelId = currentProviderInfo.defaultModel;
+        }
+      }
+
+      return {
+        ...state,
+        meta: {
+          ...state.meta,
+          availableProviders: providers,
+          aiModel: currentModelId,
+        },
+      };
 
     case 'SET_DEFAULT_MODELS':
       return { ...state, meta: { ...state.meta, defaultModels: action.payload } };
@@ -114,6 +155,17 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       };
 
     case 'LOAD_SUCCESS':
+      const loadProvider = action.payload.provider || state.meta.aiProvider;
+      let loadModel = action.payload.model || state.meta.aiModel;
+
+      const loadProviderInfo = state.meta.availableProviders.find(p => p.id === loadProvider);
+      if (loadProviderInfo && loadModel) {
+        const isValidModel = loadProviderInfo.models.some(m => m.id === loadModel);
+        if (!isValidModel) {
+          loadModel = loadProviderInfo.defaultModel;
+        }
+      }
+
       return {
         ...state,
         status: 'IDLE',
@@ -127,8 +179,8 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
           ...state.meta,
           isDirty: false,
           lastSavedAt: action.payload.timestamp,
-          aiProvider: action.payload.provider || state.meta.aiProvider,
-          aiModel: action.payload.model || state.meta.aiModel,
+          aiProvider: loadProvider,
+          aiModel: loadModel,
         },
         error: undefined,
       };
@@ -141,6 +193,17 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
       return { ...state, status: 'GENERATING', error: undefined };
 
     case 'GENERATE_SUCCESS':
+      const genProvider = action.payload.provider || state.meta.aiProvider;
+      let genModel = action.payload.model || state.meta.aiModel;
+
+      const genProviderInfo = state.meta.availableProviders.find(p => p.id === genProvider);
+      if (genProviderInfo && genModel) {
+        const isValidModel = genProviderInfo.models.some(m => m.id === genModel);
+        if (!isValidModel) {
+          genModel = genProviderInfo.defaultModel;
+        }
+      }
+
       return {
         ...state,
         status: 'IDLE',
@@ -152,8 +215,8 @@ export function animationReducer(state: AnimationState, action: AnimationAction)
         meta: {
           ...state.meta,
           isDirty: false, // Auto-saved on generation means clean
-          aiProvider: action.payload.provider || state.meta.aiProvider,
-          aiModel: action.payload.model || state.meta.aiModel,
+          aiProvider: genProvider,
+          aiModel: genModel,
         },
       };
 

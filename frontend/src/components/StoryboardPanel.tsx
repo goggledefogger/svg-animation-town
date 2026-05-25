@@ -64,26 +64,32 @@ const getModelLabel = (modelId: string | undefined): string | null => {
   // Common model ID to short label mappings
   const modelLabels: Record<string, string> = {
     // OpenAI
-    'gpt-4o-mini': 'GPT-4o Mini',
-    'gpt-4o': 'GPT-4o',
-    'o3-mini': 'O3 Mini',
-    'o1-mini': 'O1 Mini',
+    'gpt-5.5-instant': 'GPT-5.5 Instant',
+    'gpt-5.5': 'GPT-5.5',
+    'gpt-5.5-pro': 'GPT-5.5 Pro',
+    'gpt-5.4': 'GPT-5.4',
+    'gpt-5.4-mini': 'GPT-5.4 Mini',
+    'gpt-5-codex': 'GPT-5 Codex',
     'o1': 'O1',
-    'gpt-5-pro': 'GPT-5 Pro',
-    'gpt-5.2-pro': 'GPT-5.2 Pro',
-    'gpt-5-mini': 'GPT-5 Mini',
+    'o3-mini': 'O3 Mini',
+    'gpt-4o': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o Mini',
     // Anthropic
-    'claude-sonnet-4-5-20250929': 'Claude 4.5',
-    'claude-haiku-4-5-20251015': 'Claude 4.5 Haiku',
-    'claude-3-7-sonnet-20250219': 'Claude 3.7',
-    'claude-3-5-sonnet-20241022': 'Claude 3.5',
+    'claude-opus-4.7': 'Claude Opus 4.7',
+    'claude-opus-4.6': 'Claude Opus 4.6',
+    'claude-sonnet-4-6': 'Claude Sonnet 4.6',
+    'claude-sonnet-4-5-20250929': 'Claude 4.5 Sonnet',
+    'claude-haiku-4.5': 'Claude 4.5 Haiku',
+    'claude-3-haiku-20240307': 'Claude 3 Haiku',
+    'claude-3-7-sonnet-20250219': 'Claude 3.7 Sonnet',
+    'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet',
     // Google
-    'gemini-2.5-flash': 'Gemini 2.5',
+    'gemini-3.5-flash': 'Gemini 3.5 Flash',
+    'gemini-3.1-pro-preview': 'Gemini 3.1 Pro',
+    'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
     'gemini-2.5-pro': 'Gemini 2.5 Pro',
-    'gemini-2.5-flash-lite': 'Gemini 2.5 Lite',
-    'gemini-3-pro-preview': 'Gemini 3 Pro',
-    'gemini-3-flash': 'Gemini 3 Flash',
-    'gemini-2.0-flash': 'Gemini 2.0',
+    'gemini-2.5-flash': 'Gemini 2.5 Flash',
+    'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite'
   };
 
   return modelLabels[modelId] || modelId;
