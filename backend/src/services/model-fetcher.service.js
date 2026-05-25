@@ -511,7 +511,7 @@ function mergeWithMetadata(provider, apiModels) {
       useCase: meta?.useCase,
       supportsTemperature: supportsTemperature,
       maxOutputTokens: meta?.maxOutputTokens,
-      showInUi: meta?.showInUi || false,
+      showInUi: meta ? (meta.showInUi !== false) : true,
       // Preserve date fields for sorting (we'll remove them before returning to frontend)
       created: apiModel.created,
       createdAt: apiModel.createdAt,

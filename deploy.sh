@@ -34,6 +34,26 @@ error() {
   echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Ensure Swap Space
+log "Checking swap space..."
+if ! swapon --show | grep -q "/swapfile"; then
+  log "Swap not active. Creating 1G swap file..."
+  if [ -f /swapfile ]; then
+    sudo swapoff /swapfile || true
+    sudo rm -f /swapfile
+  fi
+  sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+  if ! grep -q "/swapfile" /etc/fstab; then
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+  fi
+  log "Swap space created and enabled."
+else
+  log "Swap space is already active."
+fi
+
 # 1. Update Codebase
 log "Updating codebase..."
 cd "$APP_DIR"
@@ -58,12 +78,20 @@ log "Backend dependencies updated."
 # 3. Update Frontend
 log "Updating frontend dependencies..."
 cd "$FRONTEND_DIR"
-# CRITICAL: We use 'npm start' (Vite dev server) in production, which requires devDependencies.
-# Explicitly including dev dependencies to ensure 'vite' is available regardless of NODE_ENV.
 npm install --include=dev
 log "Frontend dependencies updated."
 
-# 4. Configure Nginx timeouts for long-running reasoning models
+log "Building frontend static assets..."
+npm run build
+log "Frontend built successfully."
+
+# 4. Configure Nginx timeouts for long-running reasoning models & Serve Frontend Statically
+log "Applying Nginx frontend configuration..."
+sudo cp "$APP_DIR/deployment/svg-frontend.nginx" /etc/nginx/sites-available/svg-frontend
+if [ ! -f /etc/nginx/sites-enabled/svg-frontend ]; then
+  sudo ln -s /etc/nginx/sites-available/svg-frontend /etc/nginx/sites-enabled/
+fi
+
 log "Configuring Nginx timeouts..."
 for conf in /etc/nginx/sites-available/*; do
     if [ -f "$conf" ]; then
@@ -74,13 +102,13 @@ for conf in /etc/nginx/sites-available/*; do
     fi
 done
 sudo nginx -t && sudo systemctl reload nginx
-log "Nginx timeouts updated successfully."
+log "Nginx updated successfully."
 
 # 5. Restart Services
 log "Restarting systemd services..."
-# Using sudo - user will be prompted for password if not NOPASSWD configured
+sudo systemctl stop svg-frontend || true
+sudo systemctl disable svg-frontend || true
 sudo systemctl restart svg-backend
-sudo systemctl restart svg-frontend
 
 log "Services restarted."
 
@@ -88,6 +116,5 @@ log "Services restarted."
 log "Verifying services status..."
 sleep 2
 sudo systemctl status svg-backend --no-pager
-sudo systemctl status svg-frontend --no-pager
 
 log "Deployment complete!"
