@@ -36,16 +36,16 @@ error() {
 
 # Ensure Swap Space
 log "Checking swap space..."
-if ! swapon --show | grep -q "/swapfile"; then
+if ! sudo /sbin/swapon --show | grep -q "/swapfile"; then
   log "Swap not active. Creating 1G swap file..."
   if [ -f /swapfile ]; then
-    sudo swapoff /swapfile || true
+    sudo /sbin/swapoff /swapfile || true
     sudo rm -f /swapfile
   fi
   sudo fallocate -l 1G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024
   sudo chmod 600 /swapfile
   sudo mkswap /swapfile
-  sudo swapon /swapfile
+  sudo /sbin/swapon /swapfile
   if ! grep -q "/swapfile" /etc/fstab; then
     echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
   fi
