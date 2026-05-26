@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "build": "echo 'Backend build step'"
+    "build": "echo 'Backend build step'",
+    "test": "node --test tests/*.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
