@@ -60,13 +60,6 @@ const animationStorageController = {
         throw new NotFoundError(`Animation with ID ${id} not found`);
       }
 
-      // Add debug logging to check if provider field exists
-      console.log(`[CONTROLLER] Animation ${id} data from storage:`, {
-        hasProvider: !!animation.provider,
-        provider: animation.provider,
-        dataKeys: Object.keys(animation)
-      });
-
       res.status(200).json({
         success: true,
         animation
